@@ -100,5 +100,5 @@ export async function loadRunAccess(db: D1Database, runId: string, userId: strin
 }
 
 export function requireOwner(access: { role: Role }): void {
-  if (access.role !== 'owner') throw forbidden('Only the evaluation owner can do this.')
+  if (access.role !== 'owner') throw forbidden('Only the judge of this evaluation can do this.')
 }

@@ -59,11 +59,11 @@ export default function JoinPage() {
           </span>
           <CardTitle className="font-heading text-2xl font-semibold tracking-tight">You’re invited to review</CardTitle>
           <CardDescription className="leading-relaxed">
-            You will score anonymous AI responses against a rubric. You don’t need any API key, and you won’t see which models produced the responses — or anyone else’s ratings — until the owner reveals them.
+            You will score anonymous AI responses against a rubric. You don’t need any API key, and you won’t see which models produced the responses — or anyone else’s ratings — until the judge reveals them.
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-2 space-y-4">
-          {status === 'missing' && <p className="text-sm text-destructive">This page needs an invitation link. Ask the evaluation owner for a new one.</p>}
+          {status === 'missing' && <p className="text-sm text-destructive">This page needs an invitation link. Ask the judge for a new one.</p>}
           {status === 'error' && (
             <p role="alert" className="text-sm text-destructive">
               {message}

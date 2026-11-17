@@ -115,7 +115,7 @@ export async function redeemInvite(deps: Deps, userId: string, token: string, re
     if (session && session.status !== 'revoked') return { runId: invite.run_id, sessionId: session.id }
     throw inviteUnavailable()
   }
-  if (invite.owner_user_id === userId) throw new ApiError(409, 'INVITE_UNAVAILABLE', 'You own this evaluation. Use your owner review instead of an invitation.')
+  if (invite.owner_user_id === userId) throw new ApiError(409, 'INVITE_UNAVAILABLE', 'You are the judge of this evaluation. Use your own review instead of an invitation.')
   const now = deps.now()
   if (invite.redeemed_at || invite.revoked_at || invite.expires_at <= now || invite.status !== 'reviewing' || !invite.eligible_manifest_json) throw inviteUnavailable()
 

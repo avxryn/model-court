@@ -32,7 +32,7 @@ export default function ResultsPage() {
           <Alert>
             <AlertTitle>Results are not revealed yet</AlertTitle>
             <AlertDescription>
-              They appear after the owner closes review. <Link className="underline" to={`/runs/${id}`}>Back to the run</Link>
+              They appear after the judge closes review. <Link className="underline" to={`/runs/${id}`}>Back to the run</Link>
             </AlertDescription>
           </Alert>
         </Page>
@@ -89,19 +89,19 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
 
       <section aria-labelledby="scores" className="mb-12">
         <h2 id="scores" className="mb-4 text-xl font-semibold tracking-tight">
-          Scores by cohort
+          Scores: the jury and the judge
         </h2>
         <Tabs defaultValue={data.cohorts.invited.reviewerCount > 0 ? 'invited' : 'owner'}>
           <TabsList>
-            <TabsTrigger value="invited">Invited reviewers ({data.cohorts.invited.reviewerCount})</TabsTrigger>
-            <TabsTrigger value="owner">Owner, context-aware ({data.cohorts.owner.reviewerCount})</TabsTrigger>
+            <TabsTrigger value="invited">Jury’s findings ({data.cohorts.invited.reviewerCount} {data.cohorts.invited.reviewerCount === 1 ? 'juror' : 'jurors'})</TabsTrigger>
+            <TabsTrigger value="owner">Judge’s own review, context-aware ({data.cohorts.owner.reviewerCount})</TabsTrigger>
           </TabsList>
           <TabsContent value="invited" className="pt-3">
             <CohortTable cohort={data.cohorts.invited} configurations={data.configurations} />
           </TabsContent>
           <TabsContent value="owner" className="pt-3">
             <CohortTable cohort={data.cohorts.owner} configurations={data.configurations} />
-            <p className="mt-2 text-xs text-muted-foreground">The owner chose these configurations, so this review is not blind and is never combined with invited reviews.</p>
+            <p className="mt-2 text-xs text-muted-foreground">The judge chose these configurations, so this review is not blind and is never combined with the jury’s findings.</p>
           </TabsContent>
         </Tabs>
       </section>
@@ -156,7 +156,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
             <ul className="list-disc space-y-0.5 pl-5">
               {data.eligibleCaseKeys.length < 3 && <li>Only {data.eligibleCaseKeys.length} eligible case{data.eligibleCaseKeys.length === 1 ? '' : 's'}; the evidence is small.</li>}
               {unblinded > 0 && <li>{unblinded} review session{unblinded === 1 ? '' : 's'} flagged a possible model-identity clue (potentially unblinded).</li>}
-              {data.disagreements.length > 0 && <li>Reviewers disagreed (by 1+ point) on {data.disagreements.length} case/configuration/dimension judgment{data.disagreements.length === 1 ? '' : 's'}; see the case evidence below.</li>}
+              {data.disagreements.length > 0 && <li>Ratings disagreed (by 1+ point) on {data.disagreements.length} case/configuration/dimension judgment{data.disagreements.length === 1 ? '' : 's'}; see the case evidence below.</li>}
             </ul>
           </AlertDescription>
         </Alert>
@@ -177,7 +177,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
               </summary>
               <div className="space-y-5 border-t border-border px-5 py-5">
                 <p className="text-sm"><span className="text-muted-foreground">Request:</span> {testCase.input}</p>
-                <p className="text-xs text-muted-foreground">Reviewer guide: {testCase.expectedBehavior}</p>
+                <p className="text-xs text-muted-foreground">Scoring guide: {testCase.expectedBehavior}</p>
                 <div className="grid gap-4 lg:grid-cols-2">
                   {testCase.responses.map((response) => (
                     <div key={response.configurationKey} className="space-y-2">
@@ -205,7 +205,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Reviewer</TableHead>
+                          <TableHead>Rated by</TableHead>
                           <TableHead>Configuration</TableHead>
                           {DIMENSIONS.map((d) => (
                             <TableHead key={d} className="text-right">
@@ -248,7 +248,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
 
 function CohortTable({ cohort, configurations }: { cohort: CohortResult; configurations: ResultsView['configurations'] }) {
   if (!cohort.byConfiguration) {
-    return <p className="rounded-xl bg-secondary/70 px-5 py-4 text-sm text-muted-foreground">No reviews in this cohort.</p>
+    return <p className="rounded-xl bg-secondary/70 px-5 py-4 text-sm text-muted-foreground">No ratings in this group.</p>
   }
   const by = cohort.byConfiguration
   const tie = cohort.highest.length > 1
@@ -312,7 +312,7 @@ function VerdictSection({ data, reload }: { data: ResultsView; reload: () => Pro
           </p>
         </div>
       ) : (
-        <p className="mt-2 text-sm text-muted-foreground">{isOwner ? 'Record your decision. It may disagree with the numbers; explain why.' : 'The owner has not recorded a verdict yet.'}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{isOwner ? 'Record your decision. It may disagree with the numbers; explain why.' : 'The judge has not recorded a verdict yet.'}</p>
       )}
       {data.verdicts.length > 1 && (
         <details className="mt-3">

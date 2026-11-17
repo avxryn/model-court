@@ -3,6 +3,8 @@
 All routes require `Authorization: Bearer <platform JWT>`. Requests and responses are JSON. Every
 response carries `requestId` and `Cache-Control: private, no-store`. Unknown fields are rejected (422).
 
+Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **jurors**. Field names, enum values, and error codes keep the original terms; only display strings (session labels such as `Juror 1`, and messages) use the new ones.
+
 - Success: `{"data": …, "requestId": "req_…"}`
 - Error: `{"error": {"code", "message", "retryable", "fields?", "details?"}, "requestId"}`
 - `Idempotency-Key: <uuid>` is **required** for: start run, retry, invite, submit review, reveal, verdict, save credential. The same key and payload replay the original response; the same key with a different payload returns `409 IDEMPOTENCY_CONFLICT`.
@@ -11,9 +13,10 @@ response carries `requestId` and `Cache-Control: private, no-store`. Unknown fie
 
 | Method & path | Who | Notes |
 |---|---|---|
-| GET `/healthz` (no `/api/v1`) | public | `{build, ready, generationEnabled}` |
+| GET `/healthz` (no `/api/v1`) | public | `{build, ready, storeOk, generationEnabled}` |
 | GET `/catalog` | signed in | Model routes with `enabled` (verified) flag, limits, generation switch |
-| GET/POST `/credentials`, DELETE `/credentials/:id` | own | Metadata only; POST `{provider,label,apiKey,consentToStorage:true,replacesCredentialId?}` |
+| GET/POST `/credentials`, DELETE `/credentials/:id` | own | Metadata only; POST `{provider,label,apiKey,consentToStorage:true,replacesCredentialId?}`. Admin keys are refused (422) |
+| POST `/credentials/:id/renew` | own | If-Match, empty body. Resets `expiresAt` to now + `CREDENTIAL_TTL_DAYS`; 409 once expired or removed |
 | GET/POST `/evaluations` | own/joined | Cursor pagination `?cursor&limit≤50`; POST seeds the example draft |
 | GET `/evaluations/:id` | owner / joined reviewer | Owner: draft + runs; reviewer: title + joined runs |
 | PUT `/evaluations/:id/draft` | owner | `{comparisonMode,cases,configurations}` full replacement |

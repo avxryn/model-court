@@ -4,10 +4,12 @@
 decision supported by the actual responses and ratings.
 
 Sign in → add your provider keys → write cases and two configurations → generate → review
-anonymously (yourself and up to three invited reviewers) → reveal → record a verdict.
+anonymously (you as the judge, plus up to three invited jurors) → reveal → record a verdict.
 
-- **Live generation is strictly BYOK.** The evaluation owner's own OpenAI and/or Anthropic keys pay for every call. There is no platform credit, sponsored call, or billing selector.
-- **Invited reviewers need no keys.**
+**Roles.** The person who creates an evaluation is the **judge**: they supply the keys, may review, reveal the models, and record the verdict. Invited reviewers are **jurors**, and their ratings are **the jury’s findings**. The judge’s own review is context-aware (they chose the configurations), so it is always scored separately and never mixed into the jury’s findings. Code, the API, and the spec keep the original terms: `owner` = judge, `invited` reviewer = juror.
+
+- **Live generation is strictly BYOK.** The judge's own OpenAI and/or Anthropic keys pay for every call. There is no platform credit, sponsored call, or billing selector.
+- **Jurors need no keys.**
 - **The public sample (`/sample`) is an illustrative, hand-written fixture.** It makes no provider requests and needs no account.
 
 Live URL: https://model-court.app.space (generation disabled until providers are verified) · Built from specification v1.2 (Nov 15, 2026).
@@ -99,7 +101,7 @@ verification steps below pass.
 
 ## Limits (P0)
 
-Text only · 1–5 cases · exactly 2 configurations · 512 output tokens · fixed rubric · 3 invited reviewers ·
+Text only · 1–5 cases · exactly 2 configurations · 512 output tokens · fixed rubric · 3 jurors ·
 2 attempts per generation · 20 calls/user/day · 100/day and 500 lifetime per deployment.
 
 ## Known unfinished edges

@@ -33,7 +33,7 @@ export default function EvaluationsPage() {
                 <Link to={`/evaluations/${item.id}`} className="flex flex-col gap-1.5 px-5 py-4 transition-colors duration-150 hover:bg-secondary/50 focus-visible:bg-secondary/60 focus-visible:outline-none sm:flex-row sm:items-center sm:gap-4">
                   <span className="min-w-0 flex-1 truncate font-medium">{item.title}</span>
                   <span className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="rounded-full bg-secondary px-2 py-0.5 font-medium text-secondary-foreground">{item.role === 'owner' ? 'Owner' : 'Reviewer'}</span>
+                    <span className="rounded-full bg-secondary px-2 py-0.5 font-medium text-secondary-foreground">{item.role === 'owner' ? 'Judge' : 'Juror'}</span>
                     {item.latestRunStatus ? <StatusBadge status={item.latestRunStatus} /> : <span>No runs yet</span>}
                     <span className="tabular-nums">{formatTime(item.updatedAt)}</span>
                   </span>

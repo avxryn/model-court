@@ -309,7 +309,7 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
       // Participation only: never drafts or ratings before reveal.
       participants: sessions.map((session) => ({
         id: session.id,
-        label: session.context_type === 'owner' ? 'You (owner-context-aware)' : `Reviewer ${++invitedIndex}`,
+        label: session.context_type === 'owner' ? 'You (judge, context-aware)' : `Juror ${++invitedIndex}`,
         contextType: session.context_type,
         status: session.status,
         submittedAt: session.submitted_at,

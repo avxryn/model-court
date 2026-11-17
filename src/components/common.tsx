@@ -232,6 +232,6 @@ export const ERROR_TEXT: Record<string, string> = {
   CREDENTIAL_REVOKED: 'The key pinned to this run was removed or expired before this generation ran. Nothing was sent.',
   CREDENTIAL_EXPIRED: 'The key pinned to this run expired before this generation ran. Nothing was sent. Save a new key and start a new run.',
   CREDENTIAL_UNAVAILABLE: 'The saved key could not be used. Nothing was sent.',
-  CANCELED: 'Canceled by the owner.',
+  CANCELED: 'Canceled by the judge.',
   DELETED: 'The evaluation was deleted.',
 }

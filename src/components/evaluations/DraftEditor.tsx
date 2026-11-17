@@ -83,7 +83,7 @@ export function CasesEditor({ cases, onChange, errors, newId, disabled }: { case
             <div className="md:col-span-2">
               <TextField
                 id={`case-${testCase.key}-expected`}
-                label="Expected behavior (reviewer guide, never sent)"
+                label="Expected behavior (scoring guide, never sent)"
                 multiline
                 rows={2}
                 value={testCase.expectedBehavior}

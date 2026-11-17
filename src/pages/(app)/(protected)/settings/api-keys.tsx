@@ -31,7 +31,7 @@ export default function ApiKeysPage() {
       <PageHeader
         eyebrow="Settings"
         title="Provider API keys"
-        description="Live comparisons use your own OpenAI and Anthropic keys. Each generation is billed by the provider to your account. Invited reviewers never need a key."
+        description="Live comparisons use your own OpenAI and Anthropic keys. Each generation is billed by the provider to your account. Jurors never need a key."
       />
       <Alert className="mb-8">
         <ShieldCheck aria-hidden />

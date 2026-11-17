@@ -124,9 +124,9 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
   return (
     <Page width="wide">
       <PageHeader
-        eyebrow={review.contextType === 'owner' ? 'Your review · owner-context-aware' : 'Blind review'}
+        eyebrow={review.contextType === 'owner' ? 'Your review · judge, context-aware' : 'Blind review'}
         title="Review responses"
-        description="Score each anonymous response against the reference and reviewer guide. Labels are shuffled per case and per reviewer."
+        description="Score each anonymous response against the reference and scoring guide. Labels are shuffled per case and per person."
         actions={editable && <SaveIndicator state={saveState} onRetry={() => void save()} />}
       />
 
@@ -146,14 +146,14 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
         <Alert className="mb-6">
           <CheckCircle2 aria-hidden />
           <AlertTitle>Submitted</AlertTitle>
-          <AlertDescription>Your ratings are final. Results appear when the owner reveals the models.</AlertDescription>
+          <AlertDescription>Your ratings are final. Results appear when the judge reveals the models.</AlertDescription>
         </Alert>
       )}
       {review.contextType === 'owner' && editable && (
         <Alert className="mb-6">
           <Info aria-hidden />
           <AlertTitle>You know which configurations you chose</AlertTitle>
-          <AlertDescription>Your review is reported separately as owner-context-aware, never as a blind review.</AlertDescription>
+          <AlertDescription>As judge, your review is reported separately as context-aware, never as part of the jury’s findings.</AlertDescription>
         </Alert>
       )}
       {saveState === 'conflict' && (
@@ -215,7 +215,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Submit your review?</AlertDialogTitle>
-                <AlertDialogDescription>Submitted ratings cannot be edited. They stay hidden from other reviewers until the owner reveals the models.</AlertDialogDescription>
+                <AlertDialogDescription>Submitted ratings cannot be edited. They stay hidden from everyone else until the judge reveals the models.</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Keep reviewing</AlertDialogCancel>

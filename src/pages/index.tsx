@@ -13,16 +13,16 @@ import { SAMPLE_CASES } from '@/sample/fixture'
 import { cn } from '@/lib/utils'
 
 const STEPS = [
-  { icon: ListChecks, title: 'Build the case file', text: 'Up to five questions with reference evidence and a reviewer-only guide. Two configurations, one fixed rubric.' },
+  { icon: ListChecks, title: 'Build the case file', text: 'Up to five questions with reference evidence and a scoring guide only the judge and jurors see. Two configurations, one fixed rubric.' },
   { icon: KeyRound, title: 'Generate with your keys', text: 'Responses come from OpenAI and Anthropic using your own API keys, billed to your provider accounts. No platform credits.' },
-  { icon: EyeOff, title: 'Review blind', text: 'You and up to three invited reviewers score shuffled, unlabeled responses. Nobody sees others’ ratings early.' },
-  { icon: Gavel, title: 'Reveal and decide', text: 'See the mapping, cohort means, failures, and disagreements — then record a verdict with your reasons.' },
+  { icon: EyeOff, title: 'Review blind', text: 'You, the judge, and up to three jurors score shuffled, unlabeled responses. Nobody sees others’ ratings early.' },
+  { icon: Gavel, title: 'Reveal and decide', text: 'See the mapping, the jury’s findings, failures, and disagreements — then record a verdict with your reasons.' },
 ]
 
 const DATA_HANDLING = [
   'Live runs require your own OpenAI and/or Anthropic API key. The selected providers receive each case’s input, reference, and the system instructions, and bill your account.',
-  'Reviewer guides, ratings, reviewer identities, invitations, and verdicts are never sent to models.',
-  'Keys are encrypted at rest and never shown again; the trusted deployment operator still holds the decryption root. Invited reviewers never need a key.',
+  'Scoring guides, ratings, juror identities, invitations, and verdicts are never sent to models.',
+  'Keys are encrypted at rest and never shown again; the trusted deployment operator still holds the decryption root. Jurors never need a key.',
   'Deleting an evaluation removes it from Model Court within 24 hours; it cannot delete data a provider already received. Use synthetic or permitted information only.',
 ]
 

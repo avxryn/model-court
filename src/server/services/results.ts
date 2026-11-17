@@ -41,7 +41,7 @@ function median(values: number[]): number | null {
 export async function getResults(deps: Deps, userId: string, runId: string) {
   const access = await loadRunAccess(deps.db, runId, userId)
   const { run } = access
-  if (run.status !== 'revealed' && run.status !== 'decided') throw stateConflict('Results are available after the owner reveals the models.')
+  if (run.status !== 'revealed' && run.status !== 'decided') throw stateConflict('Results are available after the judge reveals the models.')
   const db = deps.db
   const snapshot = parseSnapshot(run.snapshot_json)
   const manifest = JSON.parse(run.eligible_manifest_json ?? '{"caseKeys":[],"excludedCaseKeys":[],"entries":[]}') as EligibleManifest
@@ -62,7 +62,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
   // Stable, identity-free reviewer labels in cohort order.
   const ordered = cohortIds.map((id) => sessionRows.find((row) => row.id === id)).filter((row): row is SessionRow => !!row && row.status === 'submitted')
   let invitedNumber = 0
-  const labelled = ordered.map((row) => ({ row, label: row.context_type === 'owner' ? 'Owner (context-aware)' : `Reviewer ${++invitedNumber}` }))
+  const labelled = ordered.map((row) => ({ row, label: row.context_type === 'owner' ? 'Judge (context-aware)' : `Juror ${++invitedNumber}` }))
 
   const scored: ScoredSession[] = labelled.map(({ row }) => {
     const assignment = JSON.parse(row.assignment_json) as AssignmentCase[]

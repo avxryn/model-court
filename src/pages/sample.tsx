@@ -173,7 +173,7 @@ export default function SamplePage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>1 reviewer × 5 cases (practice)</TableHead>
+                          <TableHead>1 juror × 5 cases (practice)</TableHead>
                           {SAMPLE_CONFIGURATIONS.map((c) => (
                             <TableHead key={c.key} className="text-right">
                               {c.label}

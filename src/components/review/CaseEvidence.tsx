@@ -14,7 +14,7 @@ export function CaseMaterial({ title, input, reference, expectedBehavior }: { ti
       <Block label="Request">{input}</Block>
       <Block label="Reference evidence">{reference || <span className="italic text-muted-foreground">No reference provided — abstention may be correct.</span>}</Block>
       <div className="rounded-r-lg border-l-2 border-brass bg-accent/70 px-4 py-3">
-        <div className="eyebrow text-accent-foreground">Reviewer guide · never sent to models</div>
+        <div className="eyebrow text-accent-foreground">Scoring guide · never sent to models</div>
         <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-accent-foreground">{expectedBehavior}</p>
       </div>
     </section>

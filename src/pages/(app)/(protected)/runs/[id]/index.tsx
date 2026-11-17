@@ -47,7 +47,7 @@ function ReviewerRun({ run }: { run: Extract<RunView, { role: 'reviewer' }> }) {
   return (
     <>
       <PageHeader eyebrow="Invited review" title={run.evaluationTitle} actions={<StatusBadge status={run.status} />} />
-      <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{revealed ? 'The owner has revealed the models. Results include every submitted review.' : 'Score the anonymous responses. Other reviewers cannot see your ratings, and you cannot see theirs, until the owner reveals the models.'}</p>
+      <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{revealed ? 'The judge has revealed the models. Results include the jury’s findings.' : 'Score the anonymous responses. Other jurors cannot see your ratings, and you cannot see theirs, until the judge reveals the models.'}</p>
       <div className="mt-6 flex gap-2">
         <Button render={<Link to={`/runs/${run.runId}/review`} />} nativeButton={false} variant={revealed ? 'outline' : 'default'}>
           {run.session?.status === 'draft' && !revealed ? 'Continue review' : 'View my review'}
@@ -301,7 +301,7 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
             <span className="flex items-center gap-2">
               <StatusBadge status={p.status} />
               {reviewing && p.contextType === 'invited' && p.status === 'draft' && (
-                <Button size="xs" variant="ghost" onClick={() => void act(() => api('DELETE', `/runs/${run.runId}/reviewers/${p.id}`), 'Reviewer removed')}>
+                <Button size="xs" variant="ghost" onClick={() => void act(() => api('DELETE', `/runs/${run.runId}/reviewers/${p.id}`), 'Juror removed')}>
                   Remove
                 </Button>
               )}
@@ -333,7 +333,7 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
             </Button>
           )}
           <Button variant="outline" disabled={slots <= 0 || busy} onClick={() => void createInvite()}>
-            <Link2 aria-hidden /> Create invite link ({Math.max(slots, 0)} left)
+            <Link2 aria-hidden /> Invite a juror ({Math.max(slots, 0)} left)
           </Button>
           <RevealButton run={run} busy={busy} act={act} />
         </div>
@@ -347,7 +347,7 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Invitation link</DialogTitle>
-            <DialogDescription>Single use, expires in 24 hours. Anyone with this link can claim the reviewer slot, so share it directly. It is shown only once.</DialogDescription>
+            <DialogDescription>Single use, expires in 24 hours. Anyone with this link can claim the juror seat, so share it directly. It is shown only once.</DialogDescription>
           </DialogHeader>
           <div className="flex gap-2">
             <Input readOnly value={inviteUrl ?? ''} aria-label="Invitation link" onFocus={(e) => e.currentTarget.select()} />

@@ -33,7 +33,7 @@ export default function EvaluationPage() {
 function ReviewerEvaluation({ evaluation }: { evaluation: Extract<EvaluationView, { role: 'reviewer' }> }) {
   return (
     <Page>
-      <PageHeader eyebrow="Invited review" title={evaluation.title} description="You were invited to review runs of this evaluation. Configuration details stay hidden until the owner reveals them." />
+      <PageHeader eyebrow="Juror" title={evaluation.title} description="You were invited as a juror for this evaluation. Configuration details stay hidden until the judge reveals them." />
       <ul className="surface divide-y divide-border overflow-hidden">
         {evaluation.runs.map((run) => (
           <li key={run.id} className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
@@ -222,7 +222,7 @@ function KeyStatus({ providers, keys }: { providers: ProviderId[]; keys: Credent
           )
         })}
       </ul>
-      <p className="mt-3 text-xs text-muted-foreground">Comparing two models from the same provider needs only one key. Invited reviewers never need keys.</p>
+      <p className="mt-3 text-xs text-muted-foreground">Comparing two models from the same provider needs only one key. Jurors never need keys.</p>
     </div>
   )
 }
@@ -291,7 +291,7 @@ function RunDialog({ evaluationId, revision, draft, providers, keys, blockers }:
           <div className="flex items-start gap-2">
             <Checkbox id="consent-processing" checked={consent} onCheckedChange={(c) => setConsent(c === true)} />
             <Label htmlFor="consent-processing" className="font-normal leading-snug">
-              Send each case input, reference, and the system instructions to {providers.map((p) => PROVIDER_NAMES[p]).join(' and ')}. Reviewer guides, ratings, and identities stay in Model Court.
+              Send each case input, reference, and the system instructions to {providers.map((p) => PROVIDER_NAMES[p]).join(' and ')}. Scoring guides, ratings, and identities stay in Model Court.
             </Label>
           </div>
           <div className="flex items-start gap-2">
@@ -336,7 +336,7 @@ function DeleteEvaluation({ evaluationId, title, revision }: { evaluationId: str
     <div className="max-w-xl space-y-4 rounded-xl border border-destructive/30 bg-card p-5 shadow-xs">
       <h2 className="text-lg font-semibold">Delete this evaluation</h2>
       <p className="text-sm leading-relaxed text-muted-foreground">
-        Access stops immediately for you and every reviewer. Runs, responses, ratings, and verdicts are permanently removed within 24 hours. A provider request already in flight may still be charged. Your saved API keys are not affected. Deleting here cannot remove data the providers already received.
+        Access stops immediately for you and every juror. Runs, responses, ratings, and verdicts are permanently removed within 24 hours. A provider request already in flight may still be charged. Your saved API keys are not affected. Deleting here cannot remove data the providers already received.
       </p>
       <div className="space-y-1.5">
         <Label htmlFor="confirm-title">Type the title to confirm: {title}</Label>
