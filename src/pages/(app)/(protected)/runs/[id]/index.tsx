@@ -338,9 +338,21 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
             <span className="flex items-center gap-2">
               <StatusBadge status={p.status} />
               {p.guest && p.guest.devices > 0 && (
-                <Button size="xs" variant="ghost" onClick={() => void act(() => api('POST', `/runs/${run.runId}/reviewers/${p.id}/sign-out-devices`, { body: {} }), 'Devices signed out')}>
-                  Sign out devices
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger render={<Button size="xs" variant="ghost" />}>Sign out devices</AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Sign {p.guest.name} out of every device?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {p.guest.devices} browser{p.guest.devices === 1 ? '' : 's'} lose access to this hearing at once. Their saved ratings stay. They can come back only with a resume link they saved; otherwise they cannot rejoin this seat.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep them signed in</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => void act(() => api('POST', `/runs/${run.runId}/reviewers/${p.id}/sign-out-devices`, { body: {} }), 'Devices signed out')}>Sign out devices</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               )}
               {reviewing && p.contextType === 'invited' && p.status === 'draft' && (
                 <Button size="xs" variant="ghost" onClick={() => void act(() => api('DELETE', `/runs/${run.runId}/reviewers/${p.id}`), 'Juror removed')}>

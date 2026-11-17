@@ -193,6 +193,18 @@ function StartForm({ runId, catalog, keys, plannedCalls, partyProviders, onStart
   const model = models.find((m) => m.key === modelKey)
   const key = model ? keys.find((k) => k.provider === model.provider && k.status === 'active') : undefined
   const providerName = model ? PROVIDER_NAMES[model.provider] : 'the grader’s provider'
+  // Say why the start button is off, one reason at a time, in the order the form is filled in.
+  const blocker = busy
+    ? null
+    : models.length === 0
+      ? 'No grader models are available right now.'
+      : !model
+        ? 'Choose a grader model to continue.'
+        : !key
+          ? `Needs your ${providerName} key.`
+          : !consent || !charges
+            ? 'Tick both boxes above to continue.'
+            : null
 
   const start = async () => {
     if (!model || !key) return
@@ -244,9 +256,16 @@ function StartForm({ runId, catalog, keys, plannedCalls, partyProviders, onStart
           Charge my {providerName} account for {plannedCalls} calls (one per testimony). A timed-out call may be charged without a result.
         </Label>
       </div>
-      <Button variant="outline" disabled={!model || !key || !consent || !charges || busy} onClick={() => void start()}>
-        <Bot aria-hidden /> {busy ? 'Starting…' : `Ask the special master (${plannedCalls} calls)`}
-      </Button>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Button variant="outline" disabled={!model || !key || !consent || !charges || busy} aria-describedby={blocker ? 'sm-start-blocker' : undefined} onClick={() => void start()}>
+          <Bot aria-hidden /> {busy ? 'Starting…' : `Ask the special master (${plannedCalls} calls)`}
+        </Button>
+        {blocker && (
+          <p id="sm-start-blocker" className="text-xs text-muted-foreground">
+            {blocker}
+          </p>
+        )}
+      </div>
       <p className="text-xs text-muted-foreground">
         <Term name="findings" plain={false} /> and your judgment are not affected.
       </p>

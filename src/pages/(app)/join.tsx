@@ -25,6 +25,10 @@ export default function JoinPage() {
   const [guestName, setGuestName] = useState('')
   const [guest, setGuest] = useState<{ runId: string; resumeLink: string | null } | null>(null)
   const [guestBusy, setGuestBusy] = useState(false)
+  // Whether an invitation token is held for this tab. Without one, signing in or joining as a guest
+  // cannot seat anyone, so those controls stay hidden instead of doing nothing.
+  const [hasInvite, setHasInvite] = useState(false)
+  const [resumeFailed, setResumeFailed] = useState(false)
 
   // A resume link (D-41) adds this browser as another device for a guest juror, but only after a click,
   // so a link someone else sent can never silently switch this browser into their seat.
@@ -44,6 +48,8 @@ export default function JoinPage() {
       // Each link works once; this device gets the next one.
       setGuest({ runId: result.runId, resumeLink: result.resumeSecret ? `${window.location.origin}/join#resume=${result.resumeSecret}` : null })
     } catch (error) {
+      setPendingResume(null)
+      setResumeFailed(true)
       setStatus('error')
       setMessage(describeError(error))
     } finally {
@@ -58,6 +64,7 @@ export default function JoinPage() {
     try {
       const result = await api<{ runId: string; resumeSecret?: string }>('POST', '/invites/redeem-as-guest', { body: { token, displayName: guestName.trim() } })
       pendingInviteToken.clear()
+      setHasInvite(false)
       setGuest({ runId: result.runId, resumeLink: result.resumeSecret ? `${window.location.origin}/join#resume=${result.resumeSecret}` : null })
     } catch (error) {
       setStatus('error')
@@ -72,8 +79,11 @@ export default function JoinPage() {
     const match = /(?:^#|&)token=([A-Za-z0-9_-]{43})/.exec(window.location.hash)
     if (match) {
       pendingInviteToken.save(match[1])
+      setHasInvite(true)
       window.history.replaceState(null, '', window.location.pathname)
-    } else if (!pendingInviteToken.peek() && !/resume=/.test(window.location.hash)) {
+    } else if (pendingInviteToken.peek()) {
+      setHasInvite(true)
+    } else {
       setStatus('missing')
     }
   }, [])
@@ -91,6 +101,7 @@ export default function JoinPage() {
       })
       .catch((error: unknown) => {
         pendingInviteToken.clear()
+        setHasInvite(false)
         setStatus('error')
         setMessage(describeError(error))
       })
@@ -111,6 +122,11 @@ export default function JoinPage() {
           {status === 'error' && (
             <p role="alert" className="text-sm text-destructive">
               {message}
+            </p>
+          )}
+          {resumeFailed && !guest && (
+            <p className="text-sm text-muted-foreground">
+              Each resume link works once. Open the newest link you saved, or ask the judge for a new invitation.
             </p>
           )}
           {status === 'redeeming' && (
@@ -146,7 +162,7 @@ export default function JoinPage() {
               </Button>
             </div>
           )}
-          {isLoaded && !isSignedIn && status !== 'missing' && status !== 'redeeming' && !guest && !pendingResume && (
+          {isLoaded && !isSignedIn && hasInvite && status !== 'redeeming' && !guest && !pendingResume && (
             <>
               <Button className="w-full" onClick={() => setShowAuth(true)}>
                 Sign in to accept the summons
@@ -170,6 +186,7 @@ export default function JoinPage() {
                 className="w-full"
                 onClick={() => {
                   pendingInviteToken.clear()
+                  setHasInvite(false)
                   navigate('/')
                 }}
               >
