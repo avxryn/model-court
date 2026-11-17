@@ -123,7 +123,7 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
                 <p className="text-xs text-muted-foreground">{run.calibration.caveat}</p>
                 {run.calibration.disagreements.length > 0 && (
                   <details>
-                    <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Where the grader falls outside the jury’s range ({run.calibration.disagreements.length})</summary>
+                    <summary className="cursor-pointer py-1 text-sm text-muted-foreground hover:text-foreground">Where the grader falls outside the jury’s range ({run.calibration.disagreements.length})</summary>
                     <ul className="mt-2 space-y-1.5 text-sm">
                       {run.calibration.disagreements.map((d, i) => (
                         <li key={i} className="rounded-[2px] bg-slip px-3 py-2">
@@ -139,7 +139,7 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
 
             {run.counts.succeeded > 0 && (
               <details className="mt-4">
-                <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">The special master’s own scores (advisory)</summary>
+                <summary className="cursor-pointer py-1 text-sm text-muted-foreground hover:text-foreground">The special master’s own scores (advisory)</summary>
                 <div className="mt-2 overflow-x-auto">
                   <Table>
                     <TableHeader>

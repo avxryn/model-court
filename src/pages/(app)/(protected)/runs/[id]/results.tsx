@@ -402,7 +402,7 @@ function VerdictSection({ data, reload }: { data: ResultsView; reload: () => Pro
           <Term name="judgment" />
         </h2>
         {latest && (
-          <Link to={`/runs/${data.runId}/judgment`} className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">
+          <Link to={`/runs/${data.runId}/judgment`} className="inline-flex min-h-6 items-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">
             Printable judgment
           </Link>
         )}

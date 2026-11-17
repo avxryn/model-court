@@ -5,6 +5,7 @@
 
 import type { ReactNode } from 'react'
 import { ArrowDown, ArrowUp, Plus, Trash2, Upload } from 'lucide-react'
+import { ExhibitSticker } from '@/components/court/CaseFile'
 import { CaseImport } from '@/components/evaluations/CaseImport'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -147,7 +148,7 @@ function ConversationEditor({ caseKey, messages, error, onChange }: { caseKey: s
       </div>
       {messages.map((message, i) => (
         <div key={i} className="space-y-1">
-          <Label htmlFor={`case-${caseKey}-msg-${i}`} className="typewriter text-xs font-bold">
+          <Label htmlFor={`case-${caseKey}-msg-${i}`} className={cn('typewriter text-xs font-bold', message.role === 'user' ? 'text-stamp' : 'text-primary')}>
             {message.role === 'user' ? 'USER' : 'ASSISTANT'} · TURN {Math.floor(i / 2) + 1}
           </Label>
           <Textarea id={`case-${caseKey}-msg-${i}`} rows={2} className="bg-white" value={message.content} onChange={(e) => set(i, e.target.value)} />
@@ -268,7 +269,8 @@ export function ConfigurationsEditor({
               className={cn(
                 'flex cursor-pointer items-start gap-3 rounded-md border px-3.5 py-3 font-normal transition-colors duration-150',
                 draft.comparisonMode === value ? 'border-foreground bg-slip' : 'border-paper-edge bg-white hover:bg-slip/60',
-                value === 'model' && hasImported && 'cursor-not-allowed opacity-60',
+                // Unavailable: no hover, muted title, but the reason stays readable (no opacity fade).
+                value === 'model' && hasImported && 'cursor-not-allowed border-paper-rule bg-transparent text-muted-foreground hover:bg-transparent',
               )}
             >
               <RadioGroupItem id={`mode-${value}`} value={value} className="mt-0.5" disabled={value === 'model' && hasImported} aria-labelledby={`mode-${value}-text`} />
@@ -285,13 +287,13 @@ export function ConfigurationsEditor({
         <TextField id="shared-system-prompt" label="System instructions (shared, sent to every party)" multiline rows={4} value={sharedPrompt} max={LIMITS.systemPrompt.max} error={errors['configurations.0.systemPrompt']} onChange={setSharedPrompt} />
       )}
 
-      <div className={cn('grid gap-4 md:grid-cols-2', draft.configurations.length > 2 && 'xl:grid-cols-3')}>
+      <div className={cn('grid items-start gap-4 md:grid-cols-2', draft.configurations.length > 2 && 'xl:grid-cols-3')}>
         {draft.configurations.map((configuration, index) => (
           <Card key={configuration.key} className="rounded-[2px] bg-white ring-exhibit-edge">
             <CardHeader>
               <CardTitle className="court-label">
                 Party <span className="typewriter font-normal tracking-normal">{index + 1}</span>
-                {isImported(configuration) && <span className="typewriter ml-2 rounded-[3px] bg-sticker px-1.5 py-0.5 text-[0.625rem] font-bold tracking-normal text-sticker-foreground">IMPORTED</span>}
+                {isImported(configuration) && <ExhibitSticker className="ml-2 px-1.5 py-0 text-[0.6875rem]">IMPORTED</ExhibitSticker>}
               </CardTitle>
               {draft.configurations.length > minParties && (
                 <CardAction>
@@ -390,7 +392,19 @@ function ImportedPartyFields({ party, index, errors, onChange, renderAnswers }: 
       />
       <div className="space-y-1.5 sm:max-w-xs">
         <Label htmlFor={`cfg-${party.key}-collected`}>Collected on (optional)</Label>
-        <Input id={`cfg-${party.key}-collected`} type="date" value={party.provenance.collectedOn ?? ''} onChange={(e) => set({ collectedOn: e.target.value || undefined })} aria-invalid={errors[`${base}.collectedOn`] ? true : undefined} />
+        <Input
+          id={`cfg-${party.key}-collected`}
+          type="date"
+          value={party.provenance.collectedOn ?? ''}
+          onChange={(e) => set({ collectedOn: e.target.value || undefined })}
+          aria-invalid={errors[`${base}.collectedOn`] ? true : undefined}
+          aria-describedby={errors[`${base}.collectedOn`] ? `cfg-${party.key}-collected-help` : undefined}
+        />
+        {errors[`${base}.collectedOn`] && (
+          <p id={`cfg-${party.key}-collected-help`} className="text-xs text-destructive">
+            {errors[`${base}.collectedOn`]}
+          </p>
+        )}
       </div>
       <div className="flex items-start gap-3">
         <Checkbox id={`cfg-${party.key}-redacted`} checked={party.provenance.redacted} onCheckedChange={(checked) => set({ redacted: checked === true })} />

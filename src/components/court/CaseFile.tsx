@@ -191,7 +191,7 @@ export function ConversationSoFar({ messages }: { messages: ReadonlyArray<{ role
       </h3>
       <ol className="divide-y divide-paper-rule">
         {messages.map((message, index) => (
-          <li key={index} className="grid grid-cols-[5.5rem_1fr] gap-3 px-4 py-2.5">
+          <li key={index} className="grid gap-1 px-4 py-2.5 sm:grid-cols-[5.5rem_1fr] sm:gap-3">
             <span className={cn('typewriter pt-0.5 text-xs font-bold', message.role === 'user' ? 'text-stamp' : 'text-primary')}>{message.role === 'user' ? 'USER' : 'ASSISTANT'}</span>
             <span className="min-w-0 font-heading text-[0.9375rem] leading-relaxed break-words whitespace-pre-wrap">{message.content}</span>
           </li>

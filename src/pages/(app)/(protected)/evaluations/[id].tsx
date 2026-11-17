@@ -175,7 +175,15 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm text-muted-foreground tabular-nums">
-            This hearing makes <strong className="text-foreground">{calls} paid calls</strong>, billed to your keys
+            {calls > 0 ? (
+              <>
+                This hearing makes <strong className="text-foreground">{calls} paid calls</strong>, billed to your keys
+              </>
+            ) : (
+              <>
+                This hearing makes <strong className="text-foreground">no paid calls</strong>: imported answers only
+              </>
+            )}
           </span>
           <RunDialog evaluationId={evaluation.id} revision={revision} draft={draft} providers={providers} keys={keys} blockers={blockers} />
         </div>
@@ -306,7 +314,8 @@ function RunDialog({ evaluationId, revision, draft, providers, keys, blockers }:
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const intent = useRef(newIntentKey())
-  const calls = draft.cases.length * generatedParties(draft.configurations).length
+  const modelParties = generatedParties(draft.configurations).length
+  const calls = draft.cases.length * modelParties
   // Imported-only hearings send nothing to a provider and charge nothing, so there is nothing to consent to.
   const needsConsent = calls > 0
 
@@ -348,17 +357,31 @@ function RunDialog({ evaluationId, revision, draft, providers, keys, blockers }:
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-heading text-xl">Start a hearing</DialogTitle>
-          <DialogDescription>This freezes the saved draft into an unchangeable hearing (a run) and sends one request per question and party, using your own provider keys.</DialogDescription>
+          <DialogDescription>
+            {needsConsent
+              ? `This freezes the saved draft into an unchangeable hearing (a run) and sends one request per question and model party, using your own provider keys.${modelParties < draft.configurations.length ? ' Imported answers are not sent.' : ''}`
+              : 'This freezes the saved draft into an unchangeable hearing (a run). Every party has imported answers, so nothing is generated.'}
+          </DialogDescription>
         </DialogHeader>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
           <dt className="text-muted-foreground">Planned calls</dt>
           <dd className="tabular-nums">
-            {draft.cases.length} questions × {draft.configurations.length} parties = <strong>{calls}</strong>
+            {needsConsent ? (
+              <>
+                {draft.cases.length} questions × {modelParties} model {modelParties === 1 ? 'party' : 'parties'} = <strong>{calls}</strong>
+              </>
+            ) : (
+              <strong>None</strong>
+            )}
           </dd>
-          <dt className="text-muted-foreground">Providers</dt>
-          <dd>{providers.map((p) => PROVIDER_NAMES[p]).join(' and ')}</dd>
-          <dt className="text-muted-foreground">Output limit</dt>
-          <dd>{LIMITS.maxOutputTokens} tokens per response</dd>
+          {needsConsent && (
+            <>
+              <dt className="text-muted-foreground">Providers</dt>
+              <dd>{providers.map((p) => PROVIDER_NAMES[p]).join(' and ')}</dd>
+              <dt className="text-muted-foreground">Output limit</dt>
+              <dd>{LIMITS.maxOutputTokens} tokens per response</dd>
+            </>
+          )}
         </dl>
         {!needsConsent && <p className="rounded-md bg-slip p-4 text-sm">Only imported answers: nothing is sent to an AI provider and nothing is charged. Jurors review the answers as you saved them.</p>}
         {needsConsent && (

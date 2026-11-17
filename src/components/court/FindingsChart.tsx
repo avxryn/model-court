@@ -20,12 +20,12 @@ export function FindingsChart({ cohort, parties, rubricVersion }: { cohort: Coho
         {rows.map((row) => (
           <div key={row.key}>
             <div className={cn('mb-1.5 font-heading text-sm', row.key === 'overall' && 'font-bold')}>{row.label}</div>
-            <div className="space-y-1">
+            <div className="space-y-1.5 sm:space-y-1">
               {parties.map((party, index) => {
                 const mean = row.value(party.key)
                 return (
-                  <div key={party.key} className="grid grid-cols-[minmax(0,9rem)_1fr_2.5rem] items-center gap-2 text-xs sm:grid-cols-[minmax(0,12rem)_1fr_2.5rem]">
-                    <span className="truncate text-muted-foreground" title={party.label}>
+                  <div key={party.key} className="grid grid-cols-[minmax(0,1fr)_2.5rem] items-center gap-x-2 gap-y-0.5 text-xs sm:grid-cols-[minmax(0,12rem)_1fr_2.5rem]">
+                    <span className="col-span-2 truncate text-muted-foreground sm:col-span-1" title={party.label}>
                       {party.label}
                     </span>
                     <span className="relative h-2.5 rounded-full bg-paper-rule">

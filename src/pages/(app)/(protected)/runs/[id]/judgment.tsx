@@ -109,7 +109,7 @@ function PrintableJudgment({ data }: { data: ResultsView }) {
                 <p className="mt-2 font-heading text-2xl font-bold">{outcome}</p>
                 <p className="mt-2 font-heading leading-relaxed whitespace-pre-wrap">{latest.rationale}</p>
                 {latest.limitations && <p className="mt-2 text-sm whitespace-pre-wrap text-muted-foreground">Limitations: {latest.limitations}</p>}
-                <div className="mt-10 grid gap-8 sm:grid-cols-2">
+                <div className="mt-10 grid gap-8 sm:grid-cols-2 print:break-inside-avoid">
                   <div>
                     <div className="h-10 border-b border-foreground" />
                     <div className="mt-1 text-xs text-muted-foreground">Signature of the judge</div>
@@ -137,7 +137,7 @@ function PrintableJudgment({ data }: { data: ResultsView }) {
 function FindingsBlock({ title, cohort, data, lines }: { title: string; cohort: CohortResult; data: ResultsView; lines: ReturnType<typeof rubricLines> }) {
   const by = cohort.byConfiguration
   return (
-    <section>
+    <section className="print:break-inside-avoid">
       <h2 className="court-label">{title}</h2>
       {by ? (
         <div className="mt-2 overflow-x-auto">

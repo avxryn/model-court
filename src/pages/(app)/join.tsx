@@ -107,7 +107,7 @@ export default function JoinPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-2 space-y-4">
-          {status === 'missing' && <p className="text-sm text-destructive">This page needs an invitation link. Ask the judge for a new one.</p>}
+          {status === 'missing' && !pendingResume && !guest && <p className="text-sm text-destructive">This page needs an invitation link. Ask the judge for a new one.</p>}
           {status === 'error' && (
             <p role="alert" className="text-sm text-destructive">
               {message}
@@ -119,7 +119,7 @@ export default function JoinPage() {
             </p>
           )}
           {pendingResume && !guest && (
-            <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
+            <div className="space-y-3 rounded-[2px] bg-slip p-4 text-sm">
               <p className="font-medium">Continue your review on this device?</p>
               <p>Use this only with a resume link you saved yourself. Anyone else’s link would put you in their seat.</p>
               <Button className="w-full" disabled={guestBusy} onClick={() => void resume()}>
@@ -128,7 +128,7 @@ export default function JoinPage() {
             </div>
           )}
           {guest && (
-            <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
+            <div className="space-y-3 rounded-[2px] bg-slip p-4 text-sm">
               <p className="font-medium">You are seated as a juror.</p>
               {guest.resumeLink && (
                 <div className="space-y-1.5">
@@ -161,7 +161,7 @@ export default function JoinPage() {
                 <Label htmlFor="guest-name">Or join with just a name</Label>
                 <Input id="guest-name" value={guestName} maxLength={40} onChange={(e) => setGuestName(e.target.value)} placeholder="The name the judge will see" />
                 <p className="text-xs text-muted-foreground">No account needed. Only the judge sees this name. This browser keeps you signed in to this one hearing for up to 14 days.</p>
-                <Button type="submit" variant="outline" className="w-full" disabled={guestBusy || guestName.trim().length === 0}>
+                <Button type="submit" variant="outline" className="mt-2 w-full" disabled={guestBusy || guestName.trim().length === 0}>
                   {guestBusy ? 'Joining…' : 'Join without an account'}
                 </Button>
               </form>

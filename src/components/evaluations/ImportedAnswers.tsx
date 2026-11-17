@@ -15,6 +15,7 @@ import type { CaseInput, ImportedConfiguration } from '@/domain/contracts'
 import { LIMITS } from '@/domain/limits'
 import { codePointLength } from '@/domain/text'
 import { api, ApiClientError, describeError } from '@/lib/api-client'
+import { cn } from '@/lib/utils'
 
 export interface SavedImport {
   configurationKey: string
@@ -90,7 +91,7 @@ export function ImportedAnswers({
                 </Label>
                 <Textarea id={id} rows={4} className="bg-white font-heading" value={value} aria-describedby={`${id}-help`} onChange={(e) => setTexts((t) => ({ ...t, [testCase.key]: e.target.value }))} />
                 <div id={`${id}-help`} className="space-y-0.5 text-xs">
-                  <div className="text-muted-foreground tabular-nums">
+                  <div className={cn('tabular-nums', codePointLength(value) > LIMITS.importedText.max ? 'text-destructive' : 'text-muted-foreground')}>
                     {codePointLength(value).toLocaleString()}/{LIMITS.importedText.max.toLocaleString()}
                   </div>
                   {warnings.map((warning) => (
@@ -103,7 +104,7 @@ export function ImportedAnswers({
               </div>
             )
           })}
-          <div className="flex items-start gap-3 rounded-md bg-slip px-3 py-3">
+          <div className="flex items-start gap-3 rounded-[2px] bg-slip px-3 py-3">
             <Checkbox id={`import-${party.key}-consent`} checked={consent} onCheckedChange={(checked) => setConsent(checked === true)} />
             <Label htmlFor={`import-${party.key}-consent`} className="flex-col items-start gap-0.5 font-normal leading-snug">
               I may share these answers with the jurors I invite

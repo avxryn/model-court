@@ -32,7 +32,8 @@
   --ring: oklch(0.52 0.09 262);
   --success: oklch(0.5 0.12 155);
   --success-foreground: oklch(0.985 0.004 85);
-  --warning: oklch(0.56 0.13 65);
+  /* 0.53 keeps warning text at 4.5:1 or better on slip and warning-tint backgrounds. */
+  --warning: oklch(0.53 0.13 65);
   --warning-foreground: oklch(0.985 0.004 85);
   --brass: oklch(0.6 0.11 75);
   /* Case-file surfaces (D-25): a desk, paper sheets, manila folder tabs,

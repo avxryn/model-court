@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Copy, Link2, RefreshCw, Wifi, WifiOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, StaleNotice, StatusBadge } from '@/components/common'
-import { Caption, CaseProgress, DocketNumber, Sheet, Stamp } from '@/components/court/CaseFile'
+import { Caption, CaseProgress, DocketNumber, ExhibitSticker, Sheet, Stamp } from '@/components/court/CaseFile'
 import { caseStep, docketNumber, recordStamp } from '@/lib/court'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
@@ -169,7 +169,7 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
                     const g = run.generations.find((x) => x.caseKey === testCase.key && x.configurationKey === c.key)
                     if (!g) {
                       const imported = run.imported.some((i) => i.caseKey === testCase.key && i.configurationKey === c.key)
-                      return <TableCell key={c.key} className="text-sm text-muted-foreground">{imported ? 'Imported answer' : '—'}</TableCell>
+                      return <TableCell key={c.key} className="align-top text-sm text-muted-foreground">{imported ? 'Imported answer' : '—'}</TableCell>
                     }
                     return (
                       <TableCell key={c.key} className="align-top">
@@ -331,7 +331,7 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
               {p.label}
               {p.guest && (
                 <span className="ml-2 text-muted-foreground">
-                  · {p.guest.name} <span className="typewriter rounded-[3px] bg-sticker px-1 text-[0.625rem] font-bold text-sticker-foreground">GUEST</span> · {p.guest.devices} device{p.guest.devices === 1 ? '' : 's'}
+                  · {p.guest.name} <ExhibitSticker className="px-1.5 py-0 text-[0.6875rem]">GUEST</ExhibitSticker> · {p.guest.devices} device{p.guest.devices === 1 ? '' : 's'}
                 </span>
               )}
             </span>
