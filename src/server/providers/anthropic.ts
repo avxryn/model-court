@@ -5,17 +5,19 @@
  * live response mapping must be confirmed by the smoke record.
  */
 
+import type { TranscriptMessage } from '../../domain/contracts'
 import { classifyHttpError, finishText, isFailure, isRecord, nonNegativeInt, postJson, type Adapter } from './common'
 
 export const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages'
 export const ANTHROPIC_VERSION = '2026-10-21'
 
-export function anthropicRequestBody(modelId: string, system: string, user: string, maxOutputTokens: number) {
+/** With a single user message this is byte-identical to the v1 body (D-39). */
+export function anthropicRequestBody(modelId: string, system: string, messages: readonly TranscriptMessage[], maxOutputTokens: number) {
   return {
     model: modelId,
     max_tokens: maxOutputTokens,
     system,
-    messages: [{ role: 'user', content: user }],
+    messages: messages.map((message) => ({ role: message.role, content: message.content })),
     thinking: { type: 'disabled' },
   }
 }
@@ -25,7 +27,7 @@ export const anthropicAdapter: Adapter = async (fetchFn, request, timeoutSignal)
     fetchFn,
     ANTHROPIC_MESSAGES_URL,
     { 'x-api-key': request.apiKey, 'anthropic-version': ANTHROPIC_VERSION },
-    anthropicRequestBody(request.modelId, request.system, request.user, request.maxOutputTokens),
+    anthropicRequestBody(request.modelId, request.system, request.messages, request.maxOutputTokens),
     request.signal,
     timeoutSignal,
     'request-id',

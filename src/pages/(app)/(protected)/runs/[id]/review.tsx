@@ -205,7 +205,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
 
           <div className="grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
             <div className="lg:sticky lg:top-4 lg:self-start">
-              <CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={review.cases.length} />
+              <CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={review.cases.length} messages={current.messages} />
             </div>
             <div className="space-y-3">
               <h2 className="court-label">

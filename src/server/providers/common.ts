@@ -4,13 +4,15 @@
  * response-body byte ceiling before parsing, normalized outcomes, no retries.
  */
 
+import type { TranscriptMessage } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
 import { utf8ByteLength } from '../../domain/text'
 
 export interface ProviderRequest {
   modelId: string
   system: string
-  user: string
+  /** Alternating turns ending with the user (D-39); a single user message for `qa-v1`. */
+  messages: TranscriptMessage[]
   maxOutputTokens: number
   apiKey: string
   signal: AbortSignal

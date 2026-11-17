@@ -17,7 +17,7 @@
 
 import { createInterface } from 'node:readline'
 import { Writable } from 'node:stream'
-import { buildMessages } from '../src/domain/messages'
+import { buildConversation, CHAT_TEMPLATE_VERSION, MESSAGE_TEMPLATE_VERSION } from '../src/domain/messages'
 import { EXAMPLE_CASES, EXAMPLE_POLICY, DEFAULT_SYSTEM_PROMPT } from '../src/domain/example'
 import { LIMITS } from '../src/domain/limits'
 import { MODEL_ROUTES, type ProviderId } from '../src/domain/registry'
@@ -46,7 +46,19 @@ async function main() {
   console.log('Model Court provider smoke test — each selected provider receives ONE request (≤512 output tokens), billed to your account.')
   const choice = (await ask('Test which providers? [openai,anthropic] (comma-separated, blank = both): ')) || 'openai,anthropic'
   const providers = choice.split(',').map((p) => p.trim()) as ProviderId[]
-  const messages = buildMessages(DEFAULT_SYSTEM_PROMPT, { reference: EXAMPLE_POLICY, input: EXAMPLE_CASES[0].input })
+  // "multi" sends a short conversation (D-39): its success is the evidence for a route's multiTurnVerifiedAt.
+  const mode = (await ask('Single question or a multi-message conversation? [single/multi] (blank = single): ')) === 'multi' ? 'multi' : 'single'
+  const conversation =
+    mode === 'multi'
+      ? buildConversation(CHAT_TEMPLATE_VERSION, DEFAULT_SYSTEM_PROMPT, {
+          reference: EXAMPLE_POLICY,
+          input: 'And if I lost the receipt?',
+          messages: [
+            { role: 'user', content: EXAMPLE_CASES[0].input },
+            { role: 'assistant', content: 'Yes. Regular items can be returned within 30 days with a receipt, and you are at day 12.' },
+          ],
+        })
+      : buildConversation(MESSAGE_TEMPLATE_VERSION, DEFAULT_SYSTEM_PROMPT, { reference: EXAMPLE_POLICY, input: EXAMPLE_CASES[0].input })
 
   for (const provider of providers) {
     const route = MODEL_ROUTES.find((r) => r.provider === provider)
@@ -58,10 +70,10 @@ async function main() {
     if (confirm.toLowerCase() !== 'y') continue
     let apiKey = await ask(`${provider} API key (input hidden): `, true)
     const timeout = AbortSignal.timeout(LIMITS.providerTimeoutMs)
-    const outcome = await ADAPTERS[provider](fetch, { modelId: route.modelId, system: messages.system, user: messages.user, maxOutputTokens: LIMITS.maxOutputTokens, apiKey, signal: timeout }, timeout)
+    const outcome = await ADAPTERS[provider](fetch, { modelId: route.modelId, system: conversation.system, messages: conversation.messages, maxOutputTokens: LIMITS.maxOutputTokens, apiKey, signal: timeout }, timeout)
     apiKey = ''
     const date = new Date().toISOString().slice(0, 10)
-    console.log(JSON.stringify({ date, provider, modelId: route.modelId, adapterVersion: route.adapterVersion, outcome: { ...outcome, text: outcome.kind === 'success' ? outcome.text.slice(0, 400) : undefined } }, null, 2))
+    console.log(JSON.stringify({ date, provider, mode, messageCount: conversation.messages.length, modelId: route.modelId, adapterVersion: route.adapterVersion, outcome: { ...outcome, text: outcome.kind === 'success' ? outcome.text.slice(0, 400) : undefined } }, null, 2))
   }
 }
 

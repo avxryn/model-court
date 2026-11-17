@@ -102,7 +102,7 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
       generationEnabled: deps(c).config.generationEnabled,
       credentialWritesEnabled: deps(c).config.credentialWritesEnabled,
       providers: Object.entries(PROVIDER_NAMES).map(([id, name]) => ({ id, name })),
-      models: deps(c).routes.map((route) => ({ key: route.key, provider: route.provider, modelId: route.modelId, label: route.label, enabled: isRouteEnabled(route), verifiedAt: route.verifiedAt })),
+      models: deps(c).routes.map((route) => ({ key: route.key, provider: route.provider, modelId: route.modelId, label: route.label, enabled: isRouteEnabled(route), verifiedAt: route.verifiedAt, multiTurnVerifiedAt: route.multiTurnVerifiedAt })),
       limits: { maxCases: LIMITS.maxCases, configurations: deps(c).config.maxConfigurationsPerRun, minConfigurations: LIMITS.minConfigurationsPerRun, maxOutputTokens: LIMITS.maxOutputTokens, maxAttemptsPerGeneration: LIMITS.maxAttemptsPerGeneration, credentialTtlDays: Math.round(deps(c).config.credentialTtlMs / 86_400_000), ...deps(c).config.limits },
     }),
   )

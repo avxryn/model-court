@@ -3,7 +3,7 @@ import { anthropicAdapter } from './anthropic'
 import type { ProviderRequest } from './common'
 import { openAiAdapter } from './openai'
 
-const request = (): ProviderRequest => ({ modelId: 'm', system: 's', user: 'u', maxOutputTokens: 512, apiKey: 'k', signal: new AbortController().signal })
+const request = (): ProviderRequest => ({ modelId: 'm', system: 's', messages: [{ role: 'user', content: 'u' }], maxOutputTokens: 512, apiKey: 'k', signal: new AbortController().signal })
 const never = new AbortController().signal
 const respond = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   (async () => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers })) as unknown as typeof fetch

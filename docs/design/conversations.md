@@ -1,7 +1,6 @@
 # Design note: conversations (phase 5)
 
-Status: proposal, Nov 17, 2026. Covers S3a (next-turn) and S3b (whole conversation). Build S3a first; it
-changes prompt construction only. S3b changes the generation pipeline and should not start until S3a ships.
+Status: **S3a built on `next`, Nov 17, 2026 (D-39); S3b not started.** S3a differs from this proposal in two ways: the 96 KiB caps stay (history is limited to 10 messages and 8,000 characters per question), and v2 adapters produce byte-identical v1 bodies for one message, with a separate `multiTurnVerifiedAt` gate for history.
 
 ## Where it fits in today's code
 

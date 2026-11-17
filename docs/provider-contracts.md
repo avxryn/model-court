@@ -30,6 +30,15 @@ After a successful row, set `verifiedAt: 'YYYY-MM-DD'` on that route in `src/dom
 mapping differs (for example, a field name), fix the adapter and add a regression to
 `src/server/providers/adapters.test.ts` first.
 
+## Multi-message requests (D-39): pending
+
+Routes now use `openai-responses-v2` and `anthropic-messages-v2`. With one user message their bodies are byte-identical to v1 (unit-tested), so the single-message smoke results above still apply. A conversation sends alternating turns: OpenAI assistant turns as `{role: "assistant", content: [{type: "output_text", text}]}`, Anthropic as `{role: "assistant", content}`. Each route's `multiTurnVerifiedAt` stays null until `npm run smoke:providers` in `multi` mode succeeds for it and the result is recorded here.
+
+| Date | Provider | Model | Mode | Outcome | Recorded by |
+|---|---|---|---|---|---|
+| | openai | gpt-6-luna | multi | | |
+| | anthropic | claude-haiku-5-5 | multi | | |
+
 ## Deployed check (V12): pending
 
 A real run in the deployed app, using keys saved through Settings, with the browser closed during generation.

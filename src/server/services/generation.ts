@@ -8,12 +8,12 @@
  */
 
 import { LIMITS } from '../../domain/limits'
-import { buildMessages } from '../../domain/messages'
+import { buildConversation, MESSAGE_TEMPLATE_VERSION } from '../../domain/messages'
 import type { ProviderId } from '../../domain/registry'
 import { isImportedSnapshot, type RunSnapshot } from '../../domain/snapshot'
 import { all, auditStatement, cond, GuardFailed, releaseReservations, runGuarded } from '../db/sql'
 import type { Deps, GenerationJob } from '../deps'
-import { ADAPTERS, type ProviderOutcome } from '../providers'
+import { adapterFor, type ProviderOutcome } from '../providers'
 import { attemptStillCurrent, CredentialUnusable, withRunCredential } from './credentials'
 
 class AttemptFenced extends Error {}
@@ -179,7 +179,12 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
   if (!testCase || !configuration) {
     return finishAttempt(deps, { attemptId, fence, job, context, requestId }, { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }, true)
   }
-  const messages = buildMessages(configuration.systemPrompt, testCase)
+  const conversation = buildConversation(context.snapshot.messageTemplateVersion ?? MESSAGE_TEMPLATE_VERSION, configuration.systemPrompt, testCase)
+  // Dispatch by the adapter version this hearing recorded (D-39); refuse, unsent, if it cannot carry the messages.
+  const adapter = adapterFor(configuration.adapterVersion, conversation.messages.length)
+  if (!adapter) {
+    return finishAttempt(deps, { attemptId, fence, job, context, requestId }, { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }, true)
+  }
   const timeout = AbortSignal.timeout(deps.config.providerTimeoutMs)
   const signal = AbortSignal.any([jobSignal, timeout])
 
@@ -189,7 +194,7 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
     outcome = await withRunCredential(deps, context.runId, context.provider, requestId, async (apiKey) => {
       // Canceled or deleted since claim: send nothing (the attempt is already fenced out).
       if (!(await attemptStillCurrent(deps.db, attemptId, fence, context.runId))) throw new AttemptFenced()
-      return ADAPTERS[context.provider](deps.providerFetch, { modelId: configuration.modelId, system: messages.system, user: messages.user, maxOutputTokens: configuration.maxOutputTokens, apiKey, signal }, timeout)
+      return adapter(deps.providerFetch, { modelId: configuration.modelId, system: conversation.system, messages: conversation.messages, maxOutputTokens: configuration.maxOutputTokens, apiKey, signal }, timeout)
     })
   } catch (error) {
     if (error instanceof AttemptFenced) {

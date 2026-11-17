@@ -177,6 +177,30 @@ export function Exhibit({ number, children, plain = true }: { number: number | s
   )
 }
 
+/**
+ * The conversation so far (D-39): the same history every party saw, shown as
+ * a transcript with speaker labels. Plain text only.
+ */
+export function ConversationSoFar({ messages }: { messages: ReadonlyArray<{ role: 'user' | 'assistant'; content: string }> }) {
+  if (messages.length === 0) return null
+  return (
+    <section aria-label="The conversation so far" className="rounded-[2px] bg-white ring-1 ring-exhibit-edge">
+      <h3 className="court-label border-b border-paper-rule px-4 py-2.5">
+        The conversation so far{' '}
+        <span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(identical for every party)</span>
+      </h3>
+      <ol className="divide-y divide-paper-rule">
+        {messages.map((message, index) => (
+          <li key={index} className="grid grid-cols-[5.5rem_1fr] gap-3 px-4 py-2.5">
+            <span className={cn('typewriter pt-0.5 text-xs font-bold', message.role === 'user' ? 'text-stamp' : 'text-primary')}>{message.role === 'user' ? 'USER' : 'ASSISTANT'}</span>
+            <span className="min-w-0 font-heading text-[0.9375rem] leading-relaxed break-words whitespace-pre-wrap">{message.content}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
 /** The scoring guide, on a dashed instruction slip. */
 export function JuryInstructions({ children }: { children: ReactNode }) {
   return (

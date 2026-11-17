@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { IMPORT_SOURCE_TYPES, isImported, type CaseInput, type ComparisonMode, type Configuration, type DraftInput, type ImportedConfiguration, type ModelConfiguration, type Provenance } from '@/domain/contracts'
+import { IMPORT_SOURCE_TYPES, isImported, type CaseInput, type ComparisonMode, type Configuration, type DraftInput, type ImportedConfiguration, type ModelConfiguration, type Provenance, type TranscriptMessage } from '@/domain/contracts'
 import { DEFAULT_SYSTEM_PROMPT } from '@/domain/example'
 import { SOURCE_LABELS } from '@/lib/parties'
 import { LIMITS } from '@/domain/limits'
@@ -77,6 +77,9 @@ export function CasesEditor({ cases, onChange, errors, newId, disabled }: { case
             <div className="md:col-span-2">
               <TextField id={`case-${testCase.key}-title`} label="Short title" value={testCase.title} max={LIMITS.caseTitle.max} error={errors[`cases.${index}.title`]} onChange={(title) => update(index, { title })} />
             </div>
+            <div className="md:col-span-2">
+              <ConversationEditor caseKey={testCase.key} messages={testCase.messages ?? []} error={errors[`cases.${index}.messages`]} onChange={(messages) => update(index, { messages: messages.length > 0 ? messages : undefined })} />
+            </div>
             <TextField id={`case-${testCase.key}-input`} label="The question (sent to the models)" multiline rows={4} value={testCase.input} max={LIMITS.caseInput.max} error={errors[`cases.${index}.input`]} onChange={(input) => update(index, { input })} />
             <TextField
               id={`case-${testCase.key}-reference`}
@@ -123,6 +126,50 @@ export function CasesEditor({ cases, onChange, errors, newId, disabled }: { case
         <Plus aria-hidden /> Add a question ({cases.length}/{LIMITS.maxCases})
       </Button>
     </fieldset>
+  )
+}
+
+/**
+ * The conversation so far for one question (D-39): earlier exchanges of a user
+ * turn and an assistant reply. The question field below stays the user's next message.
+ */
+function ConversationEditor({ caseKey, messages, error, onChange }: { caseKey: string; messages: TranscriptMessage[]; error?: string; onChange: (next: TranscriptMessage[]) => void }) {
+  const exchanges = messages.length / 2
+  const canAdd = messages.length + 2 <= LIMITS.historyMessages
+  const set = (index: number, content: string) => onChange(messages.map((message, i) => (i === index ? { ...message, content } : message)))
+  return (
+    <div className="space-y-3 rounded-[2px] border border-dashed border-slip-edge bg-slip/60 px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="text-sm font-medium">
+          Conversation so far <span className="font-normal text-muted-foreground">(optional)</span>
+        </div>
+        <span className="text-xs text-muted-foreground">Every party sees the same earlier turns and writes the next reply.</span>
+      </div>
+      {messages.map((message, i) => (
+        <div key={i} className="space-y-1">
+          <Label htmlFor={`case-${caseKey}-msg-${i}`} className="typewriter text-xs font-bold">
+            {message.role === 'user' ? 'USER' : 'ASSISTANT'} · TURN {Math.floor(i / 2) + 1}
+          </Label>
+          <Textarea id={`case-${caseKey}-msg-${i}`} rows={2} className="bg-white" value={message.content} onChange={(e) => set(i, e.target.value)} />
+        </div>
+      ))}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" disabled={!canAdd} onClick={() => onChange([...messages, { role: 'user', content: '' }, { role: 'assistant', content: '' }])}>
+          <Plus aria-hidden /> Add an earlier exchange
+        </Button>
+        {exchanges > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => onChange(messages.slice(0, -2))}>
+            Remove the last exchange
+          </Button>
+        )}
+      </div>
+      {exchanges > 0 && <p className="text-xs text-muted-foreground">The question below is the user’s next message after this conversation. A conversation needs a model that has passed a live multi-message check.</p>}
+    </div>
   )
 }
 

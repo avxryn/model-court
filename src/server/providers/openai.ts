@@ -5,15 +5,19 @@
  * 2026-11-16; live response mapping must be confirmed by the smoke record.
  */
 
+import type { TranscriptMessage } from '../../domain/contracts'
 import { classifyHttpError, finishText, isFailure, isRecord, nonNegativeInt, postJson, type Adapter } from './common'
 
 export const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
 
-export function openAiRequestBody(modelId: string, system: string, user: string, maxOutputTokens: number) {
+/** With a single user message this is byte-identical to the v1 body (D-39). */
+export function openAiRequestBody(modelId: string, system: string, messages: readonly TranscriptMessage[], maxOutputTokens: number) {
   return {
     model: modelId,
     instructions: system,
-    input: [{ role: 'user', content: [{ type: 'input_text', text: user }] }],
+    input: messages.map((message) =>
+      message.role === 'user' ? { role: 'user', content: [{ type: 'input_text', text: message.content }] } : { role: 'assistant', content: [{ type: 'output_text', text: message.content }] },
+    ),
     max_output_tokens: maxOutputTokens,
     reasoning: { effort: 'none' },
     store: false,
@@ -25,7 +29,7 @@ export const openAiAdapter: Adapter = async (fetchFn, request, timeoutSignal) =>
     fetchFn,
     OPENAI_RESPONSES_URL,
     { authorization: `Bearer ${request.apiKey}` },
-    openAiRequestBody(request.modelId, request.system, request.user, request.maxOutputTokens),
+    openAiRequestBody(request.modelId, request.system, request.messages, request.maxOutputTokens),
     request.signal,
     timeoutSignal,
     'x-request-id',

@@ -136,7 +136,7 @@ export async function createHarness(options: HarnessOptions = {}) {
     get config() {
       return parseConfig(env)
     },
-    routes: options.routes ?? MODEL_ROUTES.map((route) => ({ ...route, verifiedAt: '2026-11-16' })),
+    routes: options.routes ?? MODEL_ROUTES.map((route) => ({ ...route, verifiedAt: '2026-11-16', multiTurnVerifiedAt: '2026-11-16' })),
     now: () => clock,
     newId: () => {
       idCounter++

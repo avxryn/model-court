@@ -5,7 +5,7 @@
 
 import { CANONICALIZATION_VERSION } from './canonical'
 import { isImported, type CaseInput, type ComparisonMode, type Configuration, type Draft, type ImportedConfiguration, type ModelConfiguration } from './contracts'
-import { MESSAGE_TEMPLATE_VERSION } from './messages'
+import { templateFor, type MessageTemplateVersion } from './messages'
 import { findRoute, isRouteEnabled, PROVIDER_REGISTRY_VERSION, type ModelRoute, type ProviderId } from './registry'
 import { RUBRIC_VERSION, type RubricVersion } from './rubric'
 
@@ -47,7 +47,7 @@ export interface RunSnapshot {
   cases: CaseInput[]
   configurations: SnapshotConfiguration[]
   rubricVersion: RubricVersion
-  messageTemplateVersion: typeof MESSAGE_TEMPLATE_VERSION
+  messageTemplateVersion: MessageTemplateVersion
   providerRegistryVersion: string
   appCommit: string
   createdAt: number
@@ -60,14 +60,17 @@ export type ReadinessIssue =
   | { kind: 'model_mode_same_model' }
   | { kind: 'imported_requires_configuration_mode' }
   | { kind: 'imported_text_missing'; configurationKey: string; caseKey: string }
+  | { kind: 'history_unverified'; configurationKey: string }
 
-export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configurations'>, routes: readonly ModelRoute[]): ReadinessIssue[] {
+export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configurations'> & Partial<Pick<Draft, 'cases'>>, routes: readonly ModelRoute[]): ReadinessIssue[] {
   const issues: ReadinessIssue[] = []
   const models = generatedParties(draft.configurations)
+  const hasHistory = (draft.cases ?? []).some((testCase) => (testCase.messages?.length ?? 0) > 0)
   for (const configuration of models) {
     const route = findRoute(configuration.modelKey, routes)
     if (!route) issues.push({ kind: 'unknown_model', configurationKey: configuration.key })
     else if (!isRouteEnabled(route)) issues.push({ kind: 'model_unavailable', configurationKey: configuration.key, modelKey: route.key })
+    else if (hasHistory && !route.multiTurnVerifiedAt) issues.push({ kind: 'history_unverified', configurationKey: configuration.key })
   }
   if (draft.comparisonMode === 'model') {
     if (models.length < draft.configurations.length) issues.push({ kind: 'imported_requires_configuration_mode' })
@@ -101,6 +104,8 @@ export function describeIssue(issue: ReadinessIssue): string {
       return 'An imported party needs configuration comparison. Switch the comparison mode.'
     case 'imported_text_missing':
       return 'An imported party is missing an answer for at least one question. Add every answer and save it.'
+    case 'history_unverified':
+      return 'A question has a conversation, but a selected model has not yet passed a live multi-message check. Remove the conversation or wait for that check.'
   }
 }
 
@@ -137,7 +142,7 @@ export function buildSnapshot(draft: Draft, routes: readonly ModelRoute[], appCo
       return { ...configuration, provider: route.provider, modelId: route.modelId, adapterVersion: route.adapterVersion }
     }),
     rubricVersion: draft.rubricVersion ?? RUBRIC_VERSION,
-    messageTemplateVersion: MESSAGE_TEMPLATE_VERSION,
+    messageTemplateVersion: templateFor(draft.cases),
     providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
     appCommit,
     createdAt,

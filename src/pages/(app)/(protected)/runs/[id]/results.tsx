@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { AlertTriangle, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, StatusBadge } from '@/components/common'
-import { Caption, CaseProgress, Sheet, SheetSection, Stamp, Term } from '@/components/court/CaseFile'
+import { Caption, CaseProgress, ConversationSoFar, Sheet, SheetSection, Stamp, Term } from '@/components/court/CaseFile'
 import { FindingsChart } from '@/components/court/FindingsChart'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -221,7 +221,8 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
                 {!testCase.eligible && <span className="text-xs text-warning">Excluded from scores</span>}
               </summary>
               <div className="space-y-5 border-t border-paper-rule px-5 py-5">
-                <p className="font-heading"><span className="court-label mr-2">Question presented</span>{testCase.input}</p>
+                {testCase.messages.length > 0 && <ConversationSoFar messages={testCase.messages} />}
+                <p className="font-heading"><span className="court-label mr-2">{testCase.messages.length > 0 ? 'Next message' : 'Question presented'}</span>{testCase.input}</p>
                 <p className="text-xs text-muted-foreground">Jury instructions: {testCase.expectedBehavior}</p>
                 <div className="grid gap-4 lg:grid-cols-2">
                   {testCase.responses.map((response) => (

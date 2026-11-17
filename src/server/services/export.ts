@@ -55,6 +55,8 @@ function buildRecordBody(results: Results, evaluationId: string) {
       input: testCase.input,
       reference: testCase.reference,
       expectedBehavior: testCase.expectedBehavior,
+      // Only when present, so records without a conversation keep their earlier fingerprint.
+      ...(testCase.messages.length > 0 ? { messages: testCase.messages } : {}),
       // Only when tagged, so records of untagged hearings keep their earlier fingerprint.
       ...(testCase.language ? { language: testCase.language } : {}),
       eligible: testCase.eligible,

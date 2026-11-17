@@ -33,12 +33,31 @@ function text(bounds: { min: number; max: number }, label: string) {
 export const comparisonModeSchema = z.enum(['model', 'configuration'])
 export type ComparisonMode = z.infer<typeof comparisonModeSchema>
 
+/** One earlier turn of a conversation (D-39). */
+export const transcriptMessageSchema = z.strictObject({
+  role: z.enum(['user', 'assistant']),
+  content: text(LIMITS.historyMessage, 'Message'),
+})
+export type TranscriptMessage = z.infer<typeof transcriptMessageSchema>
+
 export const caseInputSchema = z.strictObject({
   key: uuid,
   title: text(LIMITS.caseTitle, 'Title'),
   input: text(LIMITS.caseInput, 'Input'),
   reference: text(LIMITS.caseReference, 'Reference'),
   expectedBehavior: text(LIMITS.caseExpectedBehavior, 'Expected behavior'),
+  /**
+   * Optional conversation so far (D-39): prior turns only, alternating, starting
+   * with the user and ending with the assistant. `input` stays the final user turn.
+   */
+  messages: z
+    .array(transcriptMessageSchema)
+    .min(2, 'A conversation needs at least one user turn and one assistant reply')
+    .max(LIMITS.historyMessages, `At most ${LIMITS.historyMessages} earlier messages`)
+    .refine((messages) => messages.every((message, index) => message.role === (index % 2 === 0 ? 'user' : 'assistant')), 'Turns must alternate, starting with the user')
+    .refine((messages) => messages.at(-1)?.role === 'assistant', 'The conversation so far must end with an assistant reply')
+    .refine((messages) => messages.reduce((sum, message) => sum + codePointLength(message.content), 0) <= LIMITS.historyChars, `The conversation so far is at most ${LIMITS.historyChars.toLocaleString('en-US')} characters`)
+    .optional(),
   /** Optional language tag for per-language results (D-36), e.g. "en" or "Spanish". */
   language: z.string().trim().min(1, 'Language cannot be blank').max(LIMITS.caseLanguage.max, `Language is at most ${LIMITS.caseLanguage.max} characters`).optional(),
 })

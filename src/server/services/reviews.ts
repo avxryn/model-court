@@ -175,6 +175,8 @@ export interface AnonymousReview {
     input: string
     reference: string
     expectedBehavior: string
+    /** The conversation so far, identical for every party; empty when there is none. */
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>
     responses: Array<{ responseId: string; label: 'A' | 'B' | 'C'; text: string }>
   }>
   ratings: DraftRating[]
@@ -222,6 +224,7 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
         input: testCase.input,
         reference: testCase.reference,
         expectedBehavior: testCase.expectedBehavior,
+        messages: testCase.messages ?? [],
         responses: item.responses.map((response) => ({
           responseId: response.responseId,
           label: response.label,

@@ -3,6 +3,8 @@
 All routes require `Authorization: Bearer <platform JWT>`. Requests and responses are JSON. Every
 response carries `requestId` and `Cache-Control: private, no-store`. Unknown fields are rejected (422).
 
+Conversations (D-39): a case may carry `messages: [{role: "user"|"assistant", content}]`, the conversation so far. Review cases and results cases add `messages` (empty when none); the catalog adds `multiTurnVerifiedAt` per model.
+
 Imported evidence (D-38): a configuration may be `{kind: "imported", key, label, provenance}`. `PUT /evaluations/:id/imports/:configurationKey` (If-Match; body `{items: [{caseKey, text}], confirmMayShareWithJurors: true}`) replaces that party's answers and returns the new revision; `DELETE` on the same path removes them. The owner evaluation view adds `imports`; the owner run view adds `imported`; results add `source`/`provenance` on imported parties and `status: "imported"` plus `sha256` on their responses.
 
 Draft fields added in v2: optional `rubricVersion` (`reference-qa-v1` default, `safety-v1`, `writing-v1`) and an optional per-case `language` tag. Results add `cases[].language` and `byLanguage` (D-35, D-36).

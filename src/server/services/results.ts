@@ -122,6 +122,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
       input: testCase.input,
       reference: testCase.reference,
       expectedBehavior: testCase.expectedBehavior,
+      messages: testCase.messages ?? [],
       language: testCase.language ?? null,
       eligible,
       responses: snapshot.configurations.map((configuration) => {

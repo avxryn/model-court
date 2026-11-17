@@ -20,7 +20,7 @@ import { utf8ByteLength } from './text'
 export const CASE_IMPORT_COLUMNS = ['title', 'input', 'reference', 'expected_behavior', 'language'] as const
 type Column = (typeof CASE_IMPORT_COLUMNS)[number]
 const REQUIRED: readonly Column[] = ['title', 'input', 'expected_behavior']
-const FIELD: Record<Column, keyof Omit<CaseInput, 'key'>> = { title: 'title', input: 'input', reference: 'reference', expected_behavior: 'expectedBehavior', language: 'language' }
+const FIELD: Record<Column, 'title' | 'input' | 'reference' | 'expectedBehavior' | 'language'> = { title: 'title', input: 'input', reference: 'reference', expected_behavior: 'expectedBehavior', language: 'language' }
 
 export interface ImportIssue {
   /** 1-based data row (the header is row 0); null for file-level problems. */

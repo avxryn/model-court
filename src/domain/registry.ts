@@ -21,10 +21,15 @@ export interface ModelRoute {
   label: string
   /** ISO date of the recorded live smoke call; null = documented but unverified. */
   verifiedAt: string | null
+  /**
+   * ISO date of a recorded live call with a multi-message history (D-39). Questions with a
+   * conversation can run only on routes where this is set.
+   */
+  multiTurnVerifiedAt: string | null
   adapterVersion: string
 }
 
-export const PROVIDER_REGISTRY_VERSION = '2026-11-17.1'
+export const PROVIDER_REGISTRY_VERSION = '2026-11-17.2'
 
 export const MODEL_ROUTES: readonly ModelRoute[] = [
   {
@@ -33,7 +38,8 @@ export const MODEL_ROUTES: readonly ModelRoute[] = [
     modelId: 'gpt-6-luna',
     label: 'OpenAI GPT-6 Luna',
     verifiedAt: '2026-11-17',
-    adapterVersion: 'openai-responses-v1',
+    multiTurnVerifiedAt: null,
+    adapterVersion: 'openai-responses-v2',
   },
   {
     key: 'anthropic-claude-haiku-5-5',
@@ -41,7 +47,8 @@ export const MODEL_ROUTES: readonly ModelRoute[] = [
     modelId: 'claude-haiku-5-5',
     label: 'Anthropic Claude Haiku 5.5',
     verifiedAt: '2026-11-17',
-    adapterVersion: 'anthropic-messages-v1',
+    multiTurnVerifiedAt: null,
+    adapterVersion: 'anthropic-messages-v2',
   },
 ]
 
