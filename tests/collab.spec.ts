@@ -66,10 +66,10 @@ test('an evaluation created by one account is invisible to another', async ({ us
   const [owner, other] = await users(2)
 
   await owner.page.goto('/evaluations')
-  await owner.page.getByRole('button', { name: /New evaluation/ }).first().click()
+  await owner.page.getByRole('button', { name: /Open a new case/ }).first().click()
   const title = `E2E isolation ${Date.now()}`
   await owner.page.getByLabel('Title').fill(title)
-  await owner.page.getByRole('button', { name: 'Create evaluation' }).click()
+  await owner.page.getByRole('button', { name: 'Open case' }).click()
   await expect(owner.page).toHaveURL(/\/evaluations\/[0-9a-f-]{36}$/, { timeout: 15_000 })
   await expect(owner.page.getByRole('heading', { name: title })).toBeVisible()
   const url = owner.page.url()

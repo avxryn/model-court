@@ -161,7 +161,7 @@ export function NotFoundPanel() {
       <h1 className="text-2xl font-semibold tracking-tight">Not found</h1>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">This page does not exist, was deleted, or is not shared with your account.</p>
       <Button className="mt-6" render={<Link to="/evaluations" />} nativeButton={false}>
-        Back to evaluations
+        Back to your cases
       </Button>
     </div>
   )

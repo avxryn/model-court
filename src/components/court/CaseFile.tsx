@@ -42,24 +42,28 @@ export function SectionLabel({ id, name, children, className }: { id?: string; n
 export function CaseProgress({ step, complete = false, className }: { step: CaseStep; complete?: boolean; className?: string }) {
   const currentIndex = CASE_STEPS.findIndex((s) => s.key === step)
   return (
-    <ol aria-label="Case progress" className={cn('flex flex-wrap items-end gap-1', className)}>
+    <ol aria-label="Case progress" className={cn('grid grid-cols-5 items-end gap-0.5 sm:gap-1', className)}>
       {CASE_STEPS.map((s, index) => {
         const isCurrent = !complete && index === currentIndex
         const done = complete || index < currentIndex
         return (
-          <li key={s.key} className="min-w-[8.5rem] flex-1" aria-current={isCurrent ? 'step' : undefined}>
+          <li key={s.key} className="min-w-0" aria-current={isCurrent ? 'step' : undefined}>
             <div
               className={cn(
-                'rounded-t-lg px-3 pt-2 pb-2.5',
+                'rounded-t-lg px-1.5 pt-1.5 pb-2 sm:px-3 sm:pt-2 sm:pb-2.5',
                 isCurrent ? 'bg-paper ring-1 ring-paper-edge [clip-path:inset(-2px_-2px_0_-2px)]' : done ? 'mt-1.5 bg-manila text-manila-foreground' : 'mt-1.5 bg-tab-idle text-tab-idle-foreground',
               )}
             >
-              <div className={cn('typewriter text-[0.6875rem] font-bold', isCurrent ? 'text-stamp' : '')}>
-                STEP {index + 1}
-                {isCurrent ? ' · NOW' : done ? ' · DONE' : ''}
+              <div className={cn('typewriter text-[0.625rem] font-bold sm:text-[0.6875rem]', isCurrent ? 'text-stamp' : '')}>
+                <span className="sm:hidden">{index + 1}</span>
+                <span className="hidden sm:inline">
+                  STEP {index + 1}
+                  {isCurrent ? ' · NOW' : done ? ' · DONE' : ''}
+                </span>
+                <span className="sr-only">{isCurrent ? ' (current)' : done ? ' (done)' : ''}</span>
               </div>
-              <div className={cn('font-heading leading-tight', isCurrent ? 'text-base font-bold text-foreground' : 'text-[0.9375rem]')}>{s.name}</div>
-              <div className={cn('text-xs leading-snug', isCurrent ? 'text-muted-foreground' : '')}>{s.plain}</div>
+              <div className={cn('truncate font-heading leading-tight', isCurrent ? 'text-xs font-bold text-foreground sm:text-base' : 'text-xs sm:text-[0.9375rem]')}>{s.name}</div>
+              <div className={cn('hidden text-xs leading-snug sm:block', isCurrent ? 'text-muted-foreground' : '')}>{s.plain}</div>
             </div>
           </li>
         )
@@ -72,7 +76,7 @@ export function CaseProgress({ step, complete = false, className }: { step: Case
  * The case caption: court heading, "In re" title, the parties, and the
  * docket details. `stamp` sits in the top-right corner.
  */
-export function Caption({ title, parties, details, stamp, backTo }: { title: ReactNode; parties?: [ReactNode, ReactNode] | null; details: ReactNode; stamp?: ReactNode; backTo?: { to: string; label: string } }) {
+export function Caption({ title, parties, details, stamp, backTo }: { title: ReactNode; parties?: ReactNode[] | null; details: ReactNode; stamp?: ReactNode; backTo?: { to: string; label: string } }) {
   return (
     <div className="relative px-5 pt-7 pb-6 sm:px-8">
       {backTo && (
@@ -80,6 +84,7 @@ export function Caption({ title, parties, details, stamp, backTo }: { title: Rea
           ← {backTo.label}
         </Link>
       )}
+      {stamp && <div className="pointer-events-none mb-4 flex justify-end sm:absolute sm:top-6 sm:right-8 sm:mb-0">{stamp}</div>}
       <div className="text-center">
         <div className="font-heading text-sm font-bold tracking-[0.18em]">IN THE MODEL COURT</div>
         <div className="mt-1 text-[0.6875rem] tracking-[0.14em] text-muted-foreground">BLIND REVIEW DIVISION</div>
@@ -88,23 +93,43 @@ export function Caption({ title, parties, details, stamp, backTo }: { title: Rea
         <div className="min-w-0 flex-[3_1_18rem] border-foreground py-4 pr-5 sm:border-r">
           <div className="font-heading text-sm italic">In re:</div>
           <h1 className="mt-0.5 font-heading text-2xl leading-tight font-bold break-words sm:text-[1.75rem]">{title}</h1>
-          {parties && (
+          {parties && parties.length > 0 && (
             <div className="mt-3 font-heading text-base">
-              <div>{parties[0]},</div>
-              <div className="my-0.5 ml-6 text-sm italic">v.</div>
-              <div>{parties[1]}.</div>
+              {parties.map((party, index) => (
+                <div key={index}>
+                  {index > 0 && <div className="my-0.5 ml-6 text-sm italic">v.</div>}
+                  <div>
+                    {party}
+                    {index === parties.length - 1 ? '.' : ','}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
         <div className="flex min-w-0 flex-[2_1_13rem] flex-col gap-1 py-4 font-heading text-sm sm:pl-5">{details}</div>
       </div>
-      {stamp && <div className="pointer-events-none absolute top-6 right-5 sm:right-8">{stamp}</div>}
     </div>
   )
 }
 
 export function DocketNumber({ children }: { children: ReactNode }) {
   return <span className="typewriter font-bold">{children}</span>
+}
+
+/** A labelled region inside a sheet, separated from the one above by a ruled line. */
+export function SheetSection({ id, label, aside, children, className }: { id: string; label: ReactNode; aside?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <section aria-labelledby={id} className={cn('border-t border-paper-rule px-5 py-6 sm:px-8', className)}>
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id={id} className="court-label">
+          {label}
+        </h2>
+        {aside}
+      </div>
+      {children}
+    </section>
+  )
 }
 
 const STAMP: Record<'filed' | 'sealed' | 'unsealed' | 'entered' | 'draft', { text: string; tone: string; tilt: string }> = {

@@ -24,7 +24,7 @@ function SignedOutPanel() {
             <Lock className="size-5" />
           </span>
           <CardTitle className="font-heading text-xl font-semibold tracking-tight">Sign in to continue</CardTitle>
-          <CardDescription>Evaluations, reviews, and API keys are private to your account.</CardDescription>
+          <CardDescription>Your cases, worksheets, and provider keys are private to your account.</CardDescription>
         </CardHeader>
         <CardContent className="mt-2 flex flex-col gap-3">
           <Button className="h-9" onClick={() => setOpen(true)}>Sign in</Button>

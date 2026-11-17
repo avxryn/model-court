@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Copy, Link2, RefreshCw, Wifi, WifiOff } from 'lucide-react'
 import { toast } from 'sonner'
-import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageHeader, PageSkeleton, StaleNotice, StatusBadge } from '@/components/common'
+import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, StaleNotice, StatusBadge } from '@/components/common'
+import { Caption, CaseProgress, DocketNumber, Sheet, Stamp } from '@/components/court/CaseFile'
+import { caseStep, docketNumber, recordStamp } from '@/lib/court'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
@@ -44,20 +46,36 @@ export default function RunPage() {
 
 function ReviewerRun({ run }: { run: Extract<RunView, { role: 'reviewer' }> }) {
   const revealed = run.status === 'revealed' || run.status === 'decided'
+  const stamp = recordStamp(run.status)
   return (
     <>
-      <PageHeader eyebrow="Invited review" title={run.evaluationTitle} actions={<StatusBadge status={run.status} />} />
-      <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{revealed ? 'The judge has revealed the models. Results include the jury’s findings.' : 'Score the anonymous responses. Other jurors cannot see your ratings, and you cannot see theirs, until the judge reveals the models.'}</p>
-      <div className="mt-6 flex gap-2">
-        <Button render={<Link to={`/runs/${run.runId}/review`} />} nativeButton={false} variant={revealed ? 'outline' : 'default'}>
-          {run.session?.status === 'draft' && !revealed ? 'Continue review' : 'View my review'}
-        </Button>
-        {revealed && (
-          <Button render={<Link to={`/runs/${run.runId}/results`} />} nativeButton={false}>
-            View results
-          </Button>
-        )}
-      </div>
+      <CaseProgress {...caseStep(run.status)} />
+      <Sheet className="rounded-t-none">
+        <Caption
+          title={run.evaluationTitle}
+          parties={revealed ? null : ['Sealed party', 'Sealed party']}
+          details={
+            <>
+              <div>Seated: <span className="italic">you, as a juror</span></div>
+              <div className="flex items-center gap-2">Status: <StatusBadge status={run.status} /></div>
+            </>
+          }
+          stamp={stamp && <Stamp kind={stamp} />}
+        />
+        <div className="space-y-5 px-5 pb-10 sm:px-8">
+          <p className="max-w-2xl font-heading text-base leading-relaxed">{revealed ? 'The judge has unsealed the record. It includes the jury’s findings.' : 'Score the testimony. Other jurors can’t see your ratings, and you can’t see theirs, until the judge unseals the record.'}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button render={<Link to={`/runs/${run.runId}/review`} />} nativeButton={false} variant={revealed ? 'outline' : 'default'}>
+              {run.session?.status === 'draft' && !revealed ? 'Open your worksheet' : 'View your worksheet'}
+            </Button>
+            {revealed && (
+              <Button render={<Link to={`/runs/${run.runId}/results`} />} nativeButton={false}>
+                View the record
+              </Button>
+            )}
+          </div>
+        </div>
+      </Sheet>
     </>
   )
 }
@@ -84,31 +102,39 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
     }
   }
 
+  const stamp = recordStamp(run.status)
   return (
     <>
-      <PageHeader
-        eyebrow={
-          <Link to={`/evaluations/${run.evaluationId}`} className="hover:underline">
-            {run.evaluationTitle}
-          </Link>
-        }
-        title={`Run · ${formatTime(run.createdAt)}`}
-        description={run.comparisonMode === 'model' ? 'Model comparison: identical instructions, different models.' : 'Configuration comparison: instructions and models may differ; not an isolated model-quality test.'}
-        actions={
+      <CaseProgress {...caseStep(run.status)} />
+      <Sheet className="rounded-t-none">
+      <Caption
+        backTo={{ to: `/evaluations/${run.evaluationId}`, label: 'Back to the case' }}
+        title={run.evaluationTitle}
+        parties={run.configurations.map((c) => c.label)}
+        details={
           <>
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title={live ? 'Live updates connected' : 'Live updates reconnecting; refreshing every 15 seconds'}>
-              {live ? <Wifi className="size-3.5" aria-hidden /> : <WifiOff className="size-3.5" aria-hidden />}
-              {live ? 'Live' : 'Reconnecting'}
-            </span>
-            <StatusBadge status={run.status} />
+            <div>
+              Case no. <DocketNumber>{docketNumber(run.evaluationId)}</DocketNumber>
+            </div>
+            <div>Hearing · {formatTime(run.createdAt)}</div>
+            <div>Presiding: <span className="italic">you, as judge</span></div>
+            <div className="text-xs leading-snug text-muted-foreground">{run.comparisonMode === 'model' ? 'Model comparison: identical instructions, different models.' : 'Configuration comparison: instructions and models may differ; not an isolated model-quality test.'}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-3 font-sans">
+              <StatusBadge status={run.status} />
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title={live ? 'Live updates connected' : 'Live updates reconnecting; refreshing every 15 seconds'}>
+                {live ? <Wifi className="size-3.5" aria-hidden /> : <WifiOff className="size-3.5" aria-hidden />}
+                {live ? 'Live' : 'Reconnecting'}
+              </span>
+            </div>
           </>
         }
+        stamp={stamp && <Stamp kind={stamp} />}
       />
 
-      <section aria-labelledby="progress-heading" className="surface space-y-4 p-5 sm:p-6">
+      <section aria-labelledby="progress-heading" className="space-y-4 border-t border-paper-rule px-5 py-6 sm:px-8">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="progress-heading" className="text-lg font-semibold">
-            Generation
+          <h2 id="progress-heading" className="court-label">
+            Hearing testimony<span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(generating responses)</span>
           </h2>
           <span className="text-sm tabular-nums text-muted-foreground" role="status">
             {terminal}/{run.counts.planned} finished · {run.counts.succeeded} succeeded · {run.counts.failed} failed · {run.counts.uncertain} uncertain
@@ -202,16 +228,16 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
             )}
             {run.status === 'ready' && <OpenReviewButton run={run} busy={busy} act={act} />}
             <AlertDialog>
-              <AlertDialogTrigger render={<Button variant="ghost" disabled={busy} />}>Cancel run</AlertDialogTrigger>
+              <AlertDialogTrigger render={<Button variant="ghost" disabled={busy} />}>Cancel hearing</AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Cancel this run?</AlertDialogTitle>
-                  <AlertDialogDescription>Queued requests are not sent. A request already in flight may still be charged; its output will be discarded. Successful responses stay in the record. You can start a new run afterward.</AlertDialogDescription>
+                  <AlertDialogTitle>Cancel this hearing?</AlertDialogTitle>
+                  <AlertDialogDescription>Queued requests are not sent. A request already in flight may still be charged; its output will be discarded. Successful responses stay in the record. You can start a new hearing afterward.</AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Keep running</AlertDialogCancel>
-                  <AlertDialogAction variant="destructive" onClick={() => void act(() => api('POST', `/runs/${run.runId}/cancel`, { body: {}, revision: run.revision }), 'Run canceled')}>
-                    Cancel run
+                  <AlertDialogCancel>Keep going</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive" onClick={() => void act(() => api('POST', `/runs/${run.runId}/cancel`, { body: {}, revision: run.revision }), 'Hearing canceled')}>
+                    Cancel hearing
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -221,6 +247,7 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
       </section>
 
       {(run.status === 'reviewing' || run.status === 'revealed' || run.status === 'decided') && <ReviewPanel run={run} busy={busy} act={act} />}
+      </Sheet>
     </>
   )
 }
@@ -232,31 +259,31 @@ function OpenReviewButton({ run, busy, act }: { run: OwnerRunView; busy: boolean
   const eligible = run.eligibility.caseKeys.length
   const excluded = run.eligibility.excludedCaseKeys.length
   if (eligible === 0) {
-    return <p className="self-center text-sm text-destructive">No case has a successful response from both configurations, so there is nothing comparable to review. Retry failures or cancel.</p>
+    return <p className="self-center text-sm text-destructive">No question has testimony from both parties, so there is nothing comparable to review. Retry failures or cancel.</p>
   }
   return (
     <AlertDialog onOpenChange={() => setAck(false)}>
-      <AlertDialogTrigger render={<Button disabled={busy} />}>Open review</AlertDialogTrigger>
+      <AlertDialogTrigger render={<Button disabled={busy} />}>Open deliberation</AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Open blind review?</AlertDialogTitle>
           <AlertDialogDescription>
-            {eligible} case{eligible === 1 ? '' : 's'} will be reviewed. Accepted responses are frozen: no more retries or replacements in this run.
-            {eligible === 1 && ' With one case, treat any conclusion as exploratory.'}
+            {eligible} question{eligible === 1 ? '' : 's'} will be reviewed. The testimony is frozen: no more retries or replacements in this hearing. Next, summon jurors and do your own review.
+            {eligible === 1 && ' With one question, treat any conclusion as exploratory.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {excluded > 0 && (
           <div className="flex items-start gap-2 text-sm">
             <Checkbox id="ack-excluded" checked={ack} onCheckedChange={(c) => setAck(c === true)} />
             <Label htmlFor="ack-excluded" className="font-normal leading-snug">
-              Exclude {excluded} incomplete case{excluded === 1 ? '' : 's'}. Their failures still count in the reliability statistics.
+              Exclude {excluded} incomplete question{excluded === 1 ? '' : 's'}. Their failures still count in the reliability statistics.
             </Label>
           </div>
         )}
         <AlertDialogFooter>
           <AlertDialogCancel>Not yet</AlertDialogCancel>
-          <AlertDialogAction disabled={excluded > 0 && !ack} onClick={() => void act(() => api('POST', `/runs/${run.runId}/open-review`, { body: { acknowledgeExcludedCases: excluded > 0 }, revision: run.revision }), 'Review opened')}>
-            Open review
+          <AlertDialogAction disabled={excluded > 0 && !ack} onClick={() => void act(() => api('POST', `/runs/${run.runId}/open-review`, { body: { acknowledgeExcludedCases: excluded > 0 }, revision: run.revision }), 'Deliberation opened')}>
+            Open deliberation
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -285,16 +312,16 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
   }
 
   return (
-    <section aria-labelledby="review-heading" className="surface mt-6 space-y-4 p-5 sm:p-6">
+    <section aria-labelledby="review-heading" className="space-y-4 border-t border-paper-rule px-5 pt-6 pb-10 sm:px-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="review-heading" className="text-lg font-semibold">
-          Blind review
+        <h2 id="review-heading" className="court-label">
+          The jury<span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(blind review)</span>
         </h2>
         <span className="text-sm tabular-nums text-muted-foreground" role="status">
-          {run.review.submittedCount} submitted · {run.review.pendingCount} unfinished (drafts and unused invitations)
+          {run.review.submittedCount} filed · {run.review.pendingCount} unfinished (worksheets in progress and unused summonses)
         </span>
       </div>
-      <ul className="divide-y divide-border rounded-lg border border-border">
+      <ul className="divide-y divide-paper-rule rounded-[2px] bg-white ring-1 ring-exhibit-edge">
         {run.review.participants.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
             <span>{p.label}</span>
@@ -312,11 +339,11 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
           .filter((i) => i.state !== 'redeemed')
           .map((invite) => (
             <li key={invite.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm text-muted-foreground">
-              <span>Invitation · expires {formatTime(invite.expiresAt)}</span>
+              <span>Jury summons · expires {formatTime(invite.expiresAt)}</span>
               <span className="flex items-center gap-2">
                 <StatusBadge status={invite.state} />
                 {invite.state === 'unused' && reviewing && (
-                  <Button size="xs" variant="ghost" onClick={() => void act(() => api('DELETE', `/runs/${run.runId}/invites/${invite.id}`), 'Invitation revoked')}>
+                  <Button size="xs" variant="ghost" onClick={() => void act(() => api('DELETE', `/runs/${run.runId}/invites/${invite.id}`), 'Summons revoked')}>
                     Revoke
                   </Button>
                 )}
@@ -333,24 +360,27 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
             </Button>
           )}
           <Button variant="outline" disabled={slots <= 0 || busy} onClick={() => void createInvite()}>
-            <Link2 aria-hidden /> Invite a juror ({Math.max(slots, 0)} left)
+            <Link2 aria-hidden /> Summon a juror ({Math.max(slots, 0)} seats left)
           </Button>
           <RevealButton run={run} busy={busy} act={act} />
         </div>
       ) : (
         <Button render={<Link to={`/runs/${run.runId}/results`} />} nativeButton={false}>
-          View results and verdict
+          {run.status === 'decided' ? 'View the record and judgment' : 'View the record and enter judgment'}
         </Button>
       )}
 
       <Dialog open={inviteUrl !== null} onOpenChange={(open) => !open && setInviteUrl(null)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="border-t-4 border-dashed border-t-paper-edge sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Invitation link</DialogTitle>
-            <DialogDescription>Single use, expires in 24 hours. Anyone with this link can claim the juror seat, so share it directly. It is shown only once.</DialogDescription>
+            <div className="typewriter text-xs font-bold text-stamp">JURY SUMMONS</div>
+            <DialogTitle className="font-heading text-xl">You are summoned to serve as a juror</DialogTitle>
+            <DialogDescription>
+              Send this invitation link to one person. It works once, expires in 24 hours, and anyone holding it can take the seat, so share it directly. It is shown only once. Jurors need no API key.
+            </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2">
-            <Input readOnly value={inviteUrl ?? ''} aria-label="Invitation link" onFocus={(e) => e.currentTarget.select()} />
+            <Input readOnly value={inviteUrl ?? ''} aria-label="Invitation link" className="typewriter bg-white" onFocus={(e) => e.currentTarget.select()} />
             <Button
               onClick={() => {
                 void navigator.clipboard.writeText(inviteUrl ?? '').then(
@@ -370,15 +400,15 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
 
 function RevealButton({ run, busy, act }: { run: OwnerRunView; busy: boolean; act: Act }) {
   const { submittedCount, pendingCount } = run.review
-  if (submittedCount === 0) return <span className="self-center text-xs text-muted-foreground">Reveal needs at least one submitted review.</span>
+  if (submittedCount === 0) return <span className="self-center text-xs text-muted-foreground">Unsealing needs at least one filed worksheet.</span>
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={<Button disabled={busy} />}>Reveal models</AlertDialogTrigger>
+      <AlertDialogTrigger render={<Button disabled={busy} />}>Unseal the record</AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Close review and reveal?</AlertDialogTitle>
+          <AlertDialogTitle>Close the jury and reveal the models?</AlertDialogTitle>
           <AlertDialogDescription>
-            {submittedCount} submitted review{submittedCount === 1 ? '' : 's'} will be included. {pendingCount > 0 ? `${pendingCount} unfinished review${pendingCount === 1 ? '' : 's'} or unused invitation${pendingCount === 1 ? '' : 's'} will be closed and excluded.` : 'No reviews are unfinished.'} This cannot be undone; a new experiment needs a new run.
+            {submittedCount} filed worksheet{submittedCount === 1 ? '' : 's'} will be included. {pendingCount > 0 ? `${pendingCount} unfinished worksheet${pendingCount === 1 ? '' : 's'} or unused summons${pendingCount === 1 ? '' : 'es'} will be closed and excluded.` : 'No worksheets are unfinished.'} This can’t be undone; a new experiment needs a new hearing.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {pendingCount > 0 && (
@@ -388,9 +418,9 @@ function RevealButton({ run, busy, act }: { run: OwnerRunView; busy: boolean; ac
           </Alert>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel>Keep reviewing open</AlertDialogCancel>
-          <AlertDialogAction onClick={() => void act(() => api('POST', `/runs/${run.runId}/reveal`, { body: { acknowledgePendingCount: pendingCount }, revision: run.revision, idempotencyKey: newIntentKey() }), 'Models revealed')}>
-            Reveal models
+          <AlertDialogCancel>Keep the jury open</AlertDialogCancel>
+          <AlertDialogAction onClick={() => void act(() => api('POST', `/runs/${run.runId}/reveal`, { body: { acknowledgePendingCount: pendingCount }, revision: run.revision, idempotencyKey: newIntentKey() }), 'Record unsealed')}>
+            Unseal the record
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

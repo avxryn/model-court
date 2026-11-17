@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, KeyRound, Play } from 'lucide-react'
 import { toast } from 'sonner'
-import { ErrorPanel, formatTime, Page, PageHeader, PageSkeleton, SaveIndicator, StatusBadge, type SaveState } from '@/components/common'
+import { ErrorPanel, formatTime, Page, PageSkeleton, SaveIndicator, StatusBadge, type SaveState } from '@/components/common'
+import { Caption, CaseProgress, DocketNumber, Sheet, Stamp, Term } from '@/components/court/CaseFile'
 import { CasesEditor, ConfigurationsEditor, type FieldErrors } from '@/components/evaluations/DraftEditor'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
@@ -18,6 +19,7 @@ import { PROVIDER_NAMES, type ModelRoute, type ProviderId } from '@/domain/regis
 import { describeIssue, readinessIssues, requiredProviders } from '@/domain/snapshot'
 import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
 import type { CatalogView, CredentialMetadata, EvaluationView, OwnerEvaluationView } from '@/lib/dto'
+import { caseStep, docketNumber, recordStamp } from '@/lib/court'
 import { useApi } from '@/lib/use-api'
 
 export default function EvaluationPage() {
@@ -33,20 +35,36 @@ export default function EvaluationPage() {
 function ReviewerEvaluation({ evaluation }: { evaluation: Extract<EvaluationView, { role: 'reviewer' }> }) {
   return (
     <Page>
-      <PageHeader eyebrow="Juror" title={evaluation.title} description="You were invited as a juror for this evaluation. Configuration details stay hidden until the judge reveals them." />
-      <ul className="surface divide-y divide-border overflow-hidden">
+      <Sheet>
+      <Caption
+        title={evaluation.title}
+        parties={['Sealed party', 'Sealed party']}
+        details={
+          <>
+            <div>
+              Case no. <DocketNumber>{docketNumber(evaluation.id)}</DocketNumber>
+            </div>
+            <div>Seated: <span className="italic">you, as a juror</span></div>
+          </>
+        }
+      />
+      <div className="space-y-4 px-5 pb-10 sm:px-8">
+      <p className="font-heading text-base leading-relaxed">You were summoned as a juror in this case. The parties stay sealed until the judge unseals the record.</p>
+      <ul className="divide-y divide-paper-rule rounded-[2px] bg-white ring-1 ring-exhibit-edge">
         {evaluation.runs.map((run) => (
           <li key={run.id} className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
-            <span className="text-sm">Run started {formatTime(run.createdAt)}</span>
+            <span className="font-heading">Hearing · {formatTime(run.createdAt)}</span>
             <span className="flex items-center gap-3">
               <StatusBadge status={run.status} />
               <Button size="sm" variant="outline" render={<Link to={run.status === 'revealed' || run.status === 'decided' ? `/runs/${run.id}/results` : `/runs/${run.id}/review`} />} nativeButton={false}>
-                Open
+                {run.status === 'revealed' || run.status === 'decided' ? 'View the record' : 'Open your worksheet'}
               </Button>
             </span>
           </li>
         ))}
       </ul>
+      </div>
+      </Sheet>
     </Page>
   )
 }
@@ -84,6 +102,10 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
   const keys = credentials.data?.items ?? []
   const missingProviders = providers.filter((provider) => !keys.some((key) => key.provider === provider))
   const activeRun = evaluation.runs.find((run) => ['generating', 'ready', 'reviewing'].includes(run.status))
+  const latestRun = [...evaluation.runs].sort((a, b) => b.createdAt - a.createdAt)[0]
+  const progress = caseStep(latestRun?.status)
+  const stamp = recordStamp(latestRun?.status)
+  const calls = draft.cases.length * draft.configurations.length
 
   const save = useCallback(async () => {
     setSaveState('saving')
@@ -109,31 +131,53 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
   }, [dirty])
 
   const blockers: string[] = [
-    ...(dirty ? ['Save the draft first — runs use the saved version.'] : []),
+    ...(dirty ? ['Save the draft first — a hearing uses the saved version.'] : []),
     ...(hasErrors ? ['Fix the highlighted fields.'] : []),
     ...issues.map(describeIssue),
     ...missingProviders.map((provider) => `Add your ${PROVIDER_NAMES[provider]} key in Settings.`),
-    ...(activeRun ? ['This evaluation already has an unfinished run.'] : []),
+    ...(activeRun ? ['This case already has an unfinished hearing.'] : []),
     ...(catalog.data && !catalog.data.generationEnabled ? ['Live generation is disabled on this deployment.'] : []),
   ]
 
   return (
     <Page width="wide">
-      <PageHeader
-        eyebrow="Evaluation"
+      <CaseProgress {...progress} />
+      <Sheet className="rounded-t-none">
+      <Caption
+        backTo={{ to: '/evaluations', label: 'Back to the docket' }}
         title={evaluation.title}
-        description={evaluation.taskDescription || undefined}
-        actions={
+        parties={draft.configurations.map((c) => c.label || 'Unnamed party')}
+        details={
           <>
-            <SaveIndicator state={dirty && saveState === 'idle' ? 'idle' : saveState} onRetry={() => void save()} />
-            {dirty && <span className="text-xs text-muted-foreground">Unsaved changes</span>}
-            <Button variant="outline" disabled={!dirty || hasErrors || saveState === 'saving'} onClick={() => void save()}>
-              Save draft
-            </Button>
-            <RunDialog evaluationId={evaluation.id} revision={revision} draft={draft} providers={providers} keys={keys} blockers={blockers} />
+            <div>
+              Case no. <DocketNumber>{docketNumber(evaluation.id)}</DocketNumber>
+            </div>
+            <div>
+              {evaluation.runs.length} hearing{evaluation.runs.length === 1 ? '' : 's'}
+              {latestRun && <> · latest {formatTime(latestRun.createdAt)}</>}
+            </div>
+            <div>Presiding: <span className="italic">you, as judge</span></div>
+            {evaluation.taskDescription && <div className="text-xs leading-snug text-muted-foreground">{evaluation.taskDescription}</div>}
           </>
         }
+        stamp={stamp ? <Stamp kind={stamp} /> : <Stamp kind="draft" />}
       />
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-paper-rule bg-slip/50 px-5 py-4 sm:px-8">
+        <div className="flex flex-wrap items-center gap-3">
+          <SaveIndicator state={dirty && saveState === 'idle' ? 'idle' : saveState} onRetry={() => void save()} />
+          {dirty && <span className="text-xs text-muted-foreground">Unsaved changes</span>}
+          <Button variant="outline" disabled={!dirty || hasErrors || saveState === 'saving'} onClick={() => void save()}>
+            Save draft
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground tabular-nums">
+            This hearing makes <strong className="text-foreground">{calls} paid calls</strong>, billed to your keys
+          </span>
+          <RunDialog evaluationId={evaluation.id} revision={revision} draft={draft} providers={providers} keys={keys} blockers={blockers} />
+        </div>
+      </div>
+      <div className="border-t border-paper-rule px-5 pt-6 pb-10 sm:px-8">
       {saveState === 'conflict' && (
         <Alert variant="destructive" className="mb-6">
           <AlertTriangle aria-hidden />
@@ -149,17 +193,17 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
       )}
       {activeRun && (
         <Alert className="mb-6">
-          <AlertTitle>Run in progress</AlertTitle>
+          <AlertTitle>A hearing is in progress</AlertTitle>
           <AlertDescription>
-            Edits here only affect future runs. <Link className="underline" to={`/runs/${activeRun.id}`}>Open the current run</Link>.
+            Edits here only affect future hearings. <Link className="underline" to={`/runs/${activeRun.id}`}>Open the current hearing</Link>.
           </AlertDescription>
         </Alert>
       )}
 
       {blockers.length > 0 && (
-        <div role="status" className="mb-8 rounded-xl bg-accent/60 px-5 py-4 text-sm ring-1 ring-brass/25">
-          <div className="font-medium text-accent-foreground">Before you can run</div>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-foreground/80 marker:text-brass">
+        <div role="status" className="mb-8 rounded-[2px] border border-dashed border-slip-edge bg-slip px-5 py-4 text-sm">
+          <div className="court-label">Before the hearing can start</div>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-foreground/80 marker:text-stamp">
             {blockers.map((b) => (
               <li key={b}>{b}</li>
             ))}
@@ -169,9 +213,9 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
 
       <Tabs defaultValue="cases">
         <TabsList>
-          <TabsTrigger value="cases">Cases ({draft.cases.length})</TabsTrigger>
-          <TabsTrigger value="configurations">Configurations</TabsTrigger>
-          <TabsTrigger value="runs">Runs ({evaluation.runs.length})</TabsTrigger>
+          <TabsTrigger value="cases">Questions ({draft.cases.length})</TabsTrigger>
+          <TabsTrigger value="configurations">Parties</TabsTrigger>
+          <TabsTrigger value="runs">Hearings ({evaluation.runs.length})</TabsTrigger>
           <TabsTrigger value="settings">Delete</TabsTrigger>
         </TabsList>
         <TabsContent value="cases" className="pt-6">
@@ -183,13 +227,13 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
         </TabsContent>
         <TabsContent value="runs" className="pt-6">
           {evaluation.runs.length === 0 ? (
-            <p className="rounded-xl bg-secondary/70 px-5 py-4 text-sm text-muted-foreground">No runs yet. Each run freezes an immutable snapshot of the saved draft.</p>
+            <p className="rounded-[2px] bg-slip px-5 py-4 text-sm text-muted-foreground">No hearings yet. Each hearing freezes an unchangeable copy of the saved draft.</p>
           ) : (
-            <ul className="surface divide-y divide-border overflow-hidden">
+            <ul className="divide-y divide-paper-rule overflow-hidden rounded-[2px] bg-white ring-1 ring-exhibit-edge">
               {evaluation.runs.map((run) => (
                 <li key={run.id}>
-                  <Link to={`/runs/${run.id}`} className="flex items-center justify-between gap-4 px-5 py-4 transition-colors duration-150 hover:bg-secondary/50 focus-visible:bg-secondary/60 focus-visible:outline-none">
-                    <span className="text-sm">Started {formatTime(run.createdAt)}</span>
+                  <Link to={`/runs/${run.id}`} className="flex items-center justify-between gap-4 px-5 py-4 transition-colors duration-150 hover:bg-slip focus-visible:bg-slip focus-visible:outline-none">
+                    <span className="font-heading">Hearing · {formatTime(run.createdAt)}</span>
                     <StatusBadge status={run.status} />
                   </Link>
                 </li>
@@ -201,14 +245,16 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
           <DeleteEvaluation evaluationId={evaluation.id} title={evaluation.title} revision={revision} />
         </TabsContent>
       </Tabs>
+      </div>
+      </Sheet>
     </Page>
   )
 }
 
 function KeyStatus({ providers, keys }: { providers: ProviderId[]; keys: CredentialMetadata[] }) {
   return (
-    <div className="surface mt-6 p-5">
-      <h2 className="flex items-center gap-2 text-lg font-semibold">
+    <div className="mt-6 rounded-[2px] bg-white p-5 ring-1 ring-exhibit-edge">
+      <h2 className="flex items-center gap-2 font-heading text-lg font-bold">
         <KeyRound className="size-4 text-muted-foreground" aria-hidden /> Keys this comparison needs
       </h2>
       <ul className="mt-3 space-y-1.5 text-sm">
@@ -270,28 +316,28 @@ function RunDialog({ evaluationId, revision, draft, providers, keys, blockers }:
       }}
     >
       <DialogTrigger render={<Button disabled={blockers.length > 0} />}>
-        <Play aria-hidden /> Run comparison
+        <Play aria-hidden /> Start a hearing
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Run comparison</DialogTitle>
-          <DialogDescription>This freezes the saved draft into an immutable run and queues one request per case and configuration.</DialogDescription>
+          <DialogTitle className="font-heading text-xl">Start a hearing</DialogTitle>
+          <DialogDescription>This freezes the saved draft into an unchangeable hearing (a run) and sends one request per question and party, using your own provider keys.</DialogDescription>
         </DialogHeader>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
           <dt className="text-muted-foreground">Planned calls</dt>
           <dd className="tabular-nums">
-            {draft.cases.length} cases × {draft.configurations.length} configurations = <strong>{calls}</strong>
+            {draft.cases.length} questions × {draft.configurations.length} parties = <strong>{calls}</strong>
           </dd>
           <dt className="text-muted-foreground">Providers</dt>
           <dd>{providers.map((p) => PROVIDER_NAMES[p]).join(' and ')}</dd>
           <dt className="text-muted-foreground">Output limit</dt>
           <dd>{LIMITS.maxOutputTokens} tokens per response</dd>
         </dl>
-        <div className="space-y-3 rounded-lg bg-secondary/70 p-4 text-sm ring-1 ring-foreground/5">
+        <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
           <div className="flex items-start gap-2">
             <Checkbox id="consent-processing" checked={consent} onCheckedChange={(c) => setConsent(c === true)} />
             <Label htmlFor="consent-processing" className="font-normal leading-snug">
-              Send each case input, reference, and the system instructions to {providers.map((p) => PROVIDER_NAMES[p]).join(' and ')}. Scoring guides, ratings, and identities stay in Model Court.
+              Send each question, its exhibit, and the system instructions to {providers.map((p) => PROVIDER_NAMES[p]).join(' and ')}. Scoring guides, ratings, and identities stay in Model Court.
             </Label>
           </div>
           <div className="flex items-start gap-2">
@@ -324,7 +370,7 @@ function DeleteEvaluation({ evaluationId, title, revision }: { evaluationId: str
     setBusy(true)
     try {
       await api('DELETE', `/evaluations/${evaluationId}`, { body: { confirmTitle: confirm }, revision })
-      toast.success('Evaluation deleted')
+      toast.success('Case deleted')
       navigate('/evaluations')
     } catch (caught) {
       toast.error(describeError(caught))
@@ -333,17 +379,17 @@ function DeleteEvaluation({ evaluationId, title, revision }: { evaluationId: str
     }
   }
   return (
-    <div className="max-w-xl space-y-4 rounded-xl border border-destructive/30 bg-card p-5 shadow-xs">
-      <h2 className="text-lg font-semibold">Delete this evaluation</h2>
+    <div className="max-w-xl space-y-4 rounded-[2px] border border-destructive/30 bg-white p-5">
+      <h2 className="font-heading text-lg font-bold">Delete this case</h2>
       <p className="text-sm leading-relaxed text-muted-foreground">
-        Access stops immediately for you and every juror. Runs, responses, ratings, and verdicts are permanently removed within 24 hours. A provider request already in flight may still be charged. Your saved API keys are not affected. Deleting here cannot remove data the providers already received.
+        Access stops immediately for you and every juror. Hearings, responses, ratings, and judgments are permanently removed within 24 hours. A provider request already in flight may still be charged. Your saved API keys are not affected. Deleting here cannot remove data the providers already received.
       </p>
       <div className="space-y-1.5">
         <Label htmlFor="confirm-title">Type the title to confirm: {title}</Label>
         <Input id="confirm-title" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
       </div>
       <AlertDialog>
-        <AlertDialogTrigger render={<Button variant="destructive" disabled={confirm !== title || busy} />}>Delete evaluation</AlertDialogTrigger>
+        <AlertDialogTrigger render={<Button variant="destructive" disabled={confirm !== title || busy} />}>Delete case</AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete “{title}”?</AlertDialogTitle>

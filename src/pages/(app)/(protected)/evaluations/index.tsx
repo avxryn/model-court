@@ -1,14 +1,21 @@
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Scale } from 'lucide-react'
-import { EmptyState as EmptyPanel, ErrorPanel, formatTime, Page, PageHeader, PageSkeleton, StaleNotice, StatusBadge } from '@/components/common'
+import { toast } from 'sonner'
+import { EmptyState as EmptyPanel, ErrorPanel, formatTime, Page, PageSkeleton, StaleNotice, StatusBadge } from '@/components/common'
+import { DocketNumber, Sheet, Term } from '@/components/court/CaseFile'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
-import { api, ApiClientError, describeError } from '@/lib/api-client'
-import type { EvaluationSummary } from '@/lib/dto'
+import type { DraftInput } from '@/domain/contracts'
+import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
+import { docketNumber } from '@/lib/court'
+import type { EvaluationSummary, OwnerEvaluationView } from '@/lib/dto'
+import { CASE_TEMPLATES } from '@/lib/templates'
+import { cn } from '@/lib/utils'
 import { useApi } from '@/lib/use-api'
 
 export default function EvaluationsPage() {
@@ -17,36 +24,52 @@ export default function EvaluationsPage() {
 
   return (
     <Page>
-      <PageHeader title="Evaluations" description="Compare two AI configurations on your own cases, review responses blind, then record a verdict." actions={<CreateEvaluationDialog />} />
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1.5">
+          <div className="court-label">
+            <Term name="docket" />
+          </div>
+          <h1 className="font-heading text-3xl leading-tight font-bold">Your cases</h1>
+          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Compare two AI setups on your own questions, have a jury score the answers blind, then enter judgment.</p>
+        </div>
+        <CreateEvaluationDialog />
+      </header>
       {list.stale && <StaleNotice onRetry={list.reload} />}
       {list.loading && !list.data ? (
-        <PageSkeleton label="Loading evaluations" />
+        <PageSkeleton label="Loading your cases" />
       ) : list.error && !list.data ? (
         <ErrorPanel error={list.error} onRetry={list.reload} />
       ) : list.data && list.data.items.length === 0 && !cursor ? (
         <EmptyState />
       ) : (
         <>
-          <ul className="surface divide-y divide-border overflow-hidden">
+          <Sheet as="div" margin={false}>
+          <ul className="divide-y divide-paper-rule">
             {list.data?.items.map((item) => (
               <li key={item.id}>
-                <Link to={`/evaluations/${item.id}`} className="flex flex-col gap-1.5 px-5 py-4 transition-colors duration-150 hover:bg-secondary/50 focus-visible:bg-secondary/60 focus-visible:outline-none sm:flex-row sm:items-center sm:gap-4">
-                  <span className="min-w-0 flex-1 truncate font-medium">{item.title}</span>
+                <Link to={`/evaluations/${item.id}`} className="flex flex-col gap-1.5 px-5 py-4 transition-colors duration-150 hover:bg-slip focus-visible:bg-slip focus-visible:outline-none sm:flex-row sm:items-center sm:gap-4">
+                  <span className="shrink-0 text-xs text-muted-foreground sm:w-32">
+                    <DocketNumber>{docketNumber(item.id)}</DocketNumber>
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-heading text-base">
+                    <span className="italic">In re:</span> <span className="font-bold">{item.title}</span>
+                  </span>
                   <span className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="rounded-full bg-secondary px-2 py-0.5 font-medium text-secondary-foreground">{item.role === 'owner' ? 'Judge' : 'Juror'}</span>
-                    {item.latestRunStatus ? <StatusBadge status={item.latestRunStatus} /> : <span>No runs yet</span>}
+                    <span className={cn('typewriter rounded-[3px] px-2 py-0.5 font-bold', item.role === 'owner' ? 'bg-foreground text-paper' : 'bg-sticker text-sticker-foreground')}>{item.role === 'owner' ? 'JUDGE' : 'JUROR'}</span>
+                    {item.latestRunStatus ? <StatusBadge status={item.latestRunStatus} /> : <span>No hearings yet</span>}
                     <span className="tabular-nums">{formatTime(item.updatedAt)}</span>
                   </span>
                 </Link>
               </li>
             ))}
           </ul>
+          </Sheet>
           <div className="mt-6 flex justify-between">
             <Button variant="ghost" size="sm" disabled={!cursor} onClick={() => setCursor(null)}>
               First page
             </Button>
             <Button variant="outline" size="sm" disabled={!list.data?.nextCursor} onClick={() => setCursor(list.data?.nextCursor ?? null)}>
-              Older evaluations
+              Older cases
             </Button>
           </div>
         </>
@@ -59,7 +82,7 @@ function EmptyState() {
   return (
     <EmptyPanel
       icon={Scale}
-      title="No evaluations yet"
+      title="Open your first case"
       actions={
         <>
           <CreateEvaluationDialog />
@@ -69,7 +92,7 @@ function EmptyState() {
         </>
       }
     >
-      <p>A new evaluation starts with a five-case customer-support example you can edit or replace. You will need your own provider keys to run it.</p>
+      <p>Pick a starter template, edit the questions, and add your provider keys. The sample case shows the whole process without keys.</p>
     </EmptyPanel>
   )
 }
@@ -77,8 +100,16 @@ function EmptyState() {
 function CreateEvaluationDialog() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState('Support policy answers')
-  const [task, setTask] = useState('Which configuration answers return-policy questions accurately from the supplied policy?')
+  const [templateId, setTemplateId] = useState(CASE_TEMPLATES[0].id)
+  const [title, setTitle] = useState(CASE_TEMPLATES[0].title)
+  const [task, setTask] = useState(CASE_TEMPLATES[0].task)
+  const template = CASE_TEMPLATES.find((t) => t.id === templateId) ?? CASE_TEMPLATES[0]
+  const pickTemplate = (id: string) => {
+    const next = CASE_TEMPLATES.find((t) => t.id === id) ?? CASE_TEMPLATES[0]
+    setTemplateId(next.id)
+    setTitle(next.title)
+    setTask(next.task)
+  }
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -88,6 +119,15 @@ function CreateEvaluationDialog() {
     setError(null)
     try {
       const result = await api<{ id: string }>('POST', '/evaluations', { body: { title: title.trim(), taskDescription: task.trim() } })
+      if (template.apply) {
+        try {
+          const created = await api<OwnerEvaluationView>('GET', `/evaluations/${result.id}`)
+          const seed: DraftInput = { comparisonMode: created.draft.comparisonMode, cases: created.draft.cases, configurations: created.draft.configurations }
+          await api('PUT', `/evaluations/${result.id}/draft`, { body: template.apply(seed, newIntentKey), revision: created.revision })
+        } catch {
+          toast.error('The case was opened with the default example; the template could not be applied.')
+        }
+      }
       setOpen(false)
       navigate(`/evaluations/${result.id}`)
     } catch (caught) {
@@ -100,12 +140,12 @@ function CreateEvaluationDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button ref={triggerRef} />}>
-        <Plus aria-hidden /> New evaluation
+        <Plus aria-hidden /> Open a new case
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>New evaluation</DialogTitle>
-          <DialogDescription>You can edit everything, including the seeded example cases, before running.</DialogDescription>
+          <DialogTitle className="font-heading text-xl">Open a new case</DialogTitle>
+          <DialogDescription>Start from a template. You can edit every question, exhibit, and party before the first hearing.</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -114,8 +154,22 @@ function CreateEvaluationDialog() {
             void create()
           }}
         >
+          <fieldset className="space-y-2">
+            <legend id="template-legend" className="mb-2 text-sm font-medium">Template</legend>
+            <RadioGroup aria-labelledby="template-legend" value={templateId} onValueChange={(v) => pickTemplate(String(v))} className="grid gap-2">
+              {CASE_TEMPLATES.map((t) => (
+                <Label key={t.id} htmlFor={`template-${t.id}`} className={cn('flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 font-normal transition-colors duration-150', templateId === t.id ? 'border-foreground bg-slip' : 'border-paper-edge bg-white hover:bg-slip/60')}>
+                  <RadioGroupItem id={`template-${t.id}`} value={t.id} className="mt-0.5" aria-labelledby={`template-${t.id}-text`} />
+                  <span id={`template-${t.id}-text`} className="leading-snug">
+                    <span className="block font-medium text-foreground">{t.name}</span>
+                    <span className="block text-xs text-muted-foreground">{t.useCase}</span>
+                  </span>
+                </Label>
+              ))}
+            </RadioGroup>
+          </fieldset>
           <div className="space-y-1.5">
-            <Label htmlFor="eval-title">Title</Label>
+            <Label htmlFor="eval-title">Case title</Label>
             <Input id="eval-title" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} required />
           </div>
           <div className="space-y-1.5">
@@ -129,7 +183,7 @@ function CreateEvaluationDialog() {
           )}
           <DialogFooter>
             <Button type="submit" disabled={busy || !title.trim()}>
-              {busy ? 'Creating…' : 'Create evaluation'}
+              {busy ? 'Opening…' : 'Open case'}
             </Button>
           </DialogFooter>
         </form>

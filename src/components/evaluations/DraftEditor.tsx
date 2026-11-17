@@ -47,31 +47,33 @@ export function CasesEditor({ cases, onChange, errors, newId, disabled }: { case
   }
   return (
     <fieldset disabled={disabled} className="space-y-4">
-      <legend className="sr-only">Cases</legend>
+      <legend className="sr-only">Questions</legend>
       {cases.map((testCase, index) => (
-        <Card key={testCase.key}>
+        <Card key={testCase.key} className="rounded-[2px] bg-white ring-exhibit-edge">
           <CardHeader>
-            <CardTitle className="text-base">Case {index + 1}</CardTitle>
+            <CardTitle className="court-label">
+              Question presented <span className="typewriter font-normal tracking-normal">· Q{index + 1}</span>
+            </CardTitle>
             <CardAction className="flex gap-1">
-              <Button size="icon-sm" variant="ghost" aria-label={`Move case ${index + 1} up`} disabled={index === 0} onClick={() => move(index, -1)}>
+              <Button size="icon-sm" variant="ghost" aria-label={`Move question ${index + 1} up`} disabled={index === 0} onClick={() => move(index, -1)}>
                 <ArrowUp aria-hidden />
               </Button>
-              <Button size="icon-sm" variant="ghost" aria-label={`Move case ${index + 1} down`} disabled={index === cases.length - 1} onClick={() => move(index, 1)}>
+              <Button size="icon-sm" variant="ghost" aria-label={`Move question ${index + 1} down`} disabled={index === cases.length - 1} onClick={() => move(index, 1)}>
                 <ArrowDown aria-hidden />
               </Button>
-              <Button size="icon-sm" variant="ghost" aria-label={`Remove case ${index + 1}`} disabled={cases.length <= LIMITS.minCases} onClick={() => onChange(cases.filter((_, i) => i !== index))}>
+              <Button size="icon-sm" variant="ghost" aria-label={`Remove question ${index + 1}`} disabled={cases.length <= LIMITS.minCases} onClick={() => onChange(cases.filter((_, i) => i !== index))}>
                 <Trash2 aria-hidden />
               </Button>
             </CardAction>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
-              <TextField id={`case-${testCase.key}-title`} label="Title" value={testCase.title} max={LIMITS.caseTitle.max} error={errors[`cases.${index}.title`]} onChange={(title) => update(index, { title })} />
+              <TextField id={`case-${testCase.key}-title`} label="Short title" value={testCase.title} max={LIMITS.caseTitle.max} error={errors[`cases.${index}.title`]} onChange={(title) => update(index, { title })} />
             </div>
-            <TextField id={`case-${testCase.key}-input`} label="Input (sent to models)" multiline rows={4} value={testCase.input} max={LIMITS.caseInput.max} error={errors[`cases.${index}.input`]} onChange={(input) => update(index, { input })} />
+            <TextField id={`case-${testCase.key}-input`} label="The question (sent to the models)" multiline rows={4} value={testCase.input} max={LIMITS.caseInput.max} error={errors[`cases.${index}.input`]} onChange={(input) => update(index, { input })} />
             <TextField
               id={`case-${testCase.key}-reference`}
-              label="Reference evidence (sent to models)"
+              label="Exhibit: reference evidence (sent to the models)"
               multiline
               rows={4}
               value={testCase.reference}
@@ -83,7 +85,7 @@ export function CasesEditor({ cases, onChange, errors, newId, disabled }: { case
             <div className="md:col-span-2">
               <TextField
                 id={`case-${testCase.key}-expected`}
-                label="Expected behavior (scoring guide, never sent)"
+                label="Jury instructions: what a good answer does (never sent to the models)"
                 multiline
                 rows={2}
                 value={testCase.expectedBehavior}
@@ -98,9 +100,9 @@ export function CasesEditor({ cases, onChange, errors, newId, disabled }: { case
       <Button
         variant="outline"
         disabled={cases.length >= LIMITS.maxCases}
-        onClick={() => onChange([...cases, { key: newId(), title: `Case ${cases.length + 1}`, input: '', reference: '', expectedBehavior: '' }])}
+        onClick={() => onChange([...cases, { key: newId(), title: `Question ${cases.length + 1}`, input: '', reference: '', expectedBehavior: '' }])}
       >
-        <Plus aria-hidden /> Add case ({cases.length}/{LIMITS.maxCases})
+        <Plus aria-hidden /> Add a question ({cases.length}/{LIMITS.maxCases})
       </Button>
     </fieldset>
   )
@@ -119,7 +121,7 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
 
   return (
     <fieldset disabled={disabled} className="space-y-6">
-      <legend className="sr-only">Configurations</legend>
+      <legend className="sr-only">Parties</legend>
       <div className="space-y-2">
         <Label id="mode-label">Comparison mode</Label>
         <RadioGroup aria-labelledby="mode-label" value={draft.comparisonMode} onValueChange={(value) => setMode(value as ComparisonMode)} className="grid gap-2 sm:grid-cols-2">
@@ -143,7 +145,7 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
       {draft.comparisonMode === 'model' && (
         <TextField
           id="shared-system-prompt"
-          label="System instructions (shared, sent to both models)"
+          label="System instructions (shared, sent to both parties)"
           multiline
           rows={4}
           value={draft.configurations[0].systemPrompt}
@@ -155,12 +157,14 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
 
       <div className="grid gap-4 md:grid-cols-2">
         {draft.configurations.map((configuration, index) => (
-          <Card key={configuration.key}>
+          <Card key={configuration.key} className="rounded-[2px] bg-white ring-exhibit-edge">
             <CardHeader>
-              <CardTitle className="text-base">Candidate {index + 1}</CardTitle>
+              <CardTitle className="court-label">
+                Party <span className="typewriter font-normal tracking-normal">{index + 1}</span>
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <TextField id={`cfg-${configuration.key}-label`} label="Label (private until reveal)" value={configuration.label} max={LIMITS.configurationLabel.max} error={errors[`configurations.${index}.label`]} onChange={(label) => updateConfig(index, { label })} />
+              <TextField id={`cfg-${configuration.key}-label`} label="Name (sealed from jurors until you unseal)" value={configuration.label} max={LIMITS.configurationLabel.max} error={errors[`configurations.${index}.label`]} onChange={(label) => updateConfig(index, { label })} />
               <div className="space-y-1.5">
                 <Label htmlFor={`cfg-${configuration.key}-model`}>Model</Label>
                 <Select value={configuration.modelKey} onValueChange={(value) => updateConfig(index, { modelKey: String(value) })} items={models.map((m) => ({ value: m.key, label: m.label }))}>

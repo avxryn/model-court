@@ -7,7 +7,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthOverlay, useAuth } from 'deepspace'
-import { EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, describeError } from '@/lib/api-client'
@@ -52,14 +51,12 @@ export default function JoinPage() {
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4 py-16">
-      <Card className="w-full max-w-md py-7">
+      <Card className="paper w-full max-w-md rounded-[2px] border-t-4 border-dashed border-t-paper-edge py-7">
         <CardHeader>
-          <span aria-hidden className="mb-3 grid size-11 place-items-center rounded-full bg-accent text-accent-foreground ring-1 ring-brass/25">
-            <EyeOff className="size-5" />
-          </span>
-          <CardTitle className="font-heading text-2xl font-semibold tracking-tight">You’re invited to review</CardTitle>
+          <div className="typewriter mb-2 text-xs font-bold text-stamp">JURY SUMMONS · MODEL COURT</div>
+          <CardTitle className="font-heading text-2xl font-bold">You are summoned to serve as a juror</CardTitle>
           <CardDescription className="leading-relaxed">
-            You will score anonymous AI responses against a rubric. You don’t need any API key, and you won’t see which models produced the responses — or anyone else’s ratings — until the judge reveals them.
+            You were invited to review blind. You will score anonymous AI answers against a short rubric. You don’t need an API key, and you won’t see which models gave the answers — or anyone else’s ratings — until the judge unseals the record.
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-2 space-y-4">
@@ -77,7 +74,7 @@ export default function JoinPage() {
           {isLoaded && !isSignedIn && status !== 'missing' && (
             <>
               <Button className="w-full" onClick={() => setShowAuth(true)}>
-                Sign in to accept
+                Sign in to accept the summons
               </Button>
               <Button
                 variant="ghost"

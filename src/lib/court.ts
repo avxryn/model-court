@@ -35,13 +35,20 @@ export const TERMS = {
 export type TermKey = keyof typeof TERMS
 
 /**
- * Display-only docket number: year plus the first four hex digits of the id.
+ * Display-only docket number from the evaluation id, the same on every page.
  * Never used as an identifier or in a URL.
  */
-export function docketNumber(id: string, createdAt: number): string {
-  const year = new Date(createdAt).getFullYear()
-  const tail = id.replace(/[^0-9a-f]/gi, '').slice(0, 4).toUpperCase().padEnd(4, '0')
-  return `MC-${year}-${tail}`
+export function docketNumber(evaluationId: string): string {
+  const hex = evaluationId.replace(/[^0-9a-f]/gi, '').toUpperCase().padEnd(8, '0')
+  return `MC-${hex.slice(0, 4)}-${hex.slice(4, 8)}`
+}
+
+/** The caption stamp for a hearing's status. */
+export function recordStamp(runStatus: string | null | undefined): 'sealed' | 'unsealed' | 'entered' | null {
+  if (runStatus === 'revealed') return 'unsealed'
+  if (runStatus === 'decided') return 'entered'
+  if (runStatus === 'generating' || runStatus === 'ready' || runStatus === 'reviewing') return 'sealed'
+  return null
 }
 
 export const CASE_STEPS = [
