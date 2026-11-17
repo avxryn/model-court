@@ -1,12 +1,13 @@
 /**
- * Public, keyless sample (F19). Static tier: no auth fetch, no WebSocket, no
- * provider or API requests. Practice ratings live only in this page's memory.
+ * Public, keyless sample (F19), inside the app shell so it keeps the sidebar.
+ * It makes no API or provider request of its own; practice ratings live only
+ * in this page's memory.
  */
 
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, ChevronLeft, ChevronRight, FlaskConical, RotateCcw } from 'lucide-react'
-import { BrandMark } from '@/components/BrandMark'
+import { Breadcrumbs, Page } from '@/components/common'
 import { Caption, CaseProgress, DocketNumber, Sheet, Stamp, Term } from '@/components/court/CaseFile'
 import { FindingsChart } from '@/components/court/FindingsChart'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
@@ -61,18 +62,13 @@ export default function SamplePage() {
   }
 
   return (
-    <div className="min-h-screen bg-desk">
-      <header className="border-b border-paper-edge/70">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link to="/" className="rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-            <BrandMark />
-          </Link>
-          <Button size="sm" variant="outline" render={<Link to="/evaluations" />} nativeButton={false}>
-            Open your own case
-          </Button>
-        </div>
-      </header>
-      <main id="main" className="mx-auto w-full max-w-6xl px-4 pt-8 pb-16 sm:px-6">
+    <Page width="wide">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <Breadcrumbs items={[{ label: 'Learn' }, { label: 'Sample case' }]} />
+        <Button size="sm" variant="outline" className="mb-3" render={<Link to="/evaluations" />} nativeButton={false}>
+          Open your own case
+        </Button>
+      </div>
         <CaseProgress step={revealed ? 'judgment' : 'deliberate'} />
         <Sheet className="rounded-t-none">
           <Caption
@@ -165,7 +161,7 @@ export default function SamplePage() {
                   <h2 id="sample-mapping" className="court-label mb-4">
                     Who gave which testimony
                   </h2>
-                  <div className="overflow-hidden rounded-[2px] bg-white ring-1 ring-exhibit-edge">
+                  <div className="overflow-hidden exhibit-panel">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -202,7 +198,7 @@ export default function SamplePage() {
                   {practice?.byConfiguration ? (
                     <>
                     <FindingsChart cohort={practice} parties={SAMPLE_CONFIGURATIONS} />
-                    <div className="overflow-hidden rounded-[2px] bg-white ring-1 ring-exhibit-edge">
+                    <div className="overflow-hidden exhibit-panel">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -272,7 +268,6 @@ export default function SamplePage() {
             )}
           </div>
         </Sheet>
-      </main>
-    </div>
+    </Page>
   )
 }

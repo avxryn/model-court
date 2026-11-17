@@ -163,6 +163,9 @@ async function requireSession(deps: Deps, userId: string, runId: string) {
 
 export interface AnonymousReview {
   runId: string
+  /** The case this hearing belongs to (as in the run view), for breadcrumbs. */
+  evaluationId: string
+  evaluationTitle: string
   sessionId: string
   sessionRevision: number
   contextType: 'invited' | 'owner'
@@ -209,6 +212,8 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
   const revealed = access.run.status === 'revealed' || access.run.status === 'decided'
   return {
     runId: access.run.id,
+    evaluationId: access.evaluation.id,
+    evaluationTitle: access.evaluation.title,
     sessionId: session.id,
     sessionRevision: session.revision,
     contextType: session.context_type,

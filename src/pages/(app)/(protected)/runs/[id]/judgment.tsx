@@ -8,6 +8,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Printer } from 'lucide-react'
 import { ErrorPanel, formatTime, Page, PageSkeleton } from '@/components/common'
 import { Caption, Sheet, Stamp } from '@/components/court/CaseFile'
+import { HearingNav } from '@/components/court/HearingNav'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { partySource } from '@/lib/parties'
@@ -47,21 +48,14 @@ function PrintableJudgment({ data }: { data: ResultsView }) {
 
   return (
     <Page>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <Link to={`/runs/${data.runId}/results`} className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-          ← Back to the record
-        </Link>
+      <HearingNav runId={data.runId} caseId={data.evaluationId} caseTitle={data.evaluationTitle} role={data.role} status={data.status} />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-tr-sm border-x border-t border-paper-edge bg-slip/70 px-5 py-3 sm:px-8 print:hidden">
+        <p className="text-sm text-muted-foreground">{latest ? 'The judgment as one printable page. Your browser can save it as a PDF.' : 'No judgment yet. Enter it on the Record tab; this page prints the latest one.'}</p>
         <Button onClick={() => window.print()} disabled={!latest}>
           <Printer aria-hidden /> Print or save as PDF
         </Button>
       </div>
-      {!latest && (
-        <Alert className="mb-4 print:hidden">
-          <AlertTitle>No judgment yet</AlertTitle>
-          <AlertDescription>Enter judgment on the record page first; this page prints the latest one.</AlertDescription>
-        </Alert>
-      )}
-      <Sheet as="article" aria-label="Judgment" className="print:shadow-none print:ring-0">
+      <Sheet as="article" aria-label="Judgment" className="rounded-t-none print:rounded-sm print:shadow-none print:ring-0">
         <Caption
           title={data.evaluationTitle}
           parties={data.configurations.map((c) => c.label)}

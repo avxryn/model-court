@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { Copy, Link2, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { Link, Navigate, useParams } from 'react-router-dom'
+import { ChevronRight, Copy, Link2, RefreshCw, Wifi, WifiOff } from 'lucide-react'
 import { toast } from 'sonner'
-import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, StaleNotice, StatusBadge } from '@/components/common'
-import { Caption, CaseProgress, DocketNumber, ExhibitSticker, Sheet, Stamp } from '@/components/court/CaseFile'
-import { caseStep, docketNumber, recordStamp } from '@/lib/court'
+import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, Plain, StaleNotice, StatusBadge } from '@/components/common'
+import { Caption, DocketNumber, ExhibitSticker, Sheet, Stamp } from '@/components/court/CaseFile'
+import { HearingNav, StageLine } from '@/components/court/HearingNav'
+import { docketNumber, recordStamp } from '@/lib/court'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
@@ -39,44 +40,8 @@ export default function RunPage() {
   return (
     <Page width="wide">
       {run.stale && <StaleNotice onRetry={run.reload} />}
-      {run.data.role === 'owner' ? <OwnerRun run={run.data} reload={run.reload} live={live} /> : <ReviewerRun run={run.data} />}
+      {run.data.role === 'owner' ? <OwnerRun run={run.data} reload={run.reload} live={live} /> : <Navigate to={`/runs/${run.data.runId}/review`} replace />}
     </Page>
-  )
-}
-
-function ReviewerRun({ run }: { run: Extract<RunView, { role: 'reviewer' }> }) {
-  const revealed = run.status === 'revealed' || run.status === 'decided'
-  const stamp = recordStamp(run.status)
-  return (
-    <>
-      <CaseProgress {...caseStep(run.status)} />
-      <Sheet className="rounded-t-none">
-        <Caption
-          title={run.evaluationTitle}
-          parties={revealed ? null : ['Sealed party', 'Sealed party']}
-          details={
-            <>
-              <div>Seated: <span className="italic">you, as a juror</span></div>
-              <div className="flex items-center gap-2">Status: <StatusBadge status={run.status} /></div>
-            </>
-          }
-          stamp={stamp && <Stamp kind={stamp} />}
-        />
-        <div className="space-y-5 px-5 pb-10 sm:px-8">
-          <p className="max-w-2xl font-heading text-base leading-relaxed">{revealed ? 'The judge has unsealed the record. It includes the jury’s findings.' : 'Score the testimony. Other jurors can’t see your ratings, and you can’t see theirs, until the judge unseals the record.'}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button render={<Link to={`/runs/${run.runId}/review`} />} nativeButton={false} variant={revealed ? 'outline' : 'default'}>
-              {run.session?.status === 'draft' && !revealed ? 'Open your worksheet' : 'View your worksheet'}
-            </Button>
-            {revealed && (
-              <Button render={<Link to={`/runs/${run.runId}/results`} />} nativeButton={false}>
-                View the record
-              </Button>
-            )}
-          </div>
-        </div>
-      </Sheet>
-    </>
   )
 }
 
@@ -103,12 +68,12 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
   }
 
   const stamp = recordStamp(run.status)
+  const deliberating = run.status === 'reviewing' || run.status === 'revealed' || run.status === 'decided'
   return (
     <>
-      <CaseProgress {...caseStep(run.status)} />
+      <HearingNav runId={run.runId} caseId={run.evaluationId} caseTitle={run.evaluationTitle} role="owner" status={run.status} />
       <Sheet className="rounded-t-none">
       <Caption
-        backTo={{ to: `/evaluations/${run.evaluationId}`, label: 'Back to the case' }}
         title={run.evaluationTitle}
         parties={run.configurations.map((c) => c.label)}
         details={
@@ -117,7 +82,7 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
               Case no. <DocketNumber>{docketNumber(run.evaluationId)}</DocketNumber>
             </div>
             <div>Hearing · {formatTime(run.createdAt)}</div>
-            <div>Presiding: <span className="italic">you, as judge</span></div>
+            <StageLine status={run.status} />
             <div className="text-xs leading-snug text-muted-foreground">{run.comparisonMode === 'model' ? 'Model comparison: identical instructions, different models.' : 'Configuration comparison: instructions and models may differ; not an isolated model-quality test.'}</div>
             <div className="mt-1 flex flex-wrap items-center gap-3 font-sans">
               <StatusBadge status={run.status} />
@@ -134,12 +99,13 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
       <section aria-labelledby="progress-heading" className="space-y-4 border-t border-paper-rule px-5 py-6 sm:px-8">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 id="progress-heading" className="court-label">
-            Hearing testimony{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(generating responses)</span>
+            Hearing testimony <Plain>generating responses</Plain>
           </h2>
           <span className="text-sm tabular-nums text-muted-foreground" role="status">
             {terminal}/{run.counts.planned} finished · {run.counts.succeeded} succeeded · {run.counts.failed} failed · {run.counts.uncertain} uncertain
           </span>
         </div>
+        <Collapsible collapsed={deliberating} summary="Show each question and party">
         <Progress value={(terminal / Math.max(run.counts.planned, 1)) * 100} aria-label="Generation progress" />
         {run.status === 'generating' && <p className="text-xs text-muted-foreground">Jobs run one at a time and survive closing this page. Each request has a 90-second deadline; there are no automatic paid retries.</p>}
 
@@ -201,6 +167,7 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
           </Table>
         </div>
 
+        </Collapsible>
         {(run.status === 'generating' || run.status === 'ready') && (
           <div className="flex flex-wrap gap-2 border-t border-paper-rule pt-3">
             {retryable.length > 0 && (
@@ -318,13 +285,13 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
     <section aria-labelledby="review-heading" className="space-y-4 border-t border-paper-rule px-5 pt-6 pb-10 sm:px-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="review-heading" className="court-label">
-          The jury{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(blind review)</span>
+          The jury <Plain>blind review</Plain>
         </h2>
         <span className="text-sm tabular-nums text-muted-foreground" role="status">
           {run.review.submittedCount} filed · {run.review.pendingCount} unfinished (worksheets in progress and unused summonses)
         </span>
       </div>
-      <ul className="divide-y divide-paper-rule rounded-[2px] bg-white ring-1 ring-exhibit-edge">
+      <ul className="divide-y divide-paper-rule exhibit-panel">
         {run.review.participants.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
             <span>
@@ -452,5 +419,19 @@ function RevealButton({ run, busy, act }: { run: OwnerRunView; busy: boolean; ac
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  )
+}
+
+/** Shows its children, or folds them behind a summary line once they are history. */
+function Collapsible({ collapsed, summary, children }: { collapsed: boolean; summary: string; children: React.ReactNode }) {
+  if (!collapsed) return <>{children}</>
+  return (
+    <details className="group">
+      <summary className="inline-flex min-h-6 cursor-pointer items-center gap-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
+        <ChevronRight className="size-3.5 transition-transform duration-150 group-open:rotate-90" aria-hidden />
+        {summary}
+      </summary>
+      <div className="mt-3 space-y-4">{children}</div>
+    </details>
   )
 }

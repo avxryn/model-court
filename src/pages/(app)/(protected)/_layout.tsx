@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Outlet } from 'react-router-dom'
+import { Link, Outlet, useSearchParams } from 'react-router-dom'
 import { AuthGate, AuthOverlay } from 'deepspace'
 import { Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,10 +15,12 @@ export default function ProtectedLayout() {
 }
 
 function SignedOutPanel() {
-  const [open, setOpen] = useState(false)
+  // The landing page's Sign in links here with ?signin=1 to open the overlay at once.
+  const [params] = useSearchParams()
+  const [open, setOpen] = useState(params.get('signin') === '1')
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4 py-16">
-      <Card className="w-full max-w-sm py-8 text-center">
+      <Card className="paper w-full max-w-sm rounded-sm py-8 text-center ring-paper-edge">
         <CardHeader className="justify-items-center">
           <span aria-hidden className="mb-3 grid size-11 place-items-center rounded-full bg-accent text-accent-foreground ring-1 ring-brass/25">
             <Lock className="size-5" />

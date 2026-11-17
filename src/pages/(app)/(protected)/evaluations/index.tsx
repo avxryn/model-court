@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Plus, Scale } from 'lucide-react'
+import { Folder, FolderOpen, Plus, Scale } from 'lucide-react'
 import { toast } from 'sonner'
-import { EmptyState as EmptyPanel, ErrorPanel, formatTime, Page, PageSkeleton, StaleNotice, StatusBadge } from '@/components/common'
+import { EmptyState as EmptyPanel, ErrorPanel, formatTime, Page, PageHeader, PageSkeleton, StaleNotice, StatusBadge } from '@/components/common'
 import { DocketNumber, Sheet, Term } from '@/components/court/CaseFile'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -24,16 +24,12 @@ export default function EvaluationsPage() {
 
   return (
     <Page>
-      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1.5">
-          <div className="court-label">
-            <Term name="docket" />
-          </div>
-          <h1 className="font-heading text-3xl leading-tight font-bold">Your cases</h1>
-          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Compare two AI setups on your own questions, have a jury score the answers blind, then enter judgment.</p>
-        </div>
-        <CreateEvaluationDialog />
-      </header>
+      <PageHeader
+        eyebrow={<Term name="docket" />}
+        title="Your cases"
+        description="Compare AI setups on your own questions, have a jury score the answers blind, then enter judgment."
+        actions={<CreateEvaluationDialog />}
+      />
       {list.stale && <StaleNotice onRetry={list.reload} />}
       {list.loading && !list.data ? (
         <PageSkeleton label="Loading your cases" />
@@ -43,27 +39,10 @@ export default function EvaluationsPage() {
         <EmptyState />
       ) : (
         <>
-          <Sheet as="div" margin={false}>
-          <ul className="divide-y divide-paper-rule">
-            {list.data?.items.map((item) => (
-              <li key={item.id}>
-                <Link to={`/evaluations/${item.id}`} className="flex flex-col gap-1.5 px-5 py-4 transition-colors duration-150 hover:bg-slip focus-visible:bg-slip focus-visible:outline-none sm:flex-row sm:items-center sm:gap-4">
-                  <span className="shrink-0 text-xs text-muted-foreground sm:w-32">
-                    <DocketNumber>{docketNumber(item.id)}</DocketNumber>
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-heading text-base">
-                    <span className="italic">In re:</span> <span className="font-bold">{item.title}</span>
-                  </span>
-                  <span className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className={cn('typewriter rounded-[3px] px-2 py-0.5 font-bold', item.role === 'owner' ? 'bg-foreground text-paper' : 'bg-sticker text-sticker-foreground')}>{item.role === 'owner' ? 'JUDGE' : 'JUROR'}</span>
-                    {item.latestRunStatus ? <StatusBadge status={item.latestRunStatus} /> : <span>No hearings yet</span>}
-                    <span className="tabular-nums">{formatTime(item.updatedAt)}</span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          </Sheet>
+          <div className="space-y-8">
+            <CaseDrawer title="Presiding" note="Cases you set up and judge" items={list.data?.items.filter((item) => item.role === 'owner') ?? []} />
+            <CaseDrawer title="Jury duty" note="Cases you were summoned to" items={list.data?.items.filter((item) => item.role === 'reviewer') ?? []} />
+          </div>
           <div className="mt-6 flex justify-between">
             <Button variant="ghost" size="sm" disabled={!cursor} onClick={() => setCursor(null)}>
               First page
@@ -75,6 +54,43 @@ export default function EvaluationsPage() {
         </>
       )}
     </Page>
+  )
+}
+
+/** One drawer of case folders. Hidden when empty, unless it is the judge's own. */
+function CaseDrawer({ title, note, items }: { title: string; note: string; items: EvaluationSummary[] }) {
+  if (items.length === 0) return null
+  return (
+    <section aria-labelledby={`drawer-${title}`}>
+      <div className="mb-2 flex items-baseline gap-2">
+        <h2 id={`drawer-${title}`} className="court-label">
+          {title}
+        </h2>
+        <span className="text-xs text-muted-foreground">{note}</span>
+      </div>
+      <Sheet as="div" margin={false}>
+        <ul className="divide-y divide-paper-rule">
+          {items.map((item) => (
+            <li key={item.id}>
+              <Link to={`/evaluations/${item.id}`} className="group flex items-center gap-3 px-4 py-3.5 transition-colors duration-150 hover:bg-slip focus-visible:bg-slip focus-visible:outline-none sm:gap-4 sm:px-5">
+                <Folder className="size-5 shrink-0 text-manila-foreground/70 group-hover:hidden" strokeWidth={1.5} aria-hidden />
+                <FolderOpen className="hidden size-5 shrink-0 text-manila-foreground group-hover:block" strokeWidth={1.5} aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-heading text-base">
+                    <span className="italic">In re:</span> <span className="font-bold">{item.title}</span>
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    <DocketNumber>{docketNumber(item.id)}</DocketNumber>
+                    <span className="tabular-nums"> · updated {formatTime(item.updatedAt)}</span>
+                  </span>
+                </span>
+                <span className="shrink-0">{item.latestRunStatus ? <StatusBadge status={item.latestRunStatus} /> : <span className="text-xs text-muted-foreground">No hearings yet</span>}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Sheet>
+    </section>
   )
 }
 

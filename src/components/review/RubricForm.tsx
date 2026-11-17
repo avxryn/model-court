@@ -4,6 +4,7 @@
  * rubric definition shared with the server scorer (E02).
  */
 
+import { Plain } from '@/components/common'
 import { useId } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { FieldDescription, FieldLegend, FieldSet } from '@/components/ui/field'
@@ -30,7 +31,7 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
   return (
     <div className="space-y-5">
       <div className="court-label">
-        Juror’s worksheet{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(your ratings)</span>
+        Juror’s worksheet <Plain>your ratings</Plain>
       </div>
       {DIMENSIONS.map((dimension) => (
         <FieldSet key={dimension} className="space-y-1.5 border-b border-dotted border-paper-edge pb-4" disabled={disabled}>

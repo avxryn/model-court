@@ -8,7 +8,6 @@ import { useEffect, useRef, useState } from 'react'
 import { KeyRound, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { ErrorPanel, formatTime, Page, PageHeader, PageSkeleton } from '@/components/common'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,38 +28,17 @@ export default function ApiKeysPage() {
   return (
     <Page>
       <PageHeader
-        eyebrow="Settings"
+        crumbs={[{ label: 'Account' }, { label: 'Provider keys' }]}
+        eyebrow="Account"
         title="Provider API keys"
         description="Live comparisons use your own OpenAI and Anthropic keys. Each generation is billed by the provider to your account. Jurors never need a key."
       />
-      <Alert className="mb-8">
-        <ShieldCheck aria-hidden />
-        <AlertTitle>How keys are stored</AlertTitle>
-        <AlertDescription>
-          Keys are encrypted with AES-256-GCM before they reach the database, can only be used by background generation for runs you start, and are never shown again.
-          The deployment operator holds the encryption root, so encryption does not make keys inaccessible to that trusted operator. Prefer a purpose-specific key with provider-side spending limits.
-        </AlertDescription>
-      </Alert>
-      <section aria-labelledby="key-hygiene" className="surface mb-8 p-5">
-        <h2 id="key-hygiene" className="text-base font-semibold">
-          Use a key you can afford to lose
-        </h2>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-          <li>Create a dedicated Model Court–only key with a low monthly spend cap and access only to the model you are testing.</li>
-          <li>Admin or organization keys are refused. Use an OpenAI project key or an Anthropic workspace key.</li>
-          <li>
-            Saved keys expire after {catalog.data?.limits.credentialTtlDays ?? 7} days unless you renew them. Expiry stops queued work exactly like removing the key.
-          </li>
-          <li>When you finish testing, remove the key here and rotate or delete it at the provider. Removing it here does not revoke it there.</li>
-          <li>Turn on two-factor authentication for the GitHub or Google account you sign in with, and for your provider accounts.</li>
-        </ul>
-      </section>
       {credentials.loading && !credentials.data ? (
         <PageSkeleton label="Loading keys" />
       ) : credentials.error && !credentials.data ? (
         <ErrorPanel error={credentials.error} onRetry={credentials.reload} />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid items-start gap-4 md:grid-cols-2">
           {PROVIDERS.map((provider) => (
             <ProviderKeyCard
               key={provider}
@@ -72,6 +50,26 @@ export default function ApiKeysPage() {
           ))}
         </div>
       )}
+      <div className="mt-8 grid gap-4 md:grid-cols-2">
+        <section aria-labelledby="key-storage" className="rounded-[2px] border border-dashed border-slip-edge bg-slip px-5 py-4">
+          <h2 id="key-storage" className="court-label flex items-center gap-2">
+            <ShieldCheck className="size-4 text-muted-foreground" aria-hidden /> How keys are stored
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-foreground/80">
+            Keys are encrypted with AES-256-GCM before they reach the database, can only be used by background generation for runs you start, and are never shown again. The deployment operator holds the encryption root, so encryption does not make keys inaccessible to that trusted operator. Prefer a purpose-specific key with provider-side spending limits.
+          </p>
+        </section>
+        <section aria-labelledby="key-hygiene" className="rounded-[2px] border border-dashed border-slip-edge bg-slip px-5 py-4">
+          <h2 id="key-hygiene" className="court-label">Use a key you can afford to lose</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-foreground/80 marker:text-stamp">
+            <li>Create a dedicated Model Court–only key with a low monthly spend cap and access only to the model you are testing.</li>
+            <li>Admin or organization keys are refused. Use an OpenAI project key or an Anthropic workspace key.</li>
+            <li>Saved keys expire after {catalog.data?.limits.credentialTtlDays ?? 7} days unless you renew them. Expiry stops queued work exactly like removing the key.</li>
+            <li>When you finish testing, remove the key here and rotate or delete it at the provider. Removing it here does not revoke it there.</li>
+            <li>Turn on two-factor authentication for the GitHub or Google account you sign in with, and for your provider accounts.</li>
+          </ul>
+        </section>
+      </div>
     </Page>
   )
 }
@@ -147,9 +145,9 @@ function ProviderKeyCard({ provider, current, writesEnabled, onChanged }: { prov
 
   const keyId = `${provider}-api-key`
   return (
-    <Card>
+    <Card className="paper rounded-sm ring-paper-edge">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2.5 text-lg font-semibold">
+        <CardTitle className="flex items-center gap-2.5 font-heading text-lg font-bold">
           <span aria-hidden className="grid size-8 place-items-center rounded-full bg-secondary text-muted-foreground ring-1 ring-foreground/5">
             <KeyRound className="size-4" />
           </span>

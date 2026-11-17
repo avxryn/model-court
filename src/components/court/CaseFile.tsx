@@ -4,8 +4,8 @@
  * rubber stamps. Presentation only; every caller passes anonymous data.
  */
 
-import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Plain } from '@/components/common'
+import { useEffect, useState, type ReactNode } from 'react'
 import { CASE_STEPS, TERMS, type CaseStep, type TermKey } from '@/lib/court'
 import { cn } from '@/lib/utils'
 
@@ -28,7 +28,7 @@ export function Term({ name, plain = true, className }: { name: TermKey; plain?:
       {plain && (
         <>
           {' '}
-          <span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">({entry.plain})</span>
+          <Plain>{entry.plain}</Plain>
         </>
       )}
     </span>
@@ -79,16 +79,12 @@ export function CaseProgress({ step, complete = false, className }: { step: Case
 
 /**
  * The case caption: court heading, "In re" title, the parties, and the
- * docket details. `stamp` sits in the top-right corner.
+ * docket details. `stamp` sits in the top-right corner. Breadcrumbs above
+ * the sheet (not a back link inside it) say where the page sits.
  */
-export function Caption({ title, parties, details, stamp, backTo }: { title: ReactNode; parties?: ReactNode[] | null; details: ReactNode; stamp?: ReactNode; backTo?: { to: string; label: string } }) {
+export function Caption({ title, parties, details, stamp }: { title: ReactNode; parties?: ReactNode[] | null; details: ReactNode; stamp?: ReactNode }) {
   return (
     <div className="relative px-5 pt-7 pb-6 sm:px-8">
-      {backTo && (
-        <Link to={backTo.to} className="mb-3 inline-block font-sans text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-          ← {backTo.label}
-        </Link>
-      )}
       {stamp && <div className="pointer-events-none mb-4 flex justify-end sm:absolute sm:top-6 sm:right-8 sm:mb-0">{stamp}</div>}
       <div className="text-center">
         <div className="font-heading text-sm font-bold tracking-[0.18em]">IN THE MODEL COURT</div>
@@ -184,10 +180,10 @@ export function Exhibit({ number, children, plain = true }: { number: number | s
 export function ConversationSoFar({ messages }: { messages: ReadonlyArray<{ role: 'user' | 'assistant'; content: string }> }) {
   if (messages.length === 0) return null
   return (
-    <section aria-label="The conversation so far" className="rounded-[2px] bg-white ring-1 ring-exhibit-edge">
+    <section aria-label="The conversation so far" className="exhibit-panel">
       <h3 className="court-label border-b border-paper-rule px-4 py-2.5">
         The conversation so far{' '}
-        <span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(identical for every party)</span>
+        <Plain>identical for every party</Plain>
       </h3>
       <ol className="divide-y divide-paper-rule">
         {messages.map((message, index) => (
@@ -221,7 +217,7 @@ export function Testimony({ label, text, children }: { label: string; text: stri
   const lines = text.split('\n')
   let n = 0
   return (
-    <article className="min-w-0 rounded-[2px] bg-white ring-1 ring-exhibit-edge">
+    <article className="min-w-0 exhibit-panel">
       <header className="flex items-center justify-between gap-3 border-b border-paper-rule px-4 py-3">
         <h3 className="typewriter shrink-0 rounded-[3px] bg-foreground px-3 py-1 text-sm font-bold whitespace-nowrap text-paper">TESTIMONY {label}</h3>
         <span className="text-right text-xs leading-snug text-muted-foreground">shuffled · unlabeled</span>
@@ -244,5 +240,44 @@ export function Testimony({ label, text, children }: { label: string; text: stri
       </div>
       {children && <div className="border-t border-foreground/80 px-4 pt-4 pb-5">{children}</div>}
     </article>
+  )
+}
+
+/**
+ * A contents bar for a long sheet: one link per section, sticky under the
+ * mobile bar (and at the top on wide screens), marking the section in view.
+ */
+export function SheetIndex({ items }: { items: Array<{ id: string; label: string }> }) {
+  const [active, setActive] = useState<string | null>(null)
+  const ids = items.map((item) => item.id).join(' ')
+  useEffect(() => {
+    const targets = ids.split(' ').map((id) => document.getElementById(id)).filter((el): el is HTMLElement => el !== null)
+    if (targets.length === 0 || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
+        if (visible) setActive(visible.target.id)
+      },
+      { rootMargin: '-80px 0px -60% 0px' },
+    )
+    targets.forEach((target) => observer.observe(target))
+    return () => observer.disconnect()
+  }, [ids])
+  return (
+    <nav aria-label="On this page" className="sticky top-14 z-10 -mb-px border-t border-paper-rule bg-paper/95 px-5 backdrop-blur-sm sm:px-8 lg:top-0 print:hidden">
+      <ol className="flex gap-1 overflow-x-auto py-2 text-sm">
+        {items.map((item) => (
+          <li key={item.id} className="shrink-0">
+            <a
+              href={`#${item.id}`}
+              aria-current={active === item.id ? 'location' : undefined}
+              className={cn('inline-flex min-h-7 items-center rounded-md px-2.5 outline-none transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/50', active === item.id ? 'bg-slip font-medium text-foreground' : 'text-muted-foreground hover:text-foreground')}
+            >
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
   )
 }

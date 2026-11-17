@@ -4,6 +4,7 @@
  * collapsed below it. Advisory: never part of the findings or the judgment.
  */
 
+import { Plain } from '@/components/common'
 import { useRef, useState } from 'react'
 import { AlertTriangle, Bot } from 'lucide-react'
 import { toast } from 'sonner'
@@ -40,7 +41,7 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
       label={
         <>
           Special master{' '}
-          <span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(an advisory AI grader, visible only to you)</span>
+          <Plain>an advisory AI grader, visible only to you</Plain>
         </>
       }
     >

@@ -1,6 +1,6 @@
 /**
  * The dynamic-app boundary (scaffold contract): DeepSpaceAuthProvider →
- * AuthBoot → RecordProvider → RecordScope, plus the navigation chrome.
+ * AuthBoot → RecordProvider → RecordScope, plus the app shell (sidebar).
  * The scaffold's in-browser AgentTools surface is intentionally not mounted.
  */
 
@@ -8,24 +8,27 @@ import { Suspense, useEffect, type ReactNode } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { DeepSpaceAuthProvider, RecordProvider, RecordScope, useAuth, useAuthStatus } from 'deepspace'
-import Navigation from '../../components/Navigation'
+import { AppShell } from '../../components/shell/AppShell'
+import { ShellProvider } from '../../components/shell/ShellContext'
 import { APP_NAME, SCOPE_ID } from '../../constants'
 import { pendingInviteToken } from '../../lib/invite-token'
 import { schemas } from '../../schemas'
 
 export default function AppLayout() {
+  // People who arrive by a summons or a guest juror's link see only that task.
+  const { pathname } = useLocation()
+  const focused = pathname === '/join' || pathname.startsWith('/juror/')
   return (
     <DeepSpaceAuthProvider>
       <title>{APP_NAME}</title>
       <AuthBoot>
-        <div className="flex min-h-screen flex-col bg-background">
-          <Navigation />
-          <main id="main" className="flex-1">
+        <ShellProvider>
+          <AppShell variant={focused ? 'focused' : 'full'}>
             <Suspense fallback={<div className="flex h-64 items-center justify-center text-muted-foreground">Loading…</div>}>
               <Outlet />
             </Suspense>
-          </main>
-        </div>
+          </AppShell>
+        </ShellProvider>
         <ResumePendingInvite />
       </AuthBoot>
     </DeepSpaceAuthProvider>

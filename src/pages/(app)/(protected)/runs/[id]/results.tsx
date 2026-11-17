@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { AlertTriangle, Download } from 'lucide-react'
 import { toast } from 'sonner'
-import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, StatusBadge } from '@/components/common'
-import { Caption, CaseProgress, ConversationSoFar, Sheet, SheetSection, Stamp, Term } from '@/components/court/CaseFile'
+import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, Plain, StatusBadge } from '@/components/common'
+import { Caption, ConversationSoFar, Sheet, SheetIndex, SheetSection, Stamp, Term } from '@/components/court/CaseFile'
+import { HearingNav } from '@/components/court/HearingNav'
 import { FindingsChart } from '@/components/court/FindingsChart'
 import { SpecialMasterPanel } from '@/components/review/SpecialMasterPanel'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -50,15 +51,13 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
   const labels = Object.fromEntries(data.configurations.map((c) => [c.key, c.label]))
   const unblinded = data.cohorts.invited.potentiallyUnblindedCount + data.cohorts.owner.potentiallyUnblindedCount
   const decided = data.status === 'decided'
-  const guest = useLocation().pathname.startsWith('/juror/')
   const RUBRIC = rubricLines(data.rubricVersion)
   const rubricName = (RUBRICS as Record<string, { name: string }>)[data.rubricVersion]?.name ?? data.rubricVersion
   return (
     <Page width="wide">
-      <CaseProgress step="judgment" complete={decided} />
+      <HearingNav runId={data.runId} caseId={data.evaluationId} caseTitle={data.evaluationTitle} role={data.role} status={data.status} />
       <Sheet className="rounded-t-none">
       <Caption
-        backTo={guest ? { to: `/juror/${data.runId}`, label: 'Back to your worksheet' } : { to: `/runs/${data.runId}`, label: 'Back to the hearing' }}
         title={data.evaluationTitle}
         parties={data.configurations.map((c) => c.label)}
         details={
@@ -77,6 +76,17 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
         stamp={<Stamp kind={decided ? 'entered' : 'unsealed'} />}
       />
 
+      <SheetIndex
+        items={[
+          { id: 'mapping', label: 'Parties' },
+          { id: 'scores', label: 'Findings' },
+          { id: 'verdict', label: 'Judgment' },
+          { id: 'evidence', label: 'Testimony' },
+          { id: 'coverage', label: 'Reliability' },
+          ...(data.byLanguage.length > 0 ? [{ id: 'by-language', label: 'By language' }] : []),
+          ...(data.role === 'owner' ? [{ id: 'special-master', label: 'Special master' }, { id: 'certified-record', label: 'Export' }] : []),
+        ]}
+      />
       <SheetSection id="mapping" label={<Term name="parties" />}>
         <div className="grid gap-4 md:grid-cols-2">
           {data.configurations.map((c) => (
@@ -105,8 +115,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
           {data.comparisonMode === 'model' ? 'Model comparison' : 'Configuration comparison — differences may come from instructions, not only the model'} · rubric {data.rubricVersion} · snapshot {data.snapshotHash.slice(0, 12)}…
         </p>
       </SheetSection>
-
-      <SheetSection id="scores" label={<>Findings{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(scores from the jury and from the judge)</span></>}>
+      <SheetSection id="scores" label={<>Findings <Plain>scores from the jury and from the judge</Plain></>}>
         <Tabs defaultValue={data.cohorts.invited.reviewerCount > 0 ? 'invited' : 'owner'}>
           <TabsList>
             <TabsTrigger value="invited">Jury’s findings ({data.cohorts.invited.reviewerCount} {data.cohorts.invited.reviewerCount === 1 ? 'juror' : 'jurors'})</TabsTrigger>
@@ -121,81 +130,6 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
           </TabsContent>
         </Tabs>
       </SheetSection>
-
-      {data.byLanguage.length > 0 && (
-        <SheetSection id="by-language" label={<>Findings by language{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(overall means; jury first, judge in brackets)</span></>}>
-          <div className="overflow-x-auto rounded-[2px] bg-white ring-1 ring-exhibit-edge">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Language</TableHead>
-                  <TableHead className="text-right">Questions</TableHead>
-                  {data.configurations.map((c) => (
-                    <TableHead key={c.key} className="text-right">
-                      {c.label}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.byLanguage.map((group) => (
-                  <TableRow key={group.language ?? 'untagged'}>
-                    <TableCell className="font-medium">{group.language ?? <span className="text-muted-foreground italic">Untagged</span>}</TableCell>
-                    <TableCell className="text-right tabular-nums">{group.caseKeys.length}</TableCell>
-                    {data.configurations.map((c) => (
-                      <TableCell key={c.key} className="text-right tabular-nums">
-                        {group.invited.byConfiguration ? formatScore(group.invited.byConfiguration[c.key].overallMean) : '—'}
-                        {group.owner.byConfiguration && <span className="ml-1 text-xs text-muted-foreground">({formatScore(group.owner.byConfiguration[c.key].overallMean)})</span>}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">Each language is scored on its own questions only. With few questions per language, treat differences as exploratory.</p>
-        </SheetSection>
-      )}
-
-      <SheetSection id="coverage" label={<>Testimony taken{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(generation coverage)</span></>}>
-        <div className="overflow-x-auto rounded-[2px] bg-white ring-1 ring-exhibit-edge">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Party</TableHead>
-                <TableHead className="text-right">Succeeded / planned</TableHead>
-                <TableHead className="text-right">Failed</TableHead>
-                <TableHead className="text-right">Uncertain</TableHead>
-                <TableHead className="text-right">Attempts</TableHead>
-                <TableHead className="text-right">Median latency</TableHead>
-                <TableHead className="text-right">Truncated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.configurations.map((c) => {
-                const cov = data.coverage[c.key]
-                return (
-                  <TableRow key={c.key}>
-                    <TableCell className="font-medium">{c.label}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {cov.succeeded}/{cov.planned} ({Math.round(cov.successRate * 100)}%)
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{cov.failed}</TableCell>
-                    <TableCell className="text-right tabular-nums">{cov.uncertain}</TableCell>
-                    <TableCell className="text-right tabular-nums">{cov.attempts}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatDuration(cov.medianLatencyMs)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{cov.truncatedCount}</TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {data.excludedCaseKeys.length} of {data.plannedCaseCount} planned questions were excluded from scoring because a party had no accepted testimony. Latency includes network overhead and excludes queue wait.
-        </p>
-      </SheetSection>
-
       {(unblinded > 0 || data.disagreements.length > 0 || data.eligibleCaseKeys.length < 3) && (
         <div className="border-t border-paper-rule px-5 py-6 sm:px-8">
         <Alert className="bg-slip">
@@ -211,11 +145,11 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
         </Alert>
         </div>
       )}
-
+      <VerdictSection data={data} reload={reload} />
       <SheetSection id="evidence" label={<Term name="record" />}>
         <div className="space-y-4">
           {data.cases.map((testCase, index) => (
-            <details key={testCase.key} className="overflow-hidden rounded-[2px] bg-white ring-1 ring-exhibit-edge" open={index === 0}>
+            <details key={testCase.key} className="overflow-hidden exhibit-panel" open={index === 0}>
               <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-5 py-4 transition-colors duration-150 hover:bg-slip">
                 <span className="font-heading font-bold">
                   Q{index + 1}: {testCase.title}
@@ -288,8 +222,78 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
           ))}
         </div>
       </SheetSection>
-
-      <VerdictSection data={data} reload={reload} />
+      <SheetSection id="coverage" label={<>Testimony taken <Plain>generation coverage</Plain></>}>
+        <div className="overflow-x-auto exhibit-panel">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Party</TableHead>
+                <TableHead className="text-right">Succeeded / planned</TableHead>
+                <TableHead className="text-right">Failed</TableHead>
+                <TableHead className="text-right">Uncertain</TableHead>
+                <TableHead className="text-right">Attempts</TableHead>
+                <TableHead className="text-right">Median latency</TableHead>
+                <TableHead className="text-right">Truncated</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.configurations.map((c) => {
+                const cov = data.coverage[c.key]
+                return (
+                  <TableRow key={c.key}>
+                    <TableCell className="font-medium">{c.label}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {cov.succeeded}/{cov.planned} ({Math.round(cov.successRate * 100)}%)
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{cov.failed}</TableCell>
+                    <TableCell className="text-right tabular-nums">{cov.uncertain}</TableCell>
+                    <TableCell className="text-right tabular-nums">{cov.attempts}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatDuration(cov.medianLatencyMs)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{cov.truncatedCount}</TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {data.excludedCaseKeys.length} of {data.plannedCaseCount} planned questions were excluded from scoring because a party had no accepted testimony. Latency includes network overhead and excludes queue wait.
+        </p>
+      </SheetSection>
+      {data.byLanguage.length > 0 && (
+        <SheetSection id="by-language" label={<>Findings by language <Plain>overall means; jury first, judge in brackets</Plain></>}>
+          <div className="overflow-x-auto exhibit-panel">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Language</TableHead>
+                  <TableHead className="text-right">Questions</TableHead>
+                  {data.configurations.map((c) => (
+                    <TableHead key={c.key} className="text-right">
+                      {c.label}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.byLanguage.map((group) => (
+                  <TableRow key={group.language ?? 'untagged'}>
+                    <TableCell className="font-medium">{group.language ?? <span className="text-muted-foreground italic">Untagged</span>}</TableCell>
+                    <TableCell className="text-right tabular-nums">{group.caseKeys.length}</TableCell>
+                    {data.configurations.map((c) => (
+                      <TableCell key={c.key} className="text-right tabular-nums">
+                        {group.invited.byConfiguration ? formatScore(group.invited.byConfiguration[c.key].overallMean) : '—'}
+                        {group.owner.byConfiguration && <span className="ml-1 text-xs text-muted-foreground">({formatScore(group.owner.byConfiguration[c.key].overallMean)})</span>}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Each language is scored on its own questions only. With few questions per language, treat differences as exploratory.</p>
+        </SheetSection>
+      )}
       {data.role === 'owner' && <SpecialMasterPanel results={data} />}
       {data.role === 'owner' && <CertifiedRecord runId={data.runId} />}
       </Sheet>
@@ -307,7 +311,7 @@ function CohortTable({ cohort, configurations, rubricVersion }: { cohort: Cohort
   return (
     <>
     <FindingsChart cohort={cohort} parties={configurations} rubricVersion={rubricVersion} />
-    <div className="overflow-x-auto rounded-[2px] bg-white ring-1 ring-exhibit-edge">
+    <div className="overflow-x-auto exhibit-panel">
       <Table>
         <TableHeader>
           <TableRow>

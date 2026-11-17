@@ -1,13 +1,17 @@
 /**
  * Static landing page (scaffold contract: no providers, no data or auth hooks,
- * deterministic for prerendering).
+ * deterministic for prerendering). The account chip reads a local display
+ * hint after hydration, never the session (src/lib/account-hint.ts).
  */
 
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import { BrandMark } from '@/components/BrandMark'
 import { ExhibitSticker, Stamp } from '@/components/court/CaseFile'
 import { Seo } from '@/components/Seo'
+import { AccountChip } from '@/components/shell/AccountChip'
+import { readAccountHint, type AccountHint } from '@/lib/account-hint'
 import { seo } from '@/seo'
 import { Button } from '@/components/ui/button'
 import { SAMPLE_CASES } from '@/sample/fixture'
@@ -29,15 +33,26 @@ const DATA_HANDLING = [
 ]
 
 export default function Landing() {
+  // Read after hydration so the prerendered HTML (always "Sign in") matches the first client render.
+  const [hint, setHint] = useState<AccountHint | null>(null)
+  useEffect(() => setHint(readAccountHint()), [])
   return (
     <div data-testid="static-landing" className="min-h-screen bg-desk">
       <Seo {...seo} path="/" />
-      <header className="border-b border-paper-edge/70">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
+      <header className="border-b border-drawer-edge bg-drawer">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4 sm:px-6">
           <BrandMark />
-          <Button variant="ghost" size="sm" render={<Link to="/evaluations" />} nativeButton={false}>
-            Sign in
-          </Button>
+          <nav aria-label="Public" className="hidden items-center gap-1 sm:flex">
+            <Link to="/sample" className="rounded-md px-2.5 py-1.5 text-sm text-foreground/80 outline-none hover:bg-paper/60 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+              Sample case
+            </Link>
+            <Link to="/glossary" className="rounded-md px-2.5 py-1.5 text-sm text-foreground/80 outline-none hover:bg-paper/60 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+              Glossary
+            </Link>
+          </nav>
+          <div className="ml-auto">
+            <AccountChip hint={hint} />
+          </div>
         </div>
       </header>
       <main id="main" className="mx-auto max-w-6xl px-4 sm:px-6">

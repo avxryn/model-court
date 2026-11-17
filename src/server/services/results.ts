@@ -195,6 +195,8 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
   return {
     runId,
     role: access.role,
+    // Same case reference the run view already gives both roles; used for breadcrumbs.
+    evaluationId: access.evaluation.id,
     evaluationTitle: access.evaluation.title,
     status: run.status,
     revision: run.revision,

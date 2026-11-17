@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { AlertTriangle, KeyRound, Play } from 'lucide-react'
+import { AlertTriangle, KeyRound, MoreHorizontal, Play, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { ErrorPanel, formatTime, Page, PageSkeleton, SaveIndicator, StatusBadge, type SaveState } from '@/components/common'
-import { Caption, CaseProgress, DocketNumber, Sheet, Stamp, Term } from '@/components/court/CaseFile'
+import { Breadcrumbs, ErrorPanel, formatTime, Note, Page, PageSkeleton, Panel, SaveIndicator, StatusBadge, type SaveState } from '@/components/common'
+import { useShellFocus } from '@/components/shell/ShellContext'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Caption, CaseProgress, DocketNumber, Sheet, Stamp } from '@/components/court/CaseFile'
 import { CasesEditor, ConfigurationsEditor, RubricPicker, type FieldErrors } from '@/components/evaluations/DraftEditor'
 import { ImportedAnswers, type SavedImport } from '@/components/evaluations/ImportedAnswers'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -34,8 +35,10 @@ export default function EvaluationPage() {
 }
 
 function ReviewerEvaluation({ evaluation }: { evaluation: Extract<EvaluationView, { role: 'reviewer' }> }) {
+  useShellFocus(evaluation.id)
   return (
     <Page>
+      <Breadcrumbs items={[{ label: 'Your cases', to: '/evaluations' }, { label: evaluation.title }]} />
       <Sheet>
       <Caption
         title={evaluation.title}
@@ -51,7 +54,7 @@ function ReviewerEvaluation({ evaluation }: { evaluation: Extract<EvaluationView
       />
       <div className="space-y-4 px-5 pb-10 sm:px-8">
       <p className="font-heading text-base leading-relaxed">You were summoned as a juror in this case. The parties stay sealed until the judge unseals the record.</p>
-      <ul className="divide-y divide-paper-rule rounded-[2px] bg-white ring-1 ring-exhibit-edge">
+      <Panel as="ul" className="divide-y divide-paper-rule">
         {evaluation.runs.map((run) => (
           <li key={run.id} className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
             <span className="font-heading">Hearing · {formatTime(run.createdAt)}</span>
@@ -63,7 +66,7 @@ function ReviewerEvaluation({ evaluation }: { evaluation: Extract<EvaluationView
             </span>
           </li>
         ))}
-      </ul>
+      </Panel>
       </div>
       </Sheet>
     </Page>
@@ -108,6 +111,9 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
   const progress = caseStep(latestRun?.status)
   const stamp = recordStamp(latestRun?.status)
   const calls = draft.cases.length * generatedParties(draft.configurations).length
+  const [deleting, setDeleting] = useState(false)
+  const [tab, setTab] = useState<string>('cases')
+  useShellFocus(evaluation.id)
 
   const save = useCallback(async () => {
     setSaveState('saving')
@@ -144,10 +150,13 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
 
   return (
     <Page width="wide">
+      <div className="flex items-start justify-between gap-3">
+        <Breadcrumbs items={[{ label: 'Your cases', to: '/evaluations' }, { label: evaluation.title }]} />
+        <CaseActions onDelete={() => setDeleting(true)} />
+      </div>
       <CaseProgress {...progress} />
       <Sheet className="rounded-t-none">
       <Caption
-        backTo={{ to: '/evaluations', label: 'Back to the docket' }}
         title={evaluation.title}
         parties={draft.configurations.map((c) => c.label || 'Unnamed party')}
         details={
@@ -165,29 +174,6 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
         }
         stamp={stamp ? <Stamp kind={stamp} /> : <Stamp kind="draft" />}
       />
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-paper-rule bg-slip/50 px-5 py-4 sm:px-8">
-        <div className="flex flex-wrap items-center gap-3">
-          <SaveIndicator state={dirty && saveState === 'idle' ? 'idle' : saveState} onRetry={() => void save()} />
-          {dirty && <span className="text-xs text-muted-foreground">Unsaved changes</span>}
-          <Button variant="outline" disabled={!dirty || hasErrors || saveState === 'saving'} onClick={() => void save()}>
-            Save draft
-          </Button>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-muted-foreground tabular-nums">
-            {calls > 0 ? (
-              <>
-                This hearing makes <strong className="text-foreground">{calls} paid calls</strong>, billed to your keys
-              </>
-            ) : (
-              <>
-                This hearing makes <strong className="text-foreground">no paid calls</strong>: imported answers only
-              </>
-            )}
-          </span>
-          <RunDialog evaluationId={evaluation.id} revision={revision} draft={draft} providers={providers} keys={keys} blockers={blockers} />
-        </div>
-      </div>
       <div className="border-t border-paper-rule px-5 pt-6 pb-10 sm:px-8">
       {saveState === 'conflict' && (
         <Alert variant="destructive" className="mb-6">
@@ -211,23 +197,12 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
         </Alert>
       )}
 
-      {blockers.length > 0 && (
-        <div role="status" className="mb-8 rounded-[2px] border border-dashed border-slip-edge bg-slip px-5 py-4 text-sm">
-          <div className="court-label">Before the hearing can start</div>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-foreground/80 marker:text-stamp">
-            {blockers.map((b) => (
-              <li key={b}>{b}</li>
-            ))}
-          </ul>
-        </div>
-      )}
 
-      <Tabs defaultValue="cases">
-        <TabsList className="grid w-full grid-cols-2 group-data-horizontal/tabs:h-auto sm:inline-flex sm:w-fit sm:group-data-horizontal/tabs:h-8">
+      <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
+        <TabsList className="w-full justify-start overflow-x-auto sm:w-fit">
           <TabsTrigger value="cases">Questions ({draft.cases.length})</TabsTrigger>
-          <TabsTrigger value="configurations">Parties</TabsTrigger>
+          <TabsTrigger value="configurations">Parties ({draft.configurations.length})</TabsTrigger>
           <TabsTrigger value="runs">Hearings ({evaluation.runs.length})</TabsTrigger>
-          <TabsTrigger value="settings">Delete</TabsTrigger>
         </TabsList>
         <TabsContent value="cases" className="pt-6">
           <RubricPicker value={draft.rubricVersion} onChange={(rubricVersion) => change({ ...draft, rubricVersion })} />
@@ -260,9 +235,9 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
         </TabsContent>
         <TabsContent value="runs" className="pt-6">
           {evaluation.runs.length === 0 ? (
-            <p className="rounded-[2px] bg-slip px-5 py-4 text-sm text-muted-foreground">No hearings yet. Each hearing freezes an unchangeable copy of the saved draft.</p>
+            <Note>No hearings yet. Each hearing freezes an unchangeable copy of the saved draft.</Note>
           ) : (
-            <ul className="divide-y divide-paper-rule overflow-hidden rounded-[2px] bg-white ring-1 ring-exhibit-edge">
+            <Panel as="ul" className="divide-y divide-paper-rule overflow-hidden">
               {evaluation.runs.map((run) => (
                 <li key={run.id}>
                   <Link to={`/runs/${run.id}`} className="flex items-center justify-between gap-4 px-5 py-4 transition-colors duration-150 hover:bg-slip focus-visible:bg-slip focus-visible:outline-none">
@@ -271,15 +246,22 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                   </Link>
                 </li>
               ))}
-            </ul>
+            </Panel>
           )}
-        </TabsContent>
-        <TabsContent value="settings" className="pt-6">
-          <DeleteEvaluation evaluationId={evaluation.id} title={evaluation.title} revision={revision} />
         </TabsContent>
       </Tabs>
       </div>
+      <ActionBar
+        saveState={dirty && saveState === 'idle' ? 'idle' : saveState}
+        dirty={dirty}
+        canSave={dirty && !hasErrors && saveState !== 'saving'}
+        onSave={() => void save()}
+        calls={calls}
+        blockers={blockers}
+        start={<RunDialog evaluationId={evaluation.id} revision={revision} draft={draft} providers={providers} keys={keys} blockers={blockers} />}
+      />
       </Sheet>
+      <DeleteEvaluation open={deleting} onOpenChange={setDeleting} evaluationId={evaluation.id} title={evaluation.title} revision={revision} />
     </Page>
   )
 }
@@ -415,7 +397,71 @@ function RunDialog({ evaluationId, revision, draft, providers, keys, blockers }:
   )
 }
 
-function DeleteEvaluation({ evaluationId, title, revision }: { evaluationId: string; title: string; revision: number }) {
+function CaseActions({ onDelete }: { onDelete: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="-mt-1 shrink-0" aria-label="Case actions" />}>
+        <MoreHorizontal aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem variant="destructive" onClick={onDelete}>
+          <Trash2 aria-hidden /> Delete case…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/**
+ * The case's save and start controls, stuck to the bottom of the screen while
+ * the case is on it. What still blocks the hearing is one click away.
+ */
+function ActionBar({ saveState, dirty, canSave, onSave, calls, blockers, start }: { saveState: SaveState; dirty: boolean; canSave: boolean; onSave: () => void; calls: number; blockers: string[]; start: ReactNode }) {
+  return (
+    <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-b-sm border-t border-paper-edge bg-slip/95 px-5 py-3 backdrop-blur-sm sm:px-8 print:hidden">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="outline" disabled={!canSave} onClick={onSave}>
+          Save draft
+        </Button>
+        <SaveIndicator state={saveState} onRetry={onSave} />
+        {dirty && saveState === 'idle' && <span className="text-xs text-muted-foreground">Unsaved changes</span>}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        {blockers.length > 0 ? (
+          <details className="relative">
+            <summary className="inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-sm text-warning outline-none hover:bg-paper/70 focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+              <AlertTriangle className="size-4" aria-hidden />
+              {blockers.length} {blockers.length === 1 ? 'thing' : 'things'} to do before the hearing
+            </summary>
+            <div role="status" className="absolute right-0 bottom-full z-30 mb-2 w-[min(26rem,calc(100vw-2rem))] rounded-[2px] border border-dashed border-slip-edge bg-slip px-5 py-4 text-sm shadow-lg">
+              <div className="court-label">Before the hearing can start</div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-foreground/80 marker:text-stamp">
+                {blockers.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+            </div>
+          </details>
+        ) : (
+          <span className="text-sm text-muted-foreground tabular-nums">
+            {calls > 0 ? (
+              <>
+                <strong className="text-foreground">{calls} paid calls</strong>, billed to your keys
+              </>
+            ) : (
+              <>
+                <strong className="text-foreground">No paid calls</strong>: imported answers only
+              </>
+            )}
+          </span>
+        )}
+        {start}
+      </div>
+    </div>
+  )
+}
+
+function DeleteEvaluation({ open, onOpenChange, evaluationId, title, revision }: { open: boolean; onOpenChange: (open: boolean) => void; evaluationId: string; title: string; revision: number }) {
   const navigate = useNavigate()
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
@@ -432,30 +478,41 @@ function DeleteEvaluation({ evaluationId, title, revision }: { evaluationId: str
     }
   }
   return (
-    <div className="max-w-xl space-y-4 rounded-[2px] border border-destructive/30 bg-white p-5">
-      <h2 className="font-heading text-lg font-bold">Delete this case</h2>
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        Access stops immediately for you and every juror. Hearings, responses, ratings, and judgments are permanently removed within 24 hours. A provider request already in flight may still be charged. Your saved API keys are not affected. Deleting here cannot remove data the providers already received.
-      </p>
-      <div className="space-y-1.5">
-        <Label htmlFor="confirm-title">Type the title to confirm: {title}</Label>
-        <Input id="confirm-title" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-      </div>
-      <AlertDialog>
-        <AlertDialogTrigger render={<Button variant="destructive" disabled={confirm !== title || busy} />}>Delete case</AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{title}”?</AlertDialogTitle>
-            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => void remove()}>
-              Delete permanently
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next)
+        if (!next) setConfirm('')
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-heading text-xl">Delete “{title}”?</DialogTitle>
+          <DialogDescription>
+            Access stops immediately for you and every juror. Hearings, responses, ratings, and judgments are permanently removed within 24 hours and cannot be recovered. A provider request already in flight may still be charged. Your saved API keys are not affected. Deleting here cannot remove data the providers already received.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (confirm === title && !busy) void remove()
+          }}
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="confirm-title">Type the title to confirm: {title}</Label>
+            <Input id="confirm-title" value={confirm} autoComplete="off" onChange={(e) => setConfirm(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Keep the case
+            </Button>
+            <Button type="submit" variant="destructive" disabled={confirm !== title || busy}>
+              {busy ? 'Deleting…' : 'Delete permanently'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -3,6 +3,7 @@
  * the shared draft schema (E02). Server validation remains authoritative.
  */
 
+import { Plain } from '@/components/common'
 import type { ReactNode } from 'react'
 import { ArrowDown, ArrowUp, Plus, Trash2, Upload } from 'lucide-react'
 import { ExhibitSticker } from '@/components/court/CaseFile'
@@ -181,7 +182,7 @@ export function RubricPicker({ value, onChange, disabled }: { value: RubricVersi
     <fieldset disabled={disabled} className="mb-6 space-y-2">
       <legend id="rubric-legend" className="court-label mb-2">
         The jury’s rubric{' '}
-        <span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(what jurors score; each line is 0–2)</span>
+        <Plain>what jurors score; each line is 0–2</Plain>
       </legend>
       <RadioGroup aria-labelledby="rubric-legend" value={current} onValueChange={(v) => onChange(v as RubricVersion)} className="grid gap-2 md:grid-cols-3">
         {RUBRIC_VERSIONS.map((version) => {

@@ -4,6 +4,7 @@
  * object. Model text renders as plain text in its own scrollable, labelled region.
  */
 
+import { Plain } from '@/components/common'
 import type { ReactNode } from 'react'
 import { ConversationSoFar, Exhibit, JuryInstructions, Term, Testimony } from '@/components/court/CaseFile'
 
@@ -18,7 +19,7 @@ export function CaseMaterial({ title, input, reference, expectedBehavior, number
               · {number} OF {total}
             </span>
           )}
-          {' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(test case)</span>
+           <Plain>test case</Plain>
         </h2>
         <p className="mt-2 font-heading text-sm text-muted-foreground italic">{title}</p>
         {messages.length > 0 && (

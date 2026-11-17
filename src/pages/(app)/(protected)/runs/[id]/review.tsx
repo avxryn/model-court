@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { CheckCircle2, ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import { toast } from 'sonner'
-import { ErrorPanel, Page, PageSkeleton, SaveIndicator, type SaveState } from '@/components/common'
-import { CaseProgress, Sheet, Stamp, Term } from '@/components/court/CaseFile'
+import { ErrorPanel, Page, PageSkeleton, Plain, SaveIndicator, type SaveState } from '@/components/common'
+import { Sheet, Stamp, Term } from '@/components/court/CaseFile'
+import { HearingNav } from '@/components/court/HearingNav'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -127,14 +128,14 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
 
   return (
     <Page width="wide">
-      <CaseProgress step="deliberate" />
+      <HearingNav runId={review.runId} caseId={review.evaluationId} caseTitle={review.evaluationTitle} role={review.contextType === 'owner' ? 'owner' : 'reviewer'} status={review.runStatus} />
       <Sheet className="rounded-t-none">
         <div className="flex flex-col gap-4 border-b border-paper-rule px-5 pt-7 pb-6 sm:flex-row sm:items-start sm:justify-between sm:px-8">
           <div className="min-w-0 space-y-1.5">
             <div className="court-label">
               {review.contextType === 'owner' ? (
                 <>
-                  The judge’s own review{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(context-aware, reported separately)</span>
+                  The judge’s own review <Plain>context-aware, reported separately</Plain>
                 </>
               ) : (
                 <Term name="worksheet" />

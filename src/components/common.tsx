@@ -5,7 +5,7 @@
  */
 
 import type { ReactNode } from 'react'
-import { AlertCircle, CheckCircle2, Clock, Loader2, Search, type LucideIcon } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ChevronRight, Clock, Loader2, Search, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -14,33 +14,78 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { ApiClientError } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 
-export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: ReactNode; title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+export interface Crumb {
+  label: ReactNode
+  to?: string
+}
+
+/** Where this page sits: Your cases › the case › the hearing. The last crumb is the current page. */
+export function Breadcrumbs({ items, className }: { items: Crumb[]; className?: string }) {
   return (
-    <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
-      <div className="min-w-0 space-y-2">
-        {eyebrow && <div className="eyebrow [&_a]:underline-offset-4 [&_a]:transition-colors [&_a:hover]:text-foreground">{eyebrow}</div>}
-        <h1 className="text-2xl leading-tight font-semibold tracking-tight text-foreground sm:text-3xl">{title}</h1>
-        {description && <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p>}
+    <nav aria-label="Breadcrumb" className={cn('mb-3 print:hidden', className)}>
+      <ol className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground">
+        {items.map((item, index) => {
+          const last = index === items.length - 1
+          return (
+            <li key={index} className="flex min-w-0 items-center gap-1.5">
+              {index > 0 && <ChevronRight aria-hidden className="size-3.5 shrink-0 text-mark" />}
+              {item.to && !last ? (
+                <Link to={item.to} className="max-w-[16rem] truncate rounded-sm underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
+                  {item.label}
+                </Link>
+              ) : (
+                <span aria-current={last ? 'page' : undefined} className={cn('max-w-[20rem] truncate', last && 'text-foreground')}>
+                  {item.label}
+                </span>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </nav>
+  )
+}
+
+/**
+ * The heading of every page that is not a case file: breadcrumbs, a court
+ * label, one title size, a short description, and the page's actions.
+ */
+export function PageHeader({ crumbs, eyebrow, title, description, actions }: { crumbs?: Crumb[]; eyebrow?: ReactNode; title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+  return (
+    <header className="mb-6">
+      {crumbs && <Breadcrumbs items={crumbs} />}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
+        <div className="min-w-0 space-y-1.5">
+          {eyebrow && <div className="court-label">{eyebrow}</div>}
+          <h1 className="font-heading text-3xl leading-tight font-bold text-foreground">{title}</h1>
+          {description && <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p>}
+        </div>
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pb-0.5">{actions}</div>}
     </header>
   )
 }
 
-/** Section heading inside a page: one size for every h2 below the page title. */
-export function SectionHeading({ id, children, className }: { id?: string; children: ReactNode; className?: string }) {
-  return (
-    <h2 id={id} className={cn('mb-4 text-xl font-semibold tracking-tight', className)}>
-      {children}
-    </h2>
-  )
+/** A court term's plain meaning in brackets after a label: "Findings (scores)". */
+export function Plain({ children }: { children: ReactNode }) {
+  return <span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">({children})</span>
+}
+
+/** A white exhibit-edged panel inside a sheet: lists, tables, side notes. */
+export function Panel({ as: Tag = 'div', className, children }: { as?: 'div' | 'section' | 'ul' | 'ol' | 'li'; className?: string; children: ReactNode }) {
+  return <Tag className={cn('exhibit-panel', className)}>{children}</Tag>
+}
+
+/** A quiet note on a slip: empty lists and short explanations. */
+export function Note({ className, children }: { className?: string; children: ReactNode }) {
+  return <p className={cn('rounded-[2px] bg-slip px-5 py-4 text-sm text-muted-foreground', className)}>{children}</p>
 }
 
 export function Page({ children, width = 'default' }: { children: ReactNode; width?: 'default' | 'wide' | 'narrow' }) {
-  return <div className={cn('mx-auto w-full px-4 py-8 sm:px-6 sm:py-12', width === 'wide' ? 'max-w-6xl' : width === 'narrow' ? 'max-w-2xl' : 'max-w-4xl')}>{children}</div>
+  return <div className={cn('mx-auto w-full px-4 py-6 sm:px-6 lg:px-10 lg:py-10', width === 'wide' ? 'max-w-6xl' : width === 'narrow' ? 'max-w-2xl' : 'max-w-4xl')}>{children}</div>
 }
 
-const RUN_STATUS: Record<string, { label: string; tone: 'neutral' | 'active' | 'good' | 'warn' | 'bad' }> = {
+const RUN_STATUS: Record<string, { label: string; tone: StatusTone }> = {
   generating: { label: 'Generating', tone: 'active' },
   ready: { label: 'Ready for review', tone: 'neutral' },
   reviewing: { label: 'Under review', tone: 'active' },
@@ -59,6 +104,21 @@ const RUN_STATUS: Record<string, { label: string; tone: 'neutral' | 'active' | '
   unused: { label: 'Unused', tone: 'neutral' },
   redeemed: { label: 'Joined', tone: 'good' },
   expired: { label: 'Expired', tone: 'warn' },
+}
+
+export type StatusTone = 'neutral' | 'active' | 'good' | 'warn' | 'bad'
+
+export function statusInfo(status: string): { label: string; tone: StatusTone } {
+  return RUN_STATUS[status] ?? { label: status, tone: 'neutral' }
+}
+
+/** A small status dot for dense lists (the sidebar); always paired with text or a title. */
+export const TONE_DOT: Record<StatusTone, string> = {
+  neutral: 'bg-mark',
+  active: 'bg-primary',
+  good: 'bg-success',
+  warn: 'bg-warning',
+  bad: 'bg-destructive',
 }
 
 const TONE: Record<string, string> = {

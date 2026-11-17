@@ -55,6 +55,9 @@
   --tab-idle-foreground: #5a4e36;
   --staple: #9aa0aa;
   --mark: #8c8270;
+  /* The sidebar: a slightly deeper desk drawer that holds the case files. */
+  --drawer: #e2d9c5;
+  --drawer-edge: #cfc3a6;
   color-scheme: light;
 }
 
@@ -104,6 +107,8 @@
   --color-tab-idle-foreground: var(--tab-idle-foreground);
   --color-staple: var(--staple);
   --color-mark: var(--mark);
+  --color-drawer: var(--drawer);
+  --color-drawer-edge: var(--drawer-edge);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -161,6 +166,11 @@
 @utility paper {
   @apply bg-paper text-foreground ring-1 ring-paper-edge;
   box-shadow: 0 1px 0 var(--paper-rule), 0 12px 28px -12px rgb(60 45 15 / 0.22);
+}
+
+/* A white exhibit-edged panel inside a sheet: lists, tables, transcripts. */
+@utility exhibit-panel {
+  @apply rounded-[2px] bg-white ring-1 ring-exhibit-edge;
 }
 
 /* Typewriter face: docket numbers, stamps, exhibit stickers. */
@@ -230,6 +240,10 @@
   }
   p, li, dd {
     text-wrap: pretty;
+  }
+  /* Section anchors land below the sticky bars (mobile header, contents bar). */
+  h2[id], [id^="term-"] {
+    scroll-margin-top: 7rem;
   }
   ::selection {
     background-color: var(--primary);
