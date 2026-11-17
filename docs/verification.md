@@ -49,4 +49,5 @@ Record only what you personally observed. Leave rows empty until then.
 
 | Date | What I checked | Environment | Result | Notes |
 |---|---|---|---|---|
+| 2026-11-17 | Signed-in pages load after the D-22 fix (reported in chat: "Yes, they load") | https://model-court.app.space, release rel_01M7M2S7YJHBV8PYN8FE77R48P | Pass | Your own browser and account |
 | | | | | |
