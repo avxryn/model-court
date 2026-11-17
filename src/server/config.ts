@@ -20,6 +20,12 @@ export interface ConfigEnv {
   PROVIDER_TIMEOUT_MS?: string
   CREDENTIAL_TTL_DAYS?: string
   MAX_CONFIGURATIONS_PER_RUN?: string
+  /** Operator-only: re-encrypt every active key to this root version on each cron tick. */
+  CREDENTIAL_REKEY_TARGET_VERSION?: string
+  /** Operator-only: during re-keying, revoke keys that fail authentication under their recorded root. */
+  CREDENTIAL_REKEY_REVOKE_UNREADABLE?: string
+  /** Operator-only, after a store restore: revoke every active key created before this epoch-ms instant. */
+  CREDENTIAL_REVOKE_CREATED_BEFORE?: string
   APP_COMMIT?: string
   DEEPSPACE_APP_ID: string
 }
@@ -40,6 +46,12 @@ export interface AppConfig {
   maxConfigurationsPerRun: number
   /** Saved provider keys expire this long after saving or renewal (D-23). */
   credentialTtlMs: number
+  /** Operator credential maintenance run by the cron (docs/runbook.md). Null/false = off. */
+  credentialOps: {
+    rekeyTargetVersion: string | null
+    rekeyRevokeUnreadable: boolean
+    revokeCreatedBefore: number | null
+  }
   problems: string[]
 }
 
@@ -100,6 +112,21 @@ export function parseConfig(env: ConfigEnv): AppConfig {
     }
   }
 
+  // Operator credential maintenance. A malformed value disables the operation (fail closed).
+  let rekeyTargetVersion: string | null = null
+  const rekeyTarget = env.CREDENTIAL_REKEY_TARGET_VERSION?.trim()
+  if (rekeyTarget) {
+    if (encryptionKeys.has(rekeyTarget)) rekeyTargetVersion = rekeyTarget
+    else problems.push(`Re-key target root ${rekeyTarget} is not configured; re-keying is paused.`)
+  }
+  let revokeCreatedBefore: number | null = null
+  const cutoff = env.CREDENTIAL_REVOKE_CREATED_BEFORE?.trim()
+  if (cutoff) {
+    const parsed = Number(cutoff)
+    if (Number.isSafeInteger(parsed) && parsed > 0) revokeCreatedBefore = parsed
+    else problems.push('CREDENTIAL_REVOKE_CREATED_BEFORE is not a positive epoch-millisecond integer; ignored.')
+  }
+
   const credentialsReady = activeKeyVersion !== null && hmacKey !== null
   const generationFlag = env.GENERATION_ENABLED === 'true'
   if (generationFlag && !credentialsReady) problems.push('Generation is enabled but credential encryption is not ready.')
@@ -121,6 +148,11 @@ export function parseConfig(env: ConfigEnv): AppConfig {
     // Operators may shorten, never lengthen, the 90s provider deadline.
     providerTimeoutMs: Math.min(positiveInt(env.PROVIDER_TIMEOUT_MS, LIMITS.providerTimeoutMs, problems, 'PROVIDER_TIMEOUT_MS') || LIMITS.providerTimeoutMs, LIMITS.providerTimeoutMs),
     maxConfigurationsPerRun: configurationCap(env.MAX_CONFIGURATIONS_PER_RUN, problems),
+    credentialOps: {
+      rekeyTargetVersion,
+      rekeyRevokeUnreadable: rekeyTargetVersion !== null && env.CREDENTIAL_REKEY_REVOKE_UNREADABLE === 'true',
+      revokeCreatedBefore,
+    },
     credentialTtlMs: Math.min(Math.max(positiveInt(env.CREDENTIAL_TTL_DAYS, 7, problems, 'CREDENTIAL_TTL_DAYS') || 7, 1), 90) * 24 * 60 * 60 * 1000,
     problems,
   }
