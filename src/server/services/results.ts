@@ -14,6 +14,7 @@ import type { Deps } from '../deps'
 import { ApiError, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
 import { notifyRun } from './generation'
+import { isImportedSnapshot } from '../../domain/snapshot'
 import { loadGenerations, parseSnapshot, type AssignmentCase, type EligibleManifest } from './runs'
 
 interface AttemptRow {
@@ -56,6 +57,12 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
       .bind(runId)
       .all<AttemptRow>()
   ).results
+  const importedOutputs = (
+    await db
+      .prepare('SELECT configuration_key, case_key, text, text_sha256, byte_length FROM run_imported_outputs WHERE run_id = ?')
+      .bind(runId)
+      .all<{ configuration_key: string; case_key: string; text: string; text_sha256: string; byte_length: number }>()
+  ).results
   const sessionRows = cohortIds.length
     ? (await db.prepare(`SELECT * FROM review_sessions WHERE id IN (${cohortIds.map(() => '?').join(',')})`).bind(...cohortIds).all<SessionRow>()).results
     : []
@@ -78,6 +85,13 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
 
   const coverage = Object.fromEntries(
     snapshot.configurations.map((configuration) => {
+      if (isImportedSnapshot(configuration)) {
+        const count = importedOutputs.filter((output) => output.configuration_key === configuration.key).length
+        return [
+          configuration.key,
+          { planned: snapshot.cases.length, succeeded: count, failed: 0, uncertain: 0, canceled: 0, successRate: snapshot.cases.length ? count / snapshot.cases.length : 0, attempts: 0, failedAttempts: 0, uncertainAttempts: 0, medianLatencyMs: null, truncatedCount: 0, source: 'imported' as const },
+        ]
+      }
       const forConfig = generations.filter((generation) => generation.configuration_key === configuration.key)
       const configAttempts = attempts.filter((attempt) => forConfig.some((generation) => generation.id === attempt.generation_id))
       const succeeded = forConfig.filter((generation) => generation.status === 'succeeded').length
@@ -111,6 +125,23 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
       language: testCase.language ?? null,
       eligible,
       responses: snapshot.configurations.map((configuration) => {
+        if (isImportedSnapshot(configuration)) {
+          const output = importedOutputs.find((o) => o.case_key === testCase.key && o.configuration_key === configuration.key)
+          return {
+            configurationKey: configuration.key,
+            status: 'imported' as const,
+            errorCode: null,
+            attemptCount: 0,
+            text: output?.text ?? null,
+            truncated: false,
+            finishReason: null,
+            inputTokens: null,
+            outputTokens: null,
+            durationMs: null,
+            observedModel: null,
+            sha256: output?.text_sha256 ?? null,
+          }
+        }
         const generation = generations.find((g) => g.case_key === testCase.key && g.configuration_key === configuration.key)
         const accepted = attempts.find((attempt) => attempt.id === generation?.accepted_attempt_id)
         return {
@@ -172,7 +203,12 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
     providerRegistryVersion: snapshot.providerRegistryVersion,
     appCommit: snapshot.appCommit,
     // Credential references are execution authorization, never evidence: not included.
-    configurations: snapshot.configurations.map((c) => ({ key: c.key, label: c.label, provider: c.provider, modelId: c.modelId, systemPrompt: c.systemPrompt, maxOutputTokens: c.maxOutputTokens })),
+    // Imported parties carry their provenance instead of a model; generated parties keep their earlier shape.
+    configurations: snapshot.configurations.map((c) =>
+      isImportedSnapshot(c)
+        ? { key: c.key, label: c.label, provider: null, modelId: null, systemPrompt: null, maxOutputTokens: null, source: 'imported' as const, provenance: c.provenance }
+        : { key: c.key, label: c.label, provider: c.provider, modelId: c.modelId, systemPrompt: c.systemPrompt, maxOutputTokens: c.maxOutputTokens },
+    ),
     plannedCaseCount: snapshot.cases.length,
     eligibleCaseKeys: manifest.caseKeys,
     excludedCaseKeys: manifest.excludedCaseKeys,

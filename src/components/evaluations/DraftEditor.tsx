@@ -3,16 +3,20 @@
  * the shared draft schema (E02). Server validation remains authoritative.
  */
 
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { ArrowDown, ArrowUp, Plus, Trash2, Upload } from 'lucide-react'
 import { CaseImport } from '@/components/evaluations/CaseImport'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import type { CaseInput, ComparisonMode, Configuration, DraftInput } from '@/domain/contracts'
+import { IMPORT_SOURCE_TYPES, isImported, type CaseInput, type ComparisonMode, type Configuration, type DraftInput, type ImportedConfiguration, type ModelConfiguration, type Provenance } from '@/domain/contracts'
+import { DEFAULT_SYSTEM_PROMPT } from '@/domain/example'
+import { SOURCE_LABELS } from '@/lib/parties'
 import { LIMITS } from '@/domain/limits'
 import { DIMENSIONS, RUBRIC_VERSION, RUBRIC_VERSIONS, RUBRICS, type RubricVersion } from '@/domain/rubric'
 import { codePointLength } from '@/domain/text'
@@ -149,27 +153,55 @@ export function RubricPicker({ value, onChange, disabled }: { value: RubricVersi
   )
 }
 
-export function ConfigurationsEditor({ draft, onChange, errors, catalog, disabled, newId }: { draft: DraftInput; onChange: (next: DraftInput) => void; errors: FieldErrors; catalog: CatalogView | null; disabled?: boolean; newId: () => string }) {
+export function ConfigurationsEditor({
+  draft,
+  onChange,
+  errors,
+  catalog,
+  disabled,
+  newId,
+  renderImportedAnswers,
+}: {
+  draft: DraftInput
+  onChange: (next: DraftInput) => void
+  errors: FieldErrors
+  catalog: CatalogView | null
+  disabled?: boolean
+  newId: () => string
+  /** Answer editor for a saved imported party (needs the API, so the page supplies it). */
+  renderImportedAnswers?: (party: ImportedConfiguration) => ReactNode
+}) {
   const models = catalog?.models ?? []
   const minParties = catalog?.limits.minConfigurations ?? LIMITS.minConfigurationsPerRun
   const maxParties = catalog?.limits.configurations ?? LIMITS.minConfigurationsPerRun
-  const addParty = () => {
-    const last = draft.configurations[draft.configurations.length - 1]
-    const unused = models.find((m) => m.enabled && !draft.configurations.some((c) => c.modelKey === m.key))
-    onChange({
-      ...draft,
-      configurations: [...draft.configurations, { ...last, key: newId(), label: `Party ${draft.configurations.length + 1}`, modelKey: unused?.key ?? last.modelKey }],
+  const modelParties = draft.configurations.filter((c): c is ModelConfiguration => !isImported(c))
+  const hasImported = modelParties.length < draft.configurations.length
+  const sharedPrompt = modelParties[0]?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT
+
+  const append = (party: Configuration, mode = draft.comparisonMode) => onChange({ ...draft, comparisonMode: mode, configurations: [...draft.configurations, party] })
+  const addModelParty = () => {
+    const template = modelParties.at(-1)
+    const unused = models.find((m) => m.enabled && !modelParties.some((c) => c.modelKey === m.key))
+    append({
+      key: newId(),
+      label: `Party ${draft.configurations.length + 1}`,
+      modelKey: unused?.key ?? template?.modelKey ?? models.find((m) => m.enabled)?.key ?? '',
+      systemPrompt: template?.systemPrompt ?? sharedPrompt,
+      maxOutputTokens: LIMITS.maxOutputTokens,
     })
   }
+  // An imported party only makes sense in a configuration comparison, so adding one switches the mode.
+  const addImportedParty = () =>
+    append({ kind: 'imported', key: newId(), label: `Party ${draft.configurations.length + 1}`, provenance: { sourceType: 'human_baseline', description: '', redacted: false } }, 'configuration')
   const removeParty = (index: number) => onChange({ ...draft, configurations: draft.configurations.filter((_, i) => i !== index) })
   const setMode = (mode: ComparisonMode) => {
-    // Model comparison shares one instruction text across both candidates.
-    const configurations = mode === 'model' ? draft.configurations.map((c) => ({ ...c, systemPrompt: draft.configurations[0].systemPrompt })) : draft.configurations
+    if (mode === 'model' && hasImported) return
+    // Model comparison shares one instruction text across every model party.
+    const configurations = mode === 'model' ? draft.configurations.map((c) => (isImported(c) ? c : { ...c, systemPrompt: sharedPrompt })) : draft.configurations
     onChange({ ...draft, comparisonMode: mode, configurations })
   }
-  const updateConfig = (index: number, patch: Partial<Configuration>) =>
-    onChange({ ...draft, configurations: draft.configurations.map((c, i) => (i === index ? { ...c, ...patch } : c)) })
-  const setSharedPrompt = (systemPrompt: string) => onChange({ ...draft, configurations: draft.configurations.map((c) => ({ ...c, systemPrompt })) })
+  const replaceParty = (index: number, party: Configuration) => onChange({ ...draft, configurations: draft.configurations.map((c, i) => (i === index ? party : c)) })
+  const setSharedPrompt = (systemPrompt: string) => onChange({ ...draft, configurations: draft.configurations.map((c) => (isImported(c) ? c : { ...c, systemPrompt })) })
 
   return (
     <fieldset disabled={disabled} className="space-y-6">
@@ -179,12 +211,20 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
         <RadioGroup aria-labelledby="mode-label" value={draft.comparisonMode} onValueChange={(value) => setMode(value as ComparisonMode)} className="grid gap-2 sm:grid-cols-2">
           {(
             [
-              ['model', 'Model comparison', 'Same instructions; only the model differs.'],
-              ['configuration', 'Configuration comparison', 'Instructions may differ too. Not an isolated test of model quality.'],
+              ['model', 'Model comparison', hasImported ? 'Not available with an imported party.' : 'Same instructions; only the model differs.'],
+              ['configuration', 'Configuration comparison', 'Instructions may differ too, and imported answers are allowed. Not an isolated test of model quality.'],
             ] as const
           ).map(([value, title, description]) => (
-            <Label key={value} htmlFor={`mode-${value}`} className={cn('flex cursor-pointer items-start gap-3 rounded-md border px-3.5 py-3 font-normal transition-colors duration-150', draft.comparisonMode === value ? 'border-foreground bg-slip' : 'border-paper-edge bg-white hover:bg-slip/60')}>
-              <RadioGroupItem id={`mode-${value}`} value={value} className="mt-0.5" aria-labelledby={`mode-${value}-text`} />
+            <Label
+              key={value}
+              htmlFor={`mode-${value}`}
+              className={cn(
+                'flex cursor-pointer items-start gap-3 rounded-md border px-3.5 py-3 font-normal transition-colors duration-150',
+                draft.comparisonMode === value ? 'border-foreground bg-slip' : 'border-paper-edge bg-white hover:bg-slip/60',
+                value === 'model' && hasImported && 'cursor-not-allowed opacity-60',
+              )}
+            >
+              <RadioGroupItem id={`mode-${value}`} value={value} className="mt-0.5" disabled={value === 'model' && hasImported} aria-labelledby={`mode-${value}-text`} />
               <span id={`mode-${value}-text`}>
                 <span className="block text-sm font-medium">{title}</span>
                 <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{description}</span>
@@ -194,17 +234,8 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
         </RadioGroup>
       </div>
 
-      {draft.comparisonMode === 'model' && (
-        <TextField
-          id="shared-system-prompt"
-          label="System instructions (shared, sent to every party)"
-          multiline
-          rows={4}
-          value={draft.configurations[0].systemPrompt}
-          max={LIMITS.systemPrompt.max}
-          error={errors['configurations.0.systemPrompt']}
-          onChange={setSharedPrompt}
-        />
+      {draft.comparisonMode === 'model' && modelParties.length > 0 && (
+        <TextField id="shared-system-prompt" label="System instructions (shared, sent to every party)" multiline rows={4} value={sharedPrompt} max={LIMITS.systemPrompt.max} error={errors['configurations.0.systemPrompt']} onChange={setSharedPrompt} />
       )}
 
       <div className={cn('grid gap-4 md:grid-cols-2', draft.configurations.length > 2 && 'xl:grid-cols-3')}>
@@ -213,6 +244,7 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
             <CardHeader>
               <CardTitle className="court-label">
                 Party <span className="typewriter font-normal tracking-normal">{index + 1}</span>
+                {isImported(configuration) && <span className="typewriter ml-2 rounded-[3px] bg-sticker px-1.5 py-0.5 text-[0.625rem] font-bold tracking-normal text-sticker-foreground">IMPORTED</span>}
               </CardTitle>
               {draft.configurations.length > minParties && (
                 <CardAction>
@@ -223,35 +255,41 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
               )}
             </CardHeader>
             <CardContent className="space-y-4">
-              <TextField id={`cfg-${configuration.key}-label`} label="Name (sealed from jurors until you unseal)" value={configuration.label} max={LIMITS.configurationLabel.max} error={errors[`configurations.${index}.label`]} onChange={(label) => updateConfig(index, { label })} />
-              <div className="space-y-1.5">
-                <Label htmlFor={`cfg-${configuration.key}-model`}>Model</Label>
-                <Select value={configuration.modelKey} onValueChange={(value) => updateConfig(index, { modelKey: String(value) })} items={models.map((m) => ({ value: m.key, label: m.label }))}>
-                  <SelectTrigger id={`cfg-${configuration.key}-model`} className="w-full">
-                    <SelectValue placeholder="Choose a model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {models.map((model) => (
-                      <SelectItem key={model.key} value={model.key} disabled={!model.enabled}>
-                        {model.label}
-                        {!model.enabled && ' (not yet verified)'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Output limit: {LIMITS.maxOutputTokens} tokens. No tools, browsing, or streaming.</p>
-              </div>
-              {draft.comparisonMode === 'configuration' && (
-                <TextField
-                  id={`cfg-${configuration.key}-prompt`}
-                  label="System instructions (sent to this model)"
-                  multiline
-                  rows={5}
-                  value={configuration.systemPrompt}
-                  max={LIMITS.systemPrompt.max}
-                  error={errors[`configurations.${index}.systemPrompt`]}
-                  onChange={(systemPrompt) => updateConfig(index, { systemPrompt })}
-                />
+              <TextField id={`cfg-${configuration.key}-label`} label="Name (sealed from jurors until you unseal)" value={configuration.label} max={LIMITS.configurationLabel.max} error={errors[`configurations.${index}.label`]} onChange={(label) => replaceParty(index, { ...configuration, label })} />
+              {isImported(configuration) ? (
+                <ImportedPartyFields party={configuration} index={index} errors={errors} onChange={(party) => replaceParty(index, party)} renderAnswers={renderImportedAnswers} />
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`cfg-${configuration.key}-model`}>Model</Label>
+                    <Select value={configuration.modelKey} onValueChange={(value) => replaceParty(index, { ...configuration, modelKey: String(value) })} items={models.map((m) => ({ value: m.key, label: m.label }))}>
+                      <SelectTrigger id={`cfg-${configuration.key}-model`} className="w-full">
+                        <SelectValue placeholder="Choose a model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {models.map((model) => (
+                          <SelectItem key={model.key} value={model.key} disabled={!model.enabled}>
+                            {model.label}
+                            {!model.enabled && ' (not yet verified)'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Output limit: {LIMITS.maxOutputTokens} tokens. No tools, browsing, or streaming.</p>
+                  </div>
+                  {draft.comparisonMode === 'configuration' && (
+                    <TextField
+                      id={`cfg-${configuration.key}-prompt`}
+                      label="System instructions (sent to this model)"
+                      multiline
+                      rows={5}
+                      value={configuration.systemPrompt}
+                      max={LIMITS.systemPrompt.max}
+                      error={errors[`configurations.${index}.systemPrompt`]}
+                      onChange={(systemPrompt) => replaceParty(index, { ...configuration, systemPrompt })}
+                    />
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -259,14 +297,62 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
       </div>
       {maxParties > draft.configurations.length && (
         <div className="flex flex-wrap items-center gap-3">
-          <Button variant="outline" onClick={addParty}>
-            <Plus aria-hidden /> Add a party ({draft.configurations.length}/{maxParties})
+          <Button variant="outline" onClick={addModelParty}>
+            <Plus aria-hidden /> Add a model party ({draft.configurations.length}/{maxParties})
           </Button>
-          <span className="text-xs text-muted-foreground">
-            Each party adds one paid call per question.{draft.comparisonMode === 'model' && ' In a model comparison, every party needs a different model.'}
-          </span>
+          <Button variant="outline" onClick={addImportedParty}>
+            <Upload aria-hidden /> Add imported answers
+          </Button>
+          <span className="text-xs text-muted-foreground">A model party adds one paid call per question. Imported answers (a human baseline or exported transcripts) cost nothing.</span>
         </div>
       )}
     </fieldset>
+  )
+}
+
+function ImportedPartyFields({ party, index, errors, onChange, renderAnswers }: { party: ImportedConfiguration; index: number; errors: FieldErrors; onChange: (next: ImportedConfiguration) => void; renderAnswers?: (party: ImportedConfiguration) => ReactNode }) {
+  const set = (patch: Partial<Provenance>) => onChange({ ...party, provenance: { ...party.provenance, ...patch } })
+  const base = `configurations.${index}.provenance`
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor={`cfg-${party.key}-source`}>Where these answers came from</Label>
+        <Select value={party.provenance.sourceType} onValueChange={(value) => set({ sourceType: value as Provenance['sourceType'] })} items={IMPORT_SOURCE_TYPES.map((value) => ({ value, label: SOURCE_LABELS[value] }))}>
+          <SelectTrigger id={`cfg-${party.key}-source`} className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {IMPORT_SOURCE_TYPES.map((value) => (
+              <SelectItem key={value} value={value}>
+                {SOURCE_LABELS[value]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <TextField
+        id={`cfg-${party.key}-description`}
+        label="Describe the source (shown after unsealing)"
+        multiline
+        rows={2}
+        value={party.provenance.description}
+        max={LIMITS.provenanceDescription.max}
+        hint="For example: written by the support lead in November."
+        error={errors[`${base}.description`]}
+        onChange={(description) => set({ description })}
+      />
+      <div className="space-y-1.5 sm:max-w-xs">
+        <Label htmlFor={`cfg-${party.key}-collected`}>Collected on (optional)</Label>
+        <Input id={`cfg-${party.key}-collected`} type="date" value={party.provenance.collectedOn ?? ''} onChange={(e) => set({ collectedOn: e.target.value || undefined })} aria-invalid={errors[`${base}.collectedOn`] ? true : undefined} />
+      </div>
+      <div className="flex items-start gap-3">
+        <Checkbox id={`cfg-${party.key}-redacted`} checked={party.provenance.redacted} onCheckedChange={(checked) => set({ redacted: checked === true })} />
+        <Label htmlFor={`cfg-${party.key}-redacted`} className="flex-col items-start gap-0.5 font-normal leading-snug">
+          I removed names, emails, and other details that could reveal the source
+          <span className="text-xs text-muted-foreground">The record says the answers were redacted.</span>
+        </Label>
+      </div>
+      {renderAnswers?.(party)}
+    </div>
   )
 }

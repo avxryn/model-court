@@ -10,6 +10,8 @@ export const LIMITS = {
   caseReference: { min: 0, max: 8_000 },
   caseExpectedBehavior: { min: 1, max: 2_000 },
   caseLanguage: { max: 35 },
+  provenanceDescription: { min: 1, max: 500 },
+  importedText: { min: 1, max: 16_000 },
   configurationLabel: { min: 1, max: 60 },
   systemPrompt: { min: 1, max: 4_000 },
   evaluationTitle: { min: 1, max: 120 },

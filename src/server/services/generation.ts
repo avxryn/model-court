@@ -10,7 +10,7 @@
 import { LIMITS } from '../../domain/limits'
 import { buildMessages } from '../../domain/messages'
 import type { ProviderId } from '../../domain/registry'
-import type { RunSnapshot } from '../../domain/snapshot'
+import { isImportedSnapshot, type RunSnapshot } from '../../domain/snapshot'
 import { all, auditStatement, cond, GuardFailed, releaseReservations, runGuarded } from '../db/sql'
 import type { Deps, GenerationJob } from '../deps'
 import { ADAPTERS, type ProviderOutcome } from '../providers'
@@ -173,7 +173,9 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
   await notifyRun(deps, context.runId)
 
   const testCase = context.snapshot.cases.find((item) => item.key === context.caseKey)
-  const configuration = context.snapshot.configurations.find((item) => item.key === context.configurationKey)
+  const found = context.snapshot.configurations.find((item) => item.key === context.configurationKey)
+  // Imported parties never have generations; refuse rather than call a provider for one.
+  const configuration = found && !isImportedSnapshot(found) ? found : undefined
   if (!testCase || !configuration) {
     return finishAttempt(deps, { attemptId, fence, job, context, requestId }, { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }, true)
   }

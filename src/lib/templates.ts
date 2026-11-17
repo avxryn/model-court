@@ -6,7 +6,7 @@
  */
 
 import { DEFAULT_SYSTEM_PROMPT, EXAMPLE_CASES, EXAMPLE_POLICY } from '@/domain/example'
-import type { DraftInput } from '@/domain/contracts'
+import { isImported, type DraftInput, type ModelConfiguration } from '@/domain/contracts'
 
 export interface CaseTemplate {
   id: string
@@ -44,13 +44,15 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
     title: 'Support prompt regression',
     task: 'Does the revised support prompt stay grounded while sounding friendlier?',
     apply: (seed, newId) => {
-      const modelKey = seed.configurations[0].modelKey
+      // The server seeds two model parties; templates only rewrite those.
+      const [first, second] = seed.configurations.filter((c): c is ModelConfiguration => !isImported(c))
+      const modelKey = first.modelKey
       return {
         comparisonMode: 'configuration',
         cases: EXAMPLE_CASES.map((c) => ({ key: newId(), title: c.title, input: c.input, reference: EXAMPLE_POLICY, expectedBehavior: c.expectedBehavior })),
         configurations: [
-          { ...seed.configurations[0], key: newId(), label: 'Current prompt', modelKey, systemPrompt: DEFAULT_SYSTEM_PROMPT },
-          { ...seed.configurations[1], key: newId(), label: 'Revised prompt', modelKey, systemPrompt: `${DEFAULT_SYSTEM_PROMPT} Use a warm, friendly tone and thank the customer for asking.` },
+          { ...first, key: newId(), label: 'Current prompt', modelKey, systemPrompt: DEFAULT_SYSTEM_PROMPT },
+          { ...second, key: newId(), label: 'Revised prompt', modelKey, systemPrompt: `${DEFAULT_SYSTEM_PROMPT} Use a warm, friendly tone and thank the customer for asking.` },
         ],
       }
     },
@@ -64,7 +66,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
     apply: (seed, newId) => ({
       comparisonMode: 'model',
       cases: HR_QUESTIONS.map((q) => ({ key: newId(), title: q.title, input: q.input, reference: HR_HANDBOOK, expectedBehavior: q.expectedBehavior })),
-      configurations: seed.configurations.map((c) => ({
+      configurations: seed.configurations.map((c) => isImported(c) ? c : ({
         ...c,
         systemPrompt:
           'You are an HR assistant. Answer only from the supplied handbook. If the handbook does not cover the question, say so plainly and suggest contacting HR. Do not invent rules or numbers. Keep the answer under 120 words.',

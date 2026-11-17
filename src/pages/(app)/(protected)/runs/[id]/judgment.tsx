@@ -10,7 +10,7 @@ import { ErrorPanel, formatTime, Page, PageSkeleton } from '@/components/common'
 import { Caption, Sheet, Stamp } from '@/components/court/CaseFile'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { PROVIDER_NAMES } from '@/domain/registry'
+import { partySource } from '@/lib/parties'
 import { DIMENSIONS, formatScore, rubricLines, RUBRICS, type CohortResult } from '@/domain/rubric'
 import type { ResultsView } from '@/lib/dto'
 import { useApi } from '@/lib/use-api'
@@ -86,7 +86,8 @@ function PrintableJudgment({ data }: { data: ResultsView }) {
             <ul className="mt-2 space-y-1 font-heading text-sm">
               {data.configurations.map((c) => (
                 <li key={c.key}>
-                  <span className="font-bold">{c.label}</span> — {PROVIDER_NAMES[c.provider]} <span className="typewriter text-xs">{c.modelId}</span>
+                  <span className="font-bold">{c.label}</span> — {partySource(c)}
+                  {c.provenance && <span className="text-muted-foreground"> ({c.provenance.description}{c.provenance.redacted ? '; redacted' : ''})</span>}
                 </li>
               ))}
             </ul>

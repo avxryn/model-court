@@ -7,7 +7,7 @@ import { canonicalJson, sha256Hex } from '../../domain/canonical'
 import { cancelRunSchema, retrySchema, startRunSchema } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
 import type { ProviderId } from '../../domain/registry'
-import { buildSnapshot, describeIssue, readinessIssues, requiredProviders, type RunSnapshot } from '../../domain/snapshot'
+import { buildSnapshot, describeIssue, generatedParties, importCoverageIssues, isImportedSnapshot, readinessIssues, requiredProviders, type ImportMeta, type RunSnapshot } from '../../domain/snapshot'
 import { canRun, isRetryable, type GenerationStatus, type RunStatus } from '../../domain/transitions'
 import { loadEvaluationAccess, loadRunAccess, requireOwner, type RunAccess } from '../access'
 import { all, auditStatement, budgetSubjects, classifyConstraint, cond, GuardFailed, releaseReservations, reserveBudget, runGuarded, type Condition } from '../db/sql'
@@ -32,7 +32,8 @@ export interface GenerationRow {
 export interface EligibleManifest {
   caseKeys: string[]
   excludedCaseKeys: string[]
-  entries: Array<{ caseKey: string; configurationKey: string; generationId: string; acceptedAttemptId: string }>
+  /** Generated entries carry a generation and attempt; imported entries (D-38) carry `importedOutputId` and null ids. */
+  entries: Array<{ caseKey: string; configurationKey: string; generationId: string | null; acceptedAttemptId: string | null; importedOutputId?: string }>
 }
 
 export function parseSnapshot(json: string): RunSnapshot {
@@ -72,8 +73,9 @@ function quotaError(): ApiError {
 // ---------------------------------------------------------------------------
 
 export async function startRun(deps: Deps, userId: string, evaluationId: string, input: z.output<typeof startRunSchema>, key: string, requestId: string) {
-  requireGenerationEnabled(deps)
   const access = await loadEvaluationAccess(deps.db, evaluationId, userId)
+  // A hearing with only imported parties makes no provider calls, so the generation switch does not apply to it.
+  if (generatedParties(parseStoredDraft(access.evaluation).configurations).length > 0) requireGenerationEnabled(deps)
   requireOwner(access)
   const db = deps.db
   const operation = `run.start:${evaluationId}`
@@ -94,9 +96,21 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
       throw new ApiError(422, 'CREDENTIAL_MISSING', 'Provide exactly one saved key for each selected provider.', { details: { requiredProviders: providers } })
     }
 
+    const importRows = (
+      await db
+        .prepare('SELECT configuration_key, case_key, text_sha256, byte_length FROM evaluation_imports WHERE evaluation_id = ?')
+        .bind(evaluationId)
+        .all<{ configuration_key: string; case_key: string; text_sha256: string; byte_length: number }>()
+    ).results
+    const importMetas: ImportMeta[] = importRows.map((row) => ({ configurationKey: row.configuration_key, caseKey: row.case_key, sha256: row.text_sha256, byteLength: row.byte_length }))
+    const missing = importCoverageIssues(draft, importMetas)
+    if (missing.length > 0) {
+      throw new ApiError(422, 'UNSUPPORTED_CONFIGURATION', describeIssue(missing[0]), { details: { issues: missing } })
+    }
+
     const now = deps.now()
     const runId = deps.newId()
-    const snapshot = buildSnapshot(draft, deps.routes, deps.config.appCommit, now)
+    const snapshot = buildSnapshot(draft, deps.routes, deps.config.appCommit, now, importMetas)
     const snapshotJson = JSON.stringify(snapshot)
     if (new TextEncoder().encode(snapshotJson).byteLength > LIMITS.snapshotJsonBytes) {
       throw new ApiError(422, 'VALIDATION_FAILED', 'The run snapshot exceeds 96 KiB.')
@@ -105,9 +119,12 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
     const subjects = budgetSubjects(userId, now)
 
     const generations = snapshot.cases.flatMap((testCase) =>
-      snapshot.configurations.map((configuration) => ({ id: deps.newId(), outboxId: deps.newId(), caseKey: testCase.key, configurationKey: configuration.key, provider: configuration.provider })),
+      generatedParties(snapshot.configurations).map((configuration) => ({ id: deps.newId(), outboxId: deps.newId(), caseKey: testCase.key, configurationKey: configuration.key, provider: configuration.provider })),
     )
-    const response = { status: 202 as const, data: { runId, status: 'generating' as RunStatus, revision: 1, plannedCalls: generations.length } }
+    const imported = snapshot.configurations.filter(isImportedSnapshot).flatMap((configuration) => configuration.imports.map((item) => ({ id: deps.newId(), configurationKey: configuration.key, ...item })))
+    // With nothing to generate, the hearing is ready for review at once and touches no budget.
+    const initialStatus: RunStatus = generations.length > 0 ? 'generating' : 'ready'
+    const response = { status: 202 as const, data: { runId, status: initialStatus, revision: 1, plannedCalls: generations.length } }
 
     const credentialChecks = providers.map((provider) =>
       cond(
@@ -124,13 +141,23 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
       db
         .prepare(
           `INSERT INTO runs (id, evaluation_id, owner_user_id, status, snapshot_json, snapshot_hash, revision, created_at, updated_at)
-           VALUES (?, ?, ?, 'generating', ?, ?, 1, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
         )
-        .bind(runId, evaluationId, userId, snapshotJson, snapshotHash, now, now),
+        .bind(runId, evaluationId, userId, initialStatus, snapshotJson, snapshotHash, now, now),
       ...providers.map((provider) =>
         db.prepare('INSERT INTO run_credentials (run_id, provider, credential_id) VALUES (?, ?, ?)').bind(runId, provider, input.credentialIdsByProvider[provider]),
       ),
-      ...reserveBudget(db, subjects, generations.length, deps.config.limits, now),
+      ...(generations.length > 0 ? reserveBudget(db, subjects, generations.length, deps.config.limits, now) : []),
+      // Freeze each imported answer exactly as hashed into the snapshot (D-38).
+      ...imported.map((item) =>
+        db
+          .prepare(
+            `INSERT INTO run_imported_outputs (id, run_id, configuration_key, case_key, text, text_sha256, byte_length, created_at)
+             SELECT ?, ?, configuration_key, case_key, text, text_sha256, byte_length, ? FROM evaluation_imports
+             WHERE evaluation_id = ? AND configuration_key = ? AND case_key = ? AND text_sha256 = ?`,
+          )
+          .bind(item.id, runId, now, evaluationId, item.configurationKey, item.caseKey, item.sha256),
+      ),
       ...generations.flatMap((generation) => [
         db
           .prepare(
@@ -159,7 +186,10 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
         all(
           cond('EXISTS (SELECT 1 FROM evaluations WHERE id = ? AND owner_user_id = ? AND revision = ? AND deleted_at IS NULL)', evaluationId, userId, input.draftRevision),
           ...credentialChecks,
-          capacity(userId, null),
+          ...(generations.length > 0 ? [capacity(userId, null)] : []),
+          ...imported.map((item) =>
+            cond('EXISTS (SELECT 1 FROM evaluation_imports WHERE evaluation_id = ? AND configuration_key = ? AND case_key = ? AND text_sha256 = ?)', evaluationId, item.configurationKey, item.caseKey, item.sha256),
+          ),
         ),
         statements,
       )
@@ -204,19 +234,38 @@ export async function loadGenerations(db: D1Database, runId: string): Promise<Ge
   return (await db.prepare('SELECT * FROM generations WHERE run_id = ? ORDER BY created_at, id').bind(runId).all<GenerationRow>()).results
 }
 
-export function computeEligibility(snapshot: RunSnapshot, generations: readonly GenerationRow[]): EligibleManifest {
+export interface ImportedOutputRow {
+  id: string
+  configuration_key: string
+  case_key: string
+}
+
+export async function loadImportedOutputs(db: D1Database, runId: string): Promise<ImportedOutputRow[]> {
+  return (await db.prepare('SELECT id, configuration_key, case_key FROM run_imported_outputs WHERE run_id = ? ORDER BY id').bind(runId).all<ImportedOutputRow>()).results
+}
+
+/**
+ * A question is eligible when every generated party succeeded and every
+ * imported party has its frozen answer. Entries are in snapshot party order.
+ */
+export function computeEligibility(snapshot: RunSnapshot, generations: readonly GenerationRow[], importedOutputs: readonly ImportedOutputRow[] = []): EligibleManifest {
   const caseKeys: string[] = []
   const excludedCaseKeys: string[] = []
   const entries: EligibleManifest['entries'] = []
   for (const testCase of snapshot.cases) {
-    const forCase = snapshot.configurations.map((configuration) =>
-      generations.find((generation) => generation.case_key === testCase.key && generation.configuration_key === configuration.key),
-    )
-    if (forCase.every((generation) => generation?.status === 'succeeded' && generation.accepted_attempt_id)) {
-      caseKeys.push(testCase.key)
-      for (const generation of forCase) {
-        entries.push({ caseKey: testCase.key, configurationKey: generation!.configuration_key, generationId: generation!.id, acceptedAttemptId: generation!.accepted_attempt_id! })
+    const forCase = snapshot.configurations.map((configuration): EligibleManifest['entries'][number] | null => {
+      if (isImportedSnapshot(configuration)) {
+        const row = importedOutputs.find((output) => output.case_key === testCase.key && output.configuration_key === configuration.key)
+        return row ? { caseKey: testCase.key, configurationKey: configuration.key, generationId: null, acceptedAttemptId: null, importedOutputId: row.id } : null
       }
+      const generation = generations.find((g) => g.case_key === testCase.key && g.configuration_key === configuration.key)
+      return generation?.status === 'succeeded' && generation.accepted_attempt_id
+        ? { caseKey: testCase.key, configurationKey: configuration.key, generationId: generation.id, acceptedAttemptId: generation.accepted_attempt_id }
+        : null
+    })
+    if (forCase.every((entry) => entry !== null)) {
+      caseKeys.push(testCase.key)
+      entries.push(...(forCase as Array<EligibleManifest['entries'][number]>))
     } else {
       excludedCaseKeys.push(testCase.key)
     }
@@ -270,7 +319,8 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
     await db.prepare(`SELECT id, expires_at, redeemed_at, revoked_at FROM invites WHERE run_id = ? ORDER BY created_at`).bind(run.id).all<{ id: string; expires_at: number; redeemed_at: number | null; revoked_at: number | null }>()
   ).results
   const now = deps.now()
-  const manifest: EligibleManifest = run.eligible_manifest_json ? (JSON.parse(run.eligible_manifest_json) as EligibleManifest) : computeEligibility(snapshot, generations)
+  const importedOutputs = await loadImportedOutputs(db, run.id)
+  const manifest: EligibleManifest = run.eligible_manifest_json ? (JSON.parse(run.eligible_manifest_json) as EligibleManifest) : computeEligibility(snapshot, generations, importedOutputs)
   const counts: Record<GenerationStatus, number> = { pending: 0, running: 0, succeeded: 0, failed: 0, uncertain: 0, canceled: 0 }
   for (const generation of generations) counts[generation.status]++
 
@@ -286,8 +336,13 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
     snapshotHash: run.snapshot_hash,
     comparisonMode: snapshot.comparisonMode,
     providerRegistryVersion: snapshot.providerRegistryVersion,
-    configurations: snapshot.configurations.map((c) => ({ key: c.key, label: c.label, provider: c.provider, modelId: c.modelId })),
+    configurations: snapshot.configurations.map((c) =>
+      isImportedSnapshot(c)
+        ? { key: c.key, label: c.label, source: 'imported' as const, provider: null, modelId: null, provenance: c.provenance }
+        : { key: c.key, label: c.label, source: 'generated' as const, provider: c.provider, modelId: c.modelId, provenance: null },
+    ),
     cases: snapshot.cases.map((c) => ({ key: c.key, title: c.title })),
+    imported: importedOutputs.map((output) => ({ caseKey: output.case_key, configurationKey: output.configuration_key })),
     generations: generations.map((generation) => {
       const last = attempts.filter((attempt) => attempt.generation_id === generation.id).at(-1)
       return {
@@ -473,7 +528,7 @@ export function shuffle<T>(items: readonly T[]): T[] {
 
 export interface AssignmentCase {
   caseKey: string
-  responses: Array<{ responseId: string; label: 'A' | 'B' | 'C'; generationId: string; acceptedAttemptId: string; configurationKey: string }>
+  responses: Array<{ responseId: string; label: 'A' | 'B' | 'C'; generationId: string | null; acceptedAttemptId: string | null; importedOutputId?: string; configurationKey: string }>
 }
 
 export function buildAssignment(manifest: EligibleManifest, newId: () => string): AssignmentCase[] {
@@ -485,6 +540,7 @@ export function buildAssignment(manifest: EligibleManifest, newId: () => string)
       label: labels[index],
       generationId: entry.generationId,
       acceptedAttemptId: entry.acceptedAttemptId,
+      ...(entry.importedOutputId ? { importedOutputId: entry.importedOutputId } : {}),
       configurationKey: entry.configurationKey,
     })),
   }))
@@ -506,7 +562,7 @@ export async function openReview(deps: Deps, userId: string, runId: string, ackn
   if (access.run.revision !== ifMatch) throw revisionConflict()
   const db = deps.db
   const snapshot = parseSnapshot(access.run.snapshot_json)
-  const manifest = computeEligibility(snapshot, await loadGenerations(db, runId))
+  const manifest = computeEligibility(snapshot, await loadGenerations(db, runId), await loadImportedOutputs(db, runId))
   if (manifest.caseKeys.length === 0) {
     throw stateConflict('No case has a successful response from every configuration, so there is nothing comparable to review. Retry failures or cancel the run.')
   }
@@ -523,7 +579,9 @@ export async function openReview(deps: Deps, userId: string, runId: string, ackn
         cond(`EXISTS (SELECT 1 FROM runs WHERE id = ? AND owner_user_id = ? AND revision = ? AND status = 'ready')`, runId, userId, ifMatch),
         // Recheck the frozen evidence at commit time.
         ...manifest.entries.map((entry) =>
-          cond(`EXISTS (SELECT 1 FROM generations WHERE id = ? AND status = 'succeeded' AND accepted_attempt_id = ?)`, entry.generationId, entry.acceptedAttemptId),
+          entry.importedOutputId
+            ? cond('EXISTS (SELECT 1 FROM run_imported_outputs WHERE id = ? AND run_id = ?)', entry.importedOutputId, runId)
+            : cond(`EXISTS (SELECT 1 FROM generations WHERE id = ? AND status = 'succeeded' AND accepted_attempt_id = ?)`, entry.generationId, entry.acceptedAttemptId),
         ),
       ),
       [

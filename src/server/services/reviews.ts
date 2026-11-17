@@ -185,8 +185,17 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
   const { access, session } = await requireSession(deps, userId, runId)
   const snapshot = parseSnapshot(access.run.snapshot_json)
   const assignment = JSON.parse(session.assignment_json) as AssignmentCase[]
-  const attemptIds = assignment.flatMap((item) => item.responses.map((response) => response.acceptedAttemptId))
+  const attemptIds = assignment.flatMap((item) => item.responses.flatMap((response) => (response.acceptedAttemptId ? [response.acceptedAttemptId] : [])))
+  const importedIds = assignment.flatMap((item) => item.responses.flatMap((response) => (response.importedOutputId ? [response.importedOutputId] : [])))
   const outputs = new Map<string, string>()
+  if (importedIds.length > 0) {
+    // Imported answers render exactly like generated ones; their source never leaves the server before reveal.
+    const rows = await deps.db
+      .prepare(`SELECT id, text FROM run_imported_outputs WHERE run_id = ? AND id IN (${importedIds.map(() => '?').join(',')})`)
+      .bind(runId, ...importedIds)
+      .all<{ id: string; text: string }>()
+    for (const row of rows.results) outputs.set(`import:${row.id}`, row.text)
+  }
   if (attemptIds.length > 0) {
     const rows = await deps.db
       .prepare(`SELECT id, output_text FROM generation_attempts WHERE status = 'succeeded' AND id IN (${attemptIds.map(() => '?').join(',')})`)
@@ -213,7 +222,11 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
         input: testCase.input,
         reference: testCase.reference,
         expectedBehavior: testCase.expectedBehavior,
-        responses: item.responses.map((response) => ({ responseId: response.responseId, label: response.label, text: outputs.get(response.acceptedAttemptId) ?? '' })),
+        responses: item.responses.map((response) => ({
+          responseId: response.responseId,
+          label: response.label,
+          text: (response.importedOutputId ? outputs.get(`import:${response.importedOutputId}`) : response.acceptedAttemptId ? outputs.get(response.acceptedAttemptId) : undefined) ?? '',
+        })),
       }
     }),
     ratings: JSON.parse(session.ratings_json) as DraftRating[],

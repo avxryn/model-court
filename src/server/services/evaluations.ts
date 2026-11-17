@@ -3,7 +3,9 @@
  */
 
 import { z } from 'zod'
-import { createEvaluationSchema, draftInputSchema, type Draft, type DraftInput } from '../../domain/contracts'
+import { sha256Hex } from '../../domain/canonical'
+import { createEvaluationSchema, draftInputSchema, isImported, type Draft, type DraftInput, type putImportsSchema } from '../../domain/contracts'
+import { utf8ByteLength } from '../../domain/text'
 import { makeExampleDraft } from '../../domain/example'
 import { LIMITS } from '../../domain/limits'
 import { isRouteEnabled, MODEL_ROUTES, type ModelRoute } from '../../domain/registry'
@@ -136,6 +138,12 @@ export async function getEvaluation(deps: Deps, userId: string, evaluationId: st
       taskDescription: evaluation.task_description,
       revision: evaluation.revision,
       draft: parseStoredDraft(evaluation),
+      imports: (
+        await deps.db
+          .prepare('SELECT configuration_key, case_key, text, text_sha256, byte_length, updated_at FROM evaluation_imports WHERE evaluation_id = ? ORDER BY configuration_key, case_key')
+          .bind(evaluationId)
+          .all<{ configuration_key: string; case_key: string; text: string; text_sha256: string; byte_length: number; updated_at: number }>()
+      ).results.map((row) => ({ configurationKey: row.configuration_key, caseKey: row.case_key, text: row.text, sha256: row.text_sha256, byteLength: row.byte_length, updatedAt: row.updated_at })),
       runs: runs.results.map((run) => ({ id: run.id, status: run.status, revision: run.revision, createdAt: run.created_at })),
       updatedAt: evaluation.updated_at,
     }
@@ -180,6 +188,65 @@ export async function saveDraft(deps: Deps, userId: string, evaluationId: string
     .bind(JSON.stringify(draft), now, evaluationId, userId, ifMatch)
     .run()
   if (result.meta.changes !== 1) throw revisionConflict()
+  return { revision: ifMatch + 1 }
+}
+
+/**
+ * Replace one imported party's answers (D-38). The party must be an imported
+ * party in the saved draft and every case key must be one of its questions.
+ * Bumps the evaluation revision, so a hearing started from an older revision is refused.
+ */
+export async function putImports(deps: Deps, userId: string, evaluationId: string, configurationKey: string, input: z.output<typeof putImportsSchema>, ifMatch: number, requestId: string) {
+  const access = await loadEvaluationAccess(deps.db, evaluationId, userId)
+  requireOwner(access)
+  const draft = parseStoredDraft(access.evaluation)
+  const party = draft.configurations.find((configuration) => configuration.key === configurationKey)
+  if (!party || !isImported(party)) throw new ApiError(422, 'VALIDATION_FAILED', 'Save the draft with this imported party first.', { fields: [{ path: 'configurationKey', message: 'Not an imported party in the saved draft' }] })
+  const caseKeys = new Set(draft.cases.map((testCase) => testCase.key))
+  const seen = new Set<string>()
+  for (const [index, item] of input.items.entries()) {
+    if (!caseKeys.has(item.caseKey) || seen.has(item.caseKey)) {
+      throw new ApiError(422, 'VALIDATION_FAILED', 'Each answer must belong to a different question in the saved draft.', { fields: [{ path: `items.${index}.caseKey`, message: 'Unknown or repeated question' }] })
+    }
+    seen.add(item.caseKey)
+  }
+  const now = deps.now()
+  const db = deps.db
+  const rows = await Promise.all(input.items.map(async (item) => ({ ...item, sha256: await sha256Hex(item.text), byteLength: utf8ByteLength(item.text) })))
+  try {
+    await runGuarded(db, 'evaluation.imports', cond('EXISTS (SELECT 1 FROM evaluations WHERE id = ? AND owner_user_id = ? AND revision = ? AND deleted_at IS NULL)', evaluationId, userId, ifMatch), [
+      db.prepare('DELETE FROM evaluation_imports WHERE evaluation_id = ? AND configuration_key = ?').bind(evaluationId, configurationKey),
+      ...rows.map((row) =>
+        db
+          .prepare(`INSERT INTO evaluation_imports (evaluation_id, configuration_key, case_key, text, text_sha256, byte_length, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+          .bind(evaluationId, configurationKey, row.caseKey, row.text, row.sha256, row.byteLength, now, now),
+      ),
+      db.prepare('UPDATE evaluations SET revision = revision + 1, updated_at = ? WHERE id = ?').bind(now, evaluationId),
+      // IDs and counts only; imported text never enters the audit log.
+      auditStatement(db, { eventType: 'evaluation.imports', requestId, outcome: 'ok', actorUserId: userId, evaluationId, metadata: { configurationKey, count: rows.length } }, now),
+    ])
+  } catch (error) {
+    if (error instanceof GuardFailed) throw revisionConflict()
+    throw error
+  }
+  return { revision: ifMatch + 1, imports: rows.map((row) => ({ caseKey: row.caseKey, sha256: row.sha256, byteLength: row.byteLength })) }
+}
+
+export async function deleteImports(deps: Deps, userId: string, evaluationId: string, configurationKey: string, ifMatch: number, requestId: string) {
+  const access = await loadEvaluationAccess(deps.db, evaluationId, userId)
+  requireOwner(access)
+  const now = deps.now()
+  const db = deps.db
+  try {
+    await runGuarded(db, 'evaluation.imports.delete', cond('EXISTS (SELECT 1 FROM evaluations WHERE id = ? AND owner_user_id = ? AND revision = ? AND deleted_at IS NULL)', evaluationId, userId, ifMatch), [
+      db.prepare('DELETE FROM evaluation_imports WHERE evaluation_id = ? AND configuration_key = ?').bind(evaluationId, configurationKey),
+      db.prepare('UPDATE evaluations SET revision = revision + 1, updated_at = ? WHERE id = ?').bind(now, evaluationId),
+      auditStatement(db, { eventType: 'evaluation.imports.delete', requestId, outcome: 'ok', actorUserId: userId, evaluationId, metadata: { configurationKey } }, now),
+    ])
+  } catch (error) {
+    if (error instanceof GuardFailed) throw revisionConflict()
+    throw error
+  }
   return { revision: ifMatch + 1 }
 }
 

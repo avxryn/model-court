@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { PROVIDER_NAMES } from '@/domain/registry'
+import { partySource } from '@/lib/parties'
 import { api, describeError, newIntentKey } from '@/lib/api-client'
 import type { OwnerRunView, RunView } from '@/lib/dto'
 import { useNoticeRefresh } from '@/lib/notices'
@@ -152,7 +152,7 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
                   <TableHead key={c.key} className="h-auto py-2.5 text-sm text-foreground">
                     {c.label}
                     <span className="block text-xs font-normal text-muted-foreground">
-                      {PROVIDER_NAMES[c.provider]} · {c.modelId}
+                      {partySource(c)}
                     </span>
                   </TableHead>
                 ))}
@@ -167,7 +167,10 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
                   </TableCell>
                   {run.configurations.map((c) => {
                     const g = run.generations.find((x) => x.caseKey === testCase.key && x.configurationKey === c.key)
-                    if (!g) return <TableCell key={c.key}>—</TableCell>
+                    if (!g) {
+                      const imported = run.imported.some((i) => i.caseKey === testCase.key && i.configurationKey === c.key)
+                      return <TableCell key={c.key} className="text-sm text-muted-foreground">{imported ? 'Imported answer' : '—'}</TableCell>
+                    }
                     return (
                       <TableCell key={c.key} className="align-top">
                         <div className="flex items-center gap-2">

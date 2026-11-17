@@ -272,6 +272,36 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX provider_credentials_by_expiry ON provider_credentials(status, expires_at)`,
     ],
   },
+  {
+    // D-38: imported evidence. Draft-side answers are editable; hearing-side copies are immutable.
+    id: '0003_imported_evidence',
+    statements: [
+      `CREATE TABLE evaluation_imports (
+        evaluation_id TEXT NOT NULL REFERENCES evaluations(id) ON DELETE CASCADE,
+        configuration_key TEXT NOT NULL,
+        case_key TEXT NOT NULL,
+        text TEXT NOT NULL,
+        text_sha256 TEXT NOT NULL,
+        byte_length INTEGER NOT NULL CHECK (byte_length > 0),
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (evaluation_id, configuration_key, case_key)
+      )`,
+      `CREATE TABLE run_imported_outputs (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        configuration_key TEXT NOT NULL,
+        case_key TEXT NOT NULL,
+        text TEXT NOT NULL,
+        text_sha256 TEXT NOT NULL,
+        byte_length INTEGER NOT NULL CHECK (byte_length > 0),
+        created_at INTEGER NOT NULL,
+        UNIQUE (run_id, configuration_key, case_key)
+      )`,
+      `CREATE TRIGGER run_imported_outputs_immutable BEFORE UPDATE ON run_imported_outputs
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_IMPORTED_OUTPUTS'); END`,
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`

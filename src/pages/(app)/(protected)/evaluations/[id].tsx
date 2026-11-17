@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { ErrorPanel, formatTime, Page, PageSkeleton, SaveIndicator, StatusBadge, type SaveState } from '@/components/common'
 import { Caption, CaseProgress, DocketNumber, Sheet, Stamp, Term } from '@/components/court/CaseFile'
 import { CasesEditor, ConfigurationsEditor, RubricPicker, type FieldErrors } from '@/components/evaluations/DraftEditor'
+import { ImportedAnswers, type SavedImport } from '@/components/evaluations/ImportedAnswers'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
@@ -16,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { draftInputSchema, type DraftInput } from '@/domain/contracts'
 import { LIMITS } from '@/domain/limits'
 import { PROVIDER_NAMES, type ModelRoute, type ProviderId } from '@/domain/registry'
-import { describeIssue, readinessIssues, requiredProviders } from '@/domain/snapshot'
+import { describeIssue, generatedParties, importCoverageIssues, readinessIssues, requiredProviders } from '@/domain/snapshot'
 import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
 import type { CatalogView, CredentialMetadata, EvaluationView, OwnerEvaluationView } from '@/lib/dto'
 import { caseStep, docketNumber, recordStamp } from '@/lib/court'
@@ -79,6 +80,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
   const credentials = useApi<{ items: CredentialMetadata[] }>('/credentials')
   const [draft, setDraft] = useState<DraftInput>(() => ({ comparisonMode: evaluation.draft.comparisonMode, ...(evaluation.draft.rubricVersion ? { rubricVersion: evaluation.draft.rubricVersion } : {}), cases: evaluation.draft.cases, configurations: evaluation.draft.configurations }))
   const [revision, setRevision] = useState(evaluation.revision)
+  const [imports, setImports] = useState<SavedImport[]>(() => evaluation.imports.map((item) => ({ configurationKey: item.configurationKey, caseKey: item.caseKey, text: item.text })))
   const [dirty, setDirty] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [serverErrors, setServerErrors] = useState<FieldErrors>({})
@@ -105,7 +107,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
   const latestRun = [...evaluation.runs].sort((a, b) => b.createdAt - a.createdAt)[0]
   const progress = caseStep(latestRun?.status)
   const stamp = recordStamp(latestRun?.status)
-  const calls = draft.cases.length * draft.configurations.length
+  const calls = draft.cases.length * generatedParties(draft.configurations).length
 
   const save = useCallback(async () => {
     setSaveState('saving')
@@ -134,6 +136,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
     ...(dirty ? ['Save the draft first — a hearing uses the saved version.'] : []),
     ...(hasErrors ? ['Fix the highlighted fields.'] : []),
     ...issues.map(describeIssue),
+    ...[...new Set(importCoverageIssues(draft, imports).map(describeIssue))],
     ...missingProviders.map((provider) => `Add your ${PROVIDER_NAMES[provider]} key in Settings.`),
     ...(activeRun ? ['This case already has an unfinished hearing.'] : []),
     ...(catalog.data && !catalog.data.generationEnabled ? ['Live generation is disabled on this deployment.'] : []),
@@ -223,7 +226,28 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
           <CasesEditor cases={draft.cases} errors={errors} newId={newIntentKey} onChange={(cases) => change({ ...draft, cases })} />
         </TabsContent>
         <TabsContent value="configurations" className="pt-6">
-          <ConfigurationsEditor draft={draft} catalog={catalog.data} errors={errors} newId={newIntentKey} onChange={change} />
+          <ConfigurationsEditor
+            draft={draft}
+            catalog={catalog.data}
+            errors={errors}
+            newId={newIntentKey}
+            onChange={change}
+            renderImportedAnswers={(party) => (
+              <ImportedAnswers
+                key={party.key}
+                evaluationId={evaluation.id}
+                party={party}
+                cases={draft.cases}
+                saved={!dirty}
+                existing={imports.filter((item) => item.configurationKey === party.key)}
+                revision={revision}
+                onSaved={(next, items) => {
+                  setRevision(next)
+                  setImports((current) => [...current.filter((item) => item.configurationKey !== party.key), ...items])
+                }}
+              />
+            )}
+          />
           <KeyStatus providers={providers} keys={keys} />
         </TabsContent>
         <TabsContent value="runs" className="pt-6">
@@ -282,7 +306,9 @@ function RunDialog({ evaluationId, revision, draft, providers, keys, blockers }:
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const intent = useRef(newIntentKey())
-  const calls = draft.cases.length * draft.configurations.length
+  const calls = draft.cases.length * generatedParties(draft.configurations).length
+  // Imported-only hearings send nothing to a provider and charge nothing, so there is nothing to consent to.
+  const needsConsent = calls > 0
 
   const start = async () => {
     setBusy(true)
@@ -334,6 +360,8 @@ function RunDialog({ evaluationId, revision, draft, providers, keys, blockers }:
           <dt className="text-muted-foreground">Output limit</dt>
           <dd>{LIMITS.maxOutputTokens} tokens per response</dd>
         </dl>
+        {!needsConsent && <p className="rounded-md bg-slip p-4 text-sm">Only imported answers: nothing is sent to an AI provider and nothing is charged. Jurors review the answers as you saved them.</p>}
+        {needsConsent && (
         <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
           <div className="flex items-start gap-2">
             <Checkbox id="consent-processing" checked={consent} onCheckedChange={(c) => setConsent(c === true)} />
@@ -348,14 +376,15 @@ function RunDialog({ evaluationId, revision, draft, providers, keys, blockers }:
             </Label>
           </div>
         </div>
+        )}
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
         )}
         <DialogFooter>
-          <Button disabled={!consent || !charges || busy} onClick={() => void start()}>
-            {busy ? 'Starting…' : `Start ${calls} calls`}
+          <Button disabled={(needsConsent && (!consent || !charges)) || busy} onClick={() => void start()}>
+            {busy ? 'Starting…' : calls > 0 ? `Start ${calls} calls` : 'Start the hearing'}
           </Button>
         </DialogFooter>
       </DialogContent>

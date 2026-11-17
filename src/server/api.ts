@@ -9,6 +9,7 @@ import {
   createCredentialSchema,
   createEvaluationSchema,
   deleteEvaluationSchema,
+  putImportsSchema,
   draftInputSchema,
   emptySchema,
   openReviewSchema,
@@ -25,7 +26,7 @@ import { hitRateLimit } from './db/sql'
 import type { Deps, VerifiedCaller } from './deps'
 import { ApiError, errorResponse, idempotencyKey, ifMatchRevision, noContent, ok, pathId, readBody, requestIdOf } from './http'
 import { listCredentials, removeCredential, renewCredential, saveCredential } from './services/credentials'
-import { createEvaluation, deleteEvaluation, getEvaluation, listEvaluations, saveDraft } from './services/evaluations'
+import { createEvaluation, deleteEvaluation, deleteImports, getEvaluation, listEvaluations, putImports, saveDraft } from './services/evaluations'
 import { exportRun, parseExportFormat } from './services/export'
 import { getResults, recordVerdict } from './services/results'
 import { createInvite, getReview, redeemInvite, reveal, revokeInvite, revokeSession, saveReview, submitReview } from './services/reviews'
@@ -134,6 +135,15 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     const ifMatch = ifMatchRevision(c)
     const input = await readBody(c, draftInputSchema)
     return ok(c, await saveDraft(deps(c), user(c), pathId(c, 'id'), input, ifMatch))
+  })
+  api.put('/evaluations/:id/imports/:configurationKey', async (c) => {
+    const ifMatch = ifMatchRevision(c)
+    const input = await readBody(c, putImportsSchema)
+    return ok(c, await putImports(deps(c), user(c), pathId(c, 'id'), pathId(c, 'configurationKey'), input, ifMatch, rid(c)))
+  })
+  api.delete('/evaluations/:id/imports/:configurationKey', async (c) => {
+    const ifMatch = ifMatchRevision(c)
+    return ok(c, await deleteImports(deps(c), user(c), pathId(c, 'id'), pathId(c, 'configurationKey'), ifMatch, rid(c)))
   })
   api.delete('/evaluations/:id', async (c) => {
     const ifMatch = ifMatchRevision(c)

@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { verdictSchema } from '@/domain/contracts'
 import { LIMITS } from '@/domain/limits'
-import { PROVIDER_NAMES } from '@/domain/registry'
+import { partySource } from '@/lib/parties'
 import { DIMENSIONS, formatScore, rubricLines, RUBRICS, type CohortResult } from '@/domain/rubric'
 import { codePointLength } from '@/domain/text'
 import { api, ApiClientError, apiDownload, describeError, newIntentKey, saveBlob } from '@/lib/api-client'
@@ -81,12 +81,21 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
             <div key={c.key} className="rounded-[2px] bg-white px-5 py-4 ring-1 ring-exhibit-edge">
               <h3 className="font-heading text-lg font-bold">{c.label}</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {PROVIDER_NAMES[c.provider]} · <code className="typewriter text-xs">{c.modelId}</code> · {c.maxOutputTokens}-token cap
+                {partySource(c)}
+                {c.maxOutputTokens && <> · {c.maxOutputTokens}-token cap</>}
               </p>
-              <details className="mt-3">
-                <summary className="cursor-pointer text-sm text-muted-foreground transition-colors hover:text-foreground">System instructions</summary>
-                <p className="mt-3 rounded-[2px] bg-slip p-3 font-heading text-sm leading-relaxed whitespace-pre-wrap">{c.systemPrompt}</p>
-              </details>
+              {c.provenance ? (
+                <p className="mt-3 rounded-[2px] bg-slip p-3 font-heading text-sm leading-relaxed">
+                  {c.provenance.description}
+                  {c.provenance.collectedOn && <span className="text-muted-foreground"> · collected {c.provenance.collectedOn}</span>}
+                  {c.provenance.redacted && <span className="text-muted-foreground"> · redacted before review</span>}
+                </p>
+              ) : (
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-sm text-muted-foreground transition-colors hover:text-foreground">System instructions</summary>
+                  <p className="mt-3 rounded-[2px] bg-slip p-3 font-heading text-sm leading-relaxed whitespace-pre-wrap">{c.systemPrompt}</p>
+                </details>
+              )}
             </div>
           ))}
         </div>

@@ -4,15 +4,40 @@
  */
 
 import { CANONICALIZATION_VERSION } from './canonical'
-import type { CaseInput, ComparisonMode, Configuration, Draft } from './contracts'
+import { isImported, type CaseInput, type ComparisonMode, type Configuration, type Draft, type ImportedConfiguration, type ModelConfiguration } from './contracts'
 import { MESSAGE_TEMPLATE_VERSION } from './messages'
 import { findRoute, isRouteEnabled, PROVIDER_REGISTRY_VERSION, type ModelRoute, type ProviderId } from './registry'
 import { RUBRIC_VERSION, type RubricVersion } from './rubric'
 
-export interface SnapshotConfiguration extends Configuration {
+/** A generated party, frozen with its resolved route. Older snapshots have no `source` field. */
+export type GeneratedSnapshotConfiguration = ModelConfiguration & {
   provider: ProviderId
   modelId: string
   adapterVersion: string
+}
+
+/** One imported answer's fingerprint; the text itself lives in `run_imported_outputs` (D-38). */
+export interface ImportMeta {
+  configurationKey: string
+  caseKey: string
+  sha256: string
+  byteLength: number
+}
+
+/** An imported party, frozen with the hash of every answer so the snapshot hash commits to the exact bytes. */
+export type ImportedSnapshotConfiguration = ImportedConfiguration & {
+  source: 'imported'
+  imports: Array<{ caseKey: string; sha256: string; byteLength: number }>
+}
+
+export type SnapshotConfiguration = GeneratedSnapshotConfiguration | ImportedSnapshotConfiguration
+
+export function isImportedSnapshot(configuration: SnapshotConfiguration): configuration is ImportedSnapshotConfiguration {
+  return isImported(configuration)
+}
+
+export function generatedParties<T extends { kind?: string }>(configurations: readonly T[]): Array<Exclude<T, { kind: 'imported' }>> {
+  return configurations.filter((configuration) => !isImported(configuration)) as Array<Exclude<T, { kind: 'imported' }>>
 }
 
 export interface RunSnapshot {
@@ -33,21 +58,33 @@ export type ReadinessIssue =
   | { kind: 'model_unavailable'; configurationKey: string; modelKey: string }
   | { kind: 'model_mode_instructions_differ' }
   | { kind: 'model_mode_same_model' }
+  | { kind: 'imported_requires_configuration_mode' }
+  | { kind: 'imported_text_missing'; configurationKey: string; caseKey: string }
 
 export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configurations'>, routes: readonly ModelRoute[]): ReadinessIssue[] {
   const issues: ReadinessIssue[] = []
-  for (const configuration of draft.configurations) {
+  const models = generatedParties(draft.configurations)
+  for (const configuration of models) {
     const route = findRoute(configuration.modelKey, routes)
     if (!route) issues.push({ kind: 'unknown_model', configurationKey: configuration.key })
     else if (!isRouteEnabled(route)) issues.push({ kind: 'model_unavailable', configurationKey: configuration.key, modelKey: route.key })
   }
   if (draft.comparisonMode === 'model') {
-    const prompts = new Set(draft.configurations.map((configuration) => configuration.systemPrompt))
+    if (models.length < draft.configurations.length) issues.push({ kind: 'imported_requires_configuration_mode' })
+    const prompts = new Set(models.map((configuration) => configuration.systemPrompt))
     if (prompts.size > 1) issues.push({ kind: 'model_mode_instructions_differ' })
-    const models = new Set(draft.configurations.map((configuration) => configuration.modelKey))
-    if (models.size < draft.configurations.length) issues.push({ kind: 'model_mode_same_model' })
+    const modelKeys = new Set(models.map((configuration) => configuration.modelKey))
+    if (modelKeys.size < models.length) issues.push({ kind: 'model_mode_same_model' })
   }
   return issues
+}
+
+/** Every imported party needs an answer for every question before a hearing can start. */
+export function importCoverageIssues(draft: Pick<Draft, 'cases' | 'configurations'>, imports: ReadonlyArray<Pick<ImportMeta, 'configurationKey' | 'caseKey'>>): ReadinessIssue[] {
+  const present = new Set(imports.map((item) => `${item.configurationKey}:${item.caseKey}`))
+  return draft.configurations.filter(isImported).flatMap((configuration) =>
+    draft.cases.filter((testCase) => !present.has(`${configuration.key}:${testCase.key}`)).map((testCase) => ({ kind: 'imported_text_missing' as const, configurationKey: configuration.key, caseKey: testCase.key })),
+  )
 }
 
 export function describeIssue(issue: ReadinessIssue): string {
@@ -60,26 +97,41 @@ export function describeIssue(issue: ReadinessIssue): string {
       return 'Model comparison requires identical system instructions. Switch to configuration comparison to vary them.'
     case 'model_mode_same_model':
       return 'Model comparison needs a different model for each configuration.'
+    case 'imported_requires_configuration_mode':
+      return 'An imported party needs configuration comparison. Switch the comparison mode.'
+    case 'imported_text_missing':
+      return 'An imported party is missing an answer for at least one question. Add every answer and save it.'
   }
 }
 
-/** Distinct providers a draft needs keys for. */
-export function requiredProviders(configurations: readonly Pick<Configuration, 'modelKey'>[], routes: readonly ModelRoute[]): ProviderId[] {
+/** Distinct providers a draft needs keys for (imported parties need none). */
+export function requiredProviders(configurations: readonly Configuration[], routes: readonly ModelRoute[]): ProviderId[] {
   const providers = new Set<ProviderId>()
-  for (const configuration of configurations) {
+  for (const configuration of generatedParties(configurations)) {
     const route = findRoute(configuration.modelKey, routes)
     if (route) providers.add(route.provider)
   }
   return [...providers].sort()
 }
 
-export function buildSnapshot(draft: Draft, routes: readonly ModelRoute[], appCommit: string, createdAt: number): RunSnapshot {
+export function buildSnapshot(draft: Draft, routes: readonly ModelRoute[], appCommit: string, createdAt: number, imports: readonly ImportMeta[] = []): RunSnapshot {
   return {
     schemaVersion: 1,
     canonicalizationVersion: CANONICALIZATION_VERSION,
     comparisonMode: draft.comparisonMode,
     cases: draft.cases,
-    configurations: draft.configurations.map((configuration) => {
+    configurations: draft.configurations.map((configuration): SnapshotConfiguration => {
+      if (isImported(configuration)) {
+        return {
+          ...configuration,
+          source: 'imported' as const,
+          imports: draft.cases.map((testCase) => {
+            const meta = imports.find((item) => item.configurationKey === configuration.key && item.caseKey === testCase.key)
+            if (!meta) throw new Error('buildSnapshot requires an import for every imported party and case')
+            return { caseKey: testCase.key, sha256: meta.sha256, byteLength: meta.byteLength }
+          }),
+        }
+      }
       const route = findRoute(configuration.modelKey, routes)
       if (!route) throw new Error('buildSnapshot requires validated routes')
       return { ...configuration, provider: route.provider, modelId: route.modelId, adapterVersion: route.adapterVersion }

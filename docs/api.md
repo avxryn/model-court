@@ -3,6 +3,8 @@
 All routes require `Authorization: Bearer <platform JWT>`. Requests and responses are JSON. Every
 response carries `requestId` and `Cache-Control: private, no-store`. Unknown fields are rejected (422).
 
+Imported evidence (D-38): a configuration may be `{kind: "imported", key, label, provenance}`. `PUT /evaluations/:id/imports/:configurationKey` (If-Match; body `{items: [{caseKey, text}], confirmMayShareWithJurors: true}`) replaces that party's answers and returns the new revision; `DELETE` on the same path removes them. The owner evaluation view adds `imports`; the owner run view adds `imported`; results add `source`/`provenance` on imported parties and `status: "imported"` plus `sha256` on their responses.
+
 Draft fields added in v2: optional `rubricVersion` (`reference-qa-v1` default, `safety-v1`, `writing-v1`) and an optional per-case `language` tag. Results add `cases[].language` and `byLanguage` (D-35, D-36).
 
 Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **jurors**. Field names, enum values, and error codes keep the original terms; only display strings (session labels such as `Juror 1`, and messages) use the new ones.

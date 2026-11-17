@@ -34,7 +34,9 @@ export const BACKUP_VERSION = 1
  */
 export const BACKUP_TABLES = [
   'evaluations',
+  'evaluation_imports',
   'runs',
+  'run_imported_outputs',
   'generations',
   'generation_attempts',
   'review_sessions',

@@ -1,7 +1,7 @@
 # Design note: imported evidence (phase 4)
 
-Status: proposal, Nov 17, 2026. Covers S3c (blind review of existing transcripts) and the S4 human baseline.
-Nothing here is built yet.
+Status: **built on `next`, Nov 17, 2026 (D-38).** Covers S3c (blind review of existing transcripts) and the S4 human baseline.
+Differences from this proposal: provenance is edited with the draft (the imports endpoint takes only answers and a sharing confirmation), the run-start consent flags stay required, and the open questions were settled as D-38 records.
 
 ## Goal
 
