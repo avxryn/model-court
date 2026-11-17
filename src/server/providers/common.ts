@@ -34,6 +34,7 @@ export type ProviderErrorCode =
   | 'EMPTY_OUTPUT'
   // Pre-send credential failures: these never reach the network.
   | 'CREDENTIAL_REVOKED'
+  | 'CREDENTIAL_EXPIRED'
   | 'CREDENTIAL_UNAVAILABLE'
 
 export interface ProviderSuccess {

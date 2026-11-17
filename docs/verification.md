@@ -34,6 +34,8 @@ wrangler/workerd from the lockfile, Vitest 4.1, local D1 via `wrangler getPlatfo
 
 | 2026-11-17 | Incident: signed-in API 500s (user report, req_fd2b2616…) | `npx deepspace logs` | Cause: cached Durable Object stub reused across contexts ("Cannot perform I/O on behalf of a different Durable Object"); cron also failing. Fixed in D-22, released rel_01M7M2S7YJHBV8PYN8FE77R48P (ef9dc24). Over ~2 min after release: 2 cron runs ok, 8/8 `/healthz` store checks ok, zero 5xx or I/O errors in logs. Signed-in page load after the fix still needs your confirmation. | V3/V6 (deployed) |
 
+| 2026-11-17 | Key safeguards (D-23) | `npm run check` | 35 unit tests pass; 57 integration tests pass on local D1 and 57 on the Durable Object store. New tests: admin keys refused at save (both providers) with nothing stored; 7-day expiry and renewal; an expired key is never decrypted before the cron sweep (zero provider calls, reservations released); cron revokes expired keys via the revocation path (ciphertext removed, queued work fenced, blocked from new runs); last use recorded with run id and no key material. Not deployed yet. | T31–T33 (extended) |
+
 ### Not yet verified by the agent (blocked or pending)
 
 - Anything requiring a DeepSpace login: `dev start`, `test run` (Playwright multi-user fixture), registration, secrets, deploy.

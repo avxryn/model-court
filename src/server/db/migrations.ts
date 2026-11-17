@@ -260,6 +260,18 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX audit_events_by_created ON audit_events(created_at)`,
     ],
   },
+  {
+    // D-23: keys expire unless renewed; last use is visible to the owner.
+    id: '0002_credential_expiry_and_last_use',
+    statements: [
+      `ALTER TABLE provider_credentials ADD COLUMN expires_at INTEGER`,
+      `ALTER TABLE provider_credentials ADD COLUMN last_used_at INTEGER`,
+      `ALTER TABLE provider_credentials ADD COLUMN last_used_run_id TEXT`,
+      // Keys saved before this migration get the default 7-day lifetime from creation.
+      `UPDATE provider_credentials SET expires_at = created_at + 604800000 WHERE status = 'active' AND expires_at IS NULL`,
+      `CREATE INDEX provider_credentials_by_expiry ON provider_credentials(status, expires_at)`,
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`

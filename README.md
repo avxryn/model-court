@@ -44,6 +44,13 @@ operator's credits, but evaluating live generation needs a key, and the app must
 so queued work survives a closed browser. The trusted operator, who holds the encryption root, could
 technically decrypt them.
 
+## Keeping your API key safe
+
+- Create a **dedicated Model Court–only key** with a low monthly spend cap and access only to the model you test. Admin or organization keys are refused.
+- Saved keys **expire after 7 days** unless renewed in Settings. Expiry stops queued work the same way removal does. Settings also shows when each key was last used, and for which run.
+- **After testing, remove the key in Settings and rotate or delete it at the provider.** Removing it in Model Court does not revoke it at OpenAI or Anthropic.
+- Turn on **two-factor authentication** for the GitHub or Google account you sign in with, and for your provider accounts.
+
 ## Local setup
 
 Requirements: Node 24 (`.nvmrc`) and npm ≥ 11.6. With npm 10, prefix installs with `npx npm@11.6.2`.

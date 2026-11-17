@@ -164,4 +164,13 @@ export const createCredentialSchema = z.strictObject({
     .refine((value) => !hasDisallowedControlChars(value) && !/\s/.test(value), 'API key contains invalid characters'),
   consentToStorage: z.literal(true),
   replacesCredentialId: uuid.optional(),
+}).superRefine((value, ctx) => {
+  // D-23: organization/admin keys can manage billing, members, and other keys.
+  // Model Court only needs a project (OpenAI) or workspace (Anthropic) key.
+  if (ADMIN_KEY_PREFIXES.some((prefix) => value.apiKey.startsWith(prefix))) {
+    ctx.addIssue({ code: 'custom', path: ['apiKey'], message: 'Admin keys are not accepted. Create a project (OpenAI) or workspace (Anthropic) API key with access only to the model you need.' })
+  }
 })
+
+/** Known prefixes of provider organization-admin keys (best-effort, not a guarantee). */
+export const ADMIN_KEY_PREFIXES = ['sk-admin-', 'sk-ant-admin'] as const

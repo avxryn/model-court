@@ -5,6 +5,7 @@
 
 import { DAY_MS } from '../db/sql'
 import type { Deps } from '../deps'
+import { expireCredentials } from './credentials'
 import { dispatchOutbox, reconcileLeases } from './generation'
 
 export interface MaintenanceReport {
@@ -12,6 +13,7 @@ export interface MaintenanceReport {
   leasesExpired: number
   evaluationsPurged: number
   cleanupFailures: number
+  credentialsExpired: number
 }
 
 async function purgeEvaluation(deps: Deps, evaluationId: string): Promise<void> {
@@ -36,10 +38,11 @@ async function purgeEvaluation(deps: Deps, evaluationId: string): Promise<void> 
 export async function runMaintenance(deps: Deps): Promise<MaintenanceReport> {
   const db = deps.db
   const now = deps.now()
-  const report: MaintenanceReport = { dispatched: 0, leasesExpired: 0, evaluationsPurged: 0, cleanupFailures: 0 }
+  const report: MaintenanceReport = { dispatched: 0, leasesExpired: 0, evaluationsPurged: 0, cleanupFailures: 0, credentialsExpired: 0 }
 
   report.dispatched = await dispatchOutbox(deps)
   report.leasesExpired = await reconcileLeases(deps)
+  report.credentialsExpired = await expireCredentials(deps)
 
   // Hard-delete tombstoned trees once no attempt can still commit (lease expired or terminal).
   const tombstoned = await db

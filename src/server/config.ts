@@ -18,6 +18,7 @@ export interface ConfigEnv {
   MAX_LIFETIME_CALLS_GLOBAL?: string
   PUBLIC_APP_ORIGIN?: string
   PROVIDER_TIMEOUT_MS?: string
+  CREDENTIAL_TTL_DAYS?: string
   APP_COMMIT?: string
   DEEPSPACE_APP_ID: string
 }
@@ -34,6 +35,8 @@ export interface AppConfig {
   hmacKey: Uint8Array<ArrayBuffer> | null
   limits: { dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number }
   providerTimeoutMs: number
+  /** Saved provider keys expire this long after saving or renewal (D-23). */
+  credentialTtlMs: number
   problems: string[]
 }
 
@@ -106,6 +109,7 @@ export function parseConfig(env: ConfigEnv): AppConfig {
     },
     // Operators may shorten, never lengthen, the 90s provider deadline.
     providerTimeoutMs: Math.min(positiveInt(env.PROVIDER_TIMEOUT_MS, LIMITS.providerTimeoutMs, problems, 'PROVIDER_TIMEOUT_MS') || LIMITS.providerTimeoutMs, LIMITS.providerTimeoutMs),
+    credentialTtlMs: Math.min(Math.max(positiveInt(env.CREDENTIAL_TTL_DAYS, 7, problems, 'CREDENTIAL_TTL_DAYS') || 7, 1), 90) * 24 * 60 * 60 * 1000,
     problems,
   }
 }

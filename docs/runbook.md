@@ -11,6 +11,7 @@ Never paste secret values into commands, chats, or documents.
 | `GENERATION_ENABLED` | `wrangler.toml [vars]` | `"false"`: the fail-closed spending switch |
 | `CREDENTIAL_WRITES_ENABLED` | `[vars]` | `"true"`; set `"false"` to pause add/replace (removal always works) |
 | `CREDENTIAL_ACTIVE_KEY_VERSION` | `[vars]` | `"v1"` |
+| `CREDENTIAL_TTL_DAYS` | `[vars]` | `"7"`; saved keys expire this long after saving or renewal (1–90) |
 | `MAX_DAILY_CALLS_PER_USER` / `_GLOBAL` / `MAX_LIFETIME_CALLS_GLOBAL` | `[vars]` | 20 / 100 / 500 |
 | `PUBLIC_APP_ORIGIN` | `[vars]` | empty → the request origin is used for invite links |
 | `APP_COMMIT` | `[vars]` | set to the shipped commit before each deploy |

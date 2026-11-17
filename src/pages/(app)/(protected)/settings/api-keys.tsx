@@ -41,6 +41,20 @@ export default function ApiKeysPage() {
           The deployment operator holds the encryption root, so encryption does not make keys inaccessible to that trusted operator. Prefer a purpose-specific key with provider-side spending limits.
         </AlertDescription>
       </Alert>
+      <section aria-labelledby="key-hygiene" className="surface mb-8 p-5">
+        <h2 id="key-hygiene" className="text-base font-semibold">
+          Use a key you can afford to lose
+        </h2>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+          <li>Create a dedicated Model Court–only key with a low monthly spend cap and access only to the model you are testing.</li>
+          <li>Admin or organization keys are refused. Use an OpenAI project key or an Anthropic workspace key.</li>
+          <li>
+            Saved keys expire after {catalog.data?.limits.credentialTtlDays ?? 7} days unless you renew them. Expiry stops queued work exactly like removing the key.
+          </li>
+          <li>When you finish testing, remove the key here and rotate or delete it at the provider. Removing it here does not revoke it there.</li>
+          <li>Turn on two-factor authentication for the GitHub or Google account you sign in with, and for your provider accounts.</li>
+        </ul>
+      </section>
       {credentials.loading && !credentials.data ? (
         <PageSkeleton label="Loading keys" />
       ) : credentials.error && !credentials.data ? (
@@ -103,6 +117,20 @@ function ProviderKeyCard({ provider, current, writesEnabled, onChanged }: { prov
     }
   }
 
+  const renew = async () => {
+    if (!current) return
+    setBusy(true)
+    try {
+      const renewed = await api<CredentialMetadata>('POST', `/credentials/${current.id}/renew`, { body: {}, revision: current.revision })
+      toast.success(`${name} key renewed until ${formatTime(renewed.expiresAt)}`)
+      await onChanged()
+    } catch (caught) {
+      toast.error(describeError(caught))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const remove = async () => {
     if (!current) return
     setBusy(true)
@@ -133,6 +161,9 @@ function ProviderKeyCard({ provider, current, writesEnabled, onChanged }: { prov
               <Badge variant="outline" className="border-success/30 bg-success/10 text-success">Saved</Badge>
               <span>
                 {current.label} · added {formatTime(current.createdAt)}
+              </span>
+              <span className="basis-full text-xs">
+                Expires {formatTime(current.expiresAt)} · {current.lastUsedAt ? `last used ${formatTime(current.lastUsedAt)}` : 'not used yet'}
               </span>
             </span>
           ) : (
@@ -216,6 +247,11 @@ function ProviderKeyCard({ provider, current, writesEnabled, onChanged }: { prov
           <Button variant={current ? 'outline' : 'default'} disabled={!writesEnabled} onClick={() => setEditing(true)}>
             {current ? 'Replace key' : 'Add key'}
           </Button>
+          {current && (
+            <Button variant="outline" disabled={busy} onClick={() => void renew()}>
+              Renew
+            </Button>
+          )}
           {current && (
             <AlertDialog>
               <AlertDialogTrigger render={<Button variant="destructive" disabled={busy} />}>Remove</AlertDialogTrigger>

@@ -23,6 +23,12 @@ export interface CredentialMetadata {
   status: 'active' | 'revoked'
   revision: number
   createdAt: number
+  /** The key stops working at this time unless renewed (D-23). */
+  expiresAt: number | null
+  /** Last time a generation job decrypted this key to call the provider. */
+  lastUsedAt: number | null
+  /** The owner's run that last used it (owner-only metadata). */
+  lastUsedRunId: string | null
 }
 
 interface CredentialRow {
@@ -37,12 +43,27 @@ interface CredentialRow {
   revision: number
   created_at: number
   revoked_at: number | null
+  expires_at: number | null
+  last_used_at: number | null
+  last_used_run_id: string | null
 }
 
-const SAFE_COLUMNS = 'id, provider, label, status, revision, created_at'
+const SAFE_COLUMNS = 'id, provider, label, status, revision, created_at, expires_at, last_used_at, last_used_run_id'
 
-function toMetadata(row: Pick<CredentialRow, 'id' | 'provider' | 'label' | 'status' | 'revision' | 'created_at'>): CredentialMetadata {
-  return { id: row.id, provider: row.provider, label: row.label, status: row.status, revision: row.revision, createdAt: row.created_at }
+type SafeRow = Pick<CredentialRow, 'id' | 'provider' | 'label' | 'status' | 'revision' | 'created_at' | 'expires_at' | 'last_used_at' | 'last_used_run_id'>
+
+function toMetadata(row: SafeRow): CredentialMetadata {
+  return {
+    id: row.id,
+    provider: row.provider,
+    label: row.label,
+    status: row.status,
+    revision: row.revision,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    lastUsedAt: row.last_used_at,
+    lastUsedRunId: row.last_used_run_id,
+  }
 }
 
 export async function listCredentials(deps: Deps, userId: string): Promise<CredentialMetadata[]> {
@@ -122,13 +143,14 @@ export async function saveCredential(
   const result = await idempotent(deps, { actorUserId: userId, idempotencyKey, operation, requestHash: digest }, async (receipt) => {
     const credentialId = deps.newId()
     const sealed = await sealCredential(rootKey, { appId: config.appId, credentialId, ownerUserId: userId, provider: input.provider, keyVersion }, input.apiKey)
-    const metadata: CredentialMetadata = { id: credentialId, provider: input.provider, label: input.label, status: 'active', revision: 1, createdAt: now }
+    const expiresAt = now + config.credentialTtlMs
+    const metadata: CredentialMetadata = { id: credentialId, provider: input.provider, label: input.label, status: 'active', revision: 1, createdAt: now, expiresAt, lastUsedAt: null, lastUsedRunId: null }
     const insert = deps.db
       .prepare(
-        `INSERT INTO provider_credentials (id, owner_user_id, provider, label, ciphertext, nonce, encryption_key_version, status, revision, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 1, ?)`,
+        `INSERT INTO provider_credentials (id, owner_user_id, provider, label, ciphertext, nonce, encryption_key_version, status, revision, created_at, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 1, ?, ?)`,
       )
-      .bind(credentialId, userId, input.provider, input.label, sealed.ciphertext, sealed.nonce, keyVersion, now)
+      .bind(credentialId, userId, input.provider, input.label, sealed.ciphertext, sealed.nonce, keyVersion, now, expiresAt)
     const audit = auditStatement(deps.db, { eventType: operation, requestId, outcome: 'ok', actorUserId: userId, metadata: { provider: input.provider, credentialId } }, now)
     const response = { status: 201 as const, data: metadata }
 
@@ -210,7 +232,76 @@ export async function removeCredential(deps: Deps, userId: string, credentialId:
   }
 }
 
-export type CredentialFailure = 'CREDENTIAL_REVOKED' | 'CREDENTIAL_UNAVAILABLE'
+/**
+ * Extend an active, unexpired key's lifetime by the configured TTL. Does not
+ * touch the ciphertext or any run that pins the key.
+ */
+export async function renewCredential(deps: Deps, userId: string, credentialId: string, ifMatch: number, requestId: string): Promise<CredentialMetadata> {
+  const now = deps.now()
+  const expiresAt = now + deps.config.credentialTtlMs
+  try {
+    await runGuarded(
+      deps.db,
+      'credential.renew',
+      cond(
+        `EXISTS (SELECT 1 FROM provider_credentials WHERE id = ? AND owner_user_id = ? AND status = 'active' AND revision = ? AND (expires_at IS NULL OR expires_at > ?))`,
+        credentialId,
+        userId,
+        ifMatch,
+        now,
+      ),
+      [
+        deps.db.prepare('UPDATE provider_credentials SET expires_at = ?, revision = revision + 1 WHERE id = ?').bind(expiresAt, credentialId),
+        auditStatement(deps.db, { eventType: 'credential.renew', requestId, outcome: 'ok', actorUserId: userId, metadata: { credentialId } }, now),
+      ],
+    )
+  } catch (error) {
+    if (error instanceof GuardFailed) {
+      const current = await deps.db.prepare(`SELECT ${SAFE_COLUMNS}, owner_user_id FROM provider_credentials WHERE id = ?`).bind(credentialId).first<CredentialRow>()
+      if (!current || current.owner_user_id !== userId) throw notFound()
+      if (current.status !== 'active' || (current.expires_at !== null && current.expires_at <= now)) {
+        throw new ApiError(409, 'STATE_CONFLICT', 'This key has expired or was removed. Save a new key instead.')
+      }
+      throw revisionConflict()
+    }
+    throw error
+  }
+  const row = await deps.db.prepare(`SELECT ${SAFE_COLUMNS} FROM provider_credentials WHERE id = ?`).bind(credentialId).first<CredentialRow>()
+  if (!row) throw notFound()
+  return toMetadata(row)
+}
+
+/**
+ * Revoke every expired key through the normal revocation path (fences queued
+ * and in-flight work, deletes ciphertext). Run by the maintenance cron.
+ */
+export async function expireCredentials(deps: Deps): Promise<number> {
+  const now = deps.now()
+  const expired = await deps.db
+    .prepare(`SELECT id, owner_user_id, provider FROM provider_credentials WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= ? LIMIT 50`)
+    .bind(now)
+    .all<{ id: string; owner_user_id: string; provider: ProviderId }>()
+  let count = 0
+  for (const row of expired.results) {
+    try {
+      await runGuarded(
+        deps.db,
+        'credential.expire',
+        cond(`EXISTS (SELECT 1 FROM provider_credentials WHERE id = ? AND status = 'active' AND expires_at <= ?)`, row.id, now),
+        [
+          ...revokeCredentialStatements(deps, row.id, now),
+          auditStatement(deps.db, { eventType: 'credential.expire', requestId: 'cron', outcome: 'revoked', actorUserId: row.owner_user_id, metadata: { provider: row.provider, credentialId: row.id } }, now),
+        ],
+      )
+      count++
+    } catch (error) {
+      if (!(error instanceof GuardFailed)) throw error // renewed or removed meanwhile
+    }
+  }
+  return count
+}
+
+export type CredentialFailure = 'CREDENTIAL_REVOKED' | 'CREDENTIAL_UNAVAILABLE' | 'CREDENTIAL_EXPIRED'
 
 export class CredentialUnusable extends Error {
   constructor(readonly code: CredentialFailure) {
@@ -232,7 +323,7 @@ export async function withRunCredential<T>(
 ): Promise<T> {
   const row = await deps.db
     .prepare(
-      `SELECT c.id, c.owner_user_id, c.provider, c.status, c.ciphertext, c.nonce, c.encryption_key_version
+      `SELECT c.id, c.owner_user_id, c.provider, c.status, c.ciphertext, c.nonce, c.encryption_key_version, c.expires_at
        FROM run_credentials rc JOIN provider_credentials c ON c.id = rc.credential_id
        JOIN runs r ON r.id = rc.run_id
        WHERE rc.run_id = ? AND rc.provider = ? AND c.owner_user_id = r.owner_user_id AND c.provider = rc.provider`,
@@ -241,6 +332,8 @@ export async function withRunCredential<T>(
     .first<CredentialRow>()
   if (!row) throw new CredentialUnusable('CREDENTIAL_UNAVAILABLE')
   if (row.status !== 'active' || !row.ciphertext || !row.nonce || !row.encryption_key_version) throw new CredentialUnusable('CREDENTIAL_REVOKED')
+  // Expiry is enforced here too, so a key past its time is never decrypted even before the cron revokes it.
+  if (row.expires_at !== null && row.expires_at <= deps.now()) throw new CredentialUnusable('CREDENTIAL_EXPIRED')
   const rootKey = deps.config.encryptionKeys.get(row.encryption_key_version)
   if (!rootKey) throw new CredentialUnusable('CREDENTIAL_UNAVAILABLE')
   let apiKey: string
@@ -260,6 +353,11 @@ export async function withRunCredential<T>(
     }
     throw error
   }
+  // Visible to the owner in Settings so unexpected use stands out. Metadata only.
+  await deps.db
+    .prepare(`UPDATE provider_credentials SET last_used_at = ?, last_used_run_id = ? WHERE id = ? AND status = 'active'`)
+    .bind(deps.now(), runId, row.id)
+    .run()
   return send(apiKey)
 }
 

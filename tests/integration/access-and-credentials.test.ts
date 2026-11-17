@@ -94,7 +94,9 @@ describe('T31/T32 credential custody', () => {
 
     const list = await h.request('GET', '/credentials', { as: OWNER })
     expect(list.status).toBe(200)
-    for (const item of list.json.data.items) expect(Object.keys(item).sort()).toEqual(['createdAt', 'id', 'label', 'provider', 'revision', 'status'])
+    for (const item of list.json.data.items) {
+      expect(Object.keys(item).sort()).toEqual(['createdAt', 'expiresAt', 'id', 'label', 'lastUsedAt', 'lastUsedRunId', 'provider', 'revision', 'status'])
+    }
     expect(list.text).not.toContain('SENTINEL')
 
     const row = await h.db.prepare(`SELECT * FROM provider_credentials WHERE provider = 'openai'`).first<any>()

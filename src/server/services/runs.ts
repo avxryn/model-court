@@ -39,11 +39,12 @@ export function parseSnapshot(json: string): RunSnapshot {
   return JSON.parse(json) as RunSnapshot
 }
 
-function credentialActive(runId: string, provider: ProviderId): Condition {
+function credentialActive(runId: string, provider: ProviderId, now: number): Condition {
   return cond(
-    `EXISTS (SELECT 1 FROM run_credentials rc JOIN provider_credentials c ON c.id = rc.credential_id WHERE rc.run_id = ? AND rc.provider = ? AND c.status = 'active')`,
+    `EXISTS (SELECT 1 FROM run_credentials rc JOIN provider_credentials c ON c.id = rc.credential_id WHERE rc.run_id = ? AND rc.provider = ? AND c.status = 'active' AND (c.expires_at IS NULL OR c.expires_at > ?))`,
     runId,
     provider,
+    now,
   )
 }
 
@@ -108,10 +109,11 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
 
     const credentialChecks = providers.map((provider) =>
       cond(
-        `EXISTS (SELECT 1 FROM provider_credentials WHERE id = ? AND owner_user_id = ? AND provider = ? AND status = 'active')`,
+        `EXISTS (SELECT 1 FROM provider_credentials WHERE id = ? AND owner_user_id = ? AND provider = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > ?))`,
         input.credentialIdsByProvider[provider],
         userId,
         provider,
+        now,
       ),
     )
 
@@ -184,10 +186,10 @@ async function explainAdmissionFailure(deps: Deps, userId: string, evaluationId:
   if (active) return new ApiError(409, 'ACTIVE_RUN_EXISTS', 'This evaluation already has an unfinished run. Finish or cancel it first.')
   for (const [provider, id] of Object.entries(input.credentialIdsByProvider)) {
     const row = await deps.db
-      .prepare(`SELECT 1 AS ok FROM provider_credentials WHERE id = ? AND owner_user_id = ? AND provider = ? AND status = 'active'`)
-      .bind(id, userId, provider)
+      .prepare(`SELECT 1 AS ok FROM provider_credentials WHERE id = ? AND owner_user_id = ? AND provider = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)`)
+      .bind(id, userId, provider, deps.now())
       .first()
-    if (!row) return new ApiError(422, 'CREDENTIAL_MISSING', `The selected ${provider} key is missing, revoked, or not yours. Add a key in Settings.`)
+    if (!row) return new ApiError(422, 'CREDENTIAL_MISSING', `The selected ${provider} key is missing, expired, revoked, or not yours. Add or renew a key in Settings.`)
   }
   return new ApiError(429, 'RATE_LIMITED', 'Another comparison is already generating. Wait for it to finish, then try again.', { retryable: true })
 }
@@ -392,7 +394,7 @@ export async function retryGenerations(deps: Deps, userId: string, runId: string
           ...targets.map((generation) =>
             cond(`EXISTS (SELECT 1 FROM generations WHERE id = ? AND run_id = ? AND status IN ('failed','uncertain') AND attempt_count = ? AND attempt_count < ?)`, generation.id, runId, generation.attempt_count, LIMITS.maxAttemptsPerGeneration),
           ),
-          ...providers.map((provider) => credentialActive(runId, provider)),
+          ...providers.map((provider) => credentialActive(runId, provider, now)),
           capacity(userId, runId),
         ),
         statements,

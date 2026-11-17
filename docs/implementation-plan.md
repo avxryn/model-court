@@ -89,3 +89,42 @@ Status legend: `[x]` done with evidence · `[~]` implemented, evidence pending
 - Deletion: tombstone and purge tested locally; scheduled execution needs a deploy.
 - Security headers: implemented; verify on the deployed origin.
 - Docs: drafted; deployment facts, the live URL, and human verification are still empty by design.
+
+## Stretch goals (after submission — not part of P0)
+
+Collected on Nov 17, 2026 from use-case discussions. These come after the Nov 20 submission, and after the spec's own P1 items (third configuration, CSV import, JSON export, result charts). Each one needs its own scope, versioning (rubric/snapshot), and tests before it starts. None of them may weaken BYOK, blinding, or evidence immutability.
+
+### S1. Use cases that work today (document and demo; no code)
+- [ ] **Model selection before launch.** Example: moving a support bot to a cheaper model. Show coverage and latency next to quality in the walkthrough.
+- [ ] **Prompt regression testing.** Configuration-comparison mode, old vs new system instructions on the same cases.
+- [ ] **Policy / knowledge-base assistants.** HR, IT helpdesk, refunds, internal docs. Grounding and abstention are what the rubric already scores.
+- [ ] **Provider-update regression check.** Re-run frozen cases after a model alias changes; compare against the earlier verdict in the run history.
+- [ ] **Domain-expert sign-off.** Lawyers, clinicians, compliance officers, or teachers review blind without keys.
+- [ ] **Teaching and hiring exercises.** Rubric scoring plus the reveal and the disagreement view as discussion material.
+
+### S2. Small additions
+- [ ] **Rubric templates (versioned).** Ship variants alongside `reference-qa-v1`:
+  - safety / red-team: prompt injection, jailbreak resistance, refusal boundaries;
+  - writing quality: tone, clarity, faithfulness for emails, release notes, summaries.
+
+  Historical runs keep their recorded rubric version.
+- [ ] **Decision export for procurement / vendor selection.** Dated, owner-only export of cases, responses, ratings, rationale, and snapshot hash. Builds on the P1 JSON export.
+- [ ] **Per-language breakdown for localization reviews.** Tag cases by language; show results per language with native-speaker reviewers.
+
+### S3. Conversation evaluation
+- [ ] **S3a. Next-turn evaluation (recommended first).**
+  - A case holds a fixed transcript; each configuration writes the next assistant turn, so both see identical history.
+  - Changes: the case schema gains a `messages[]` list; a new message-template version; multi-message adapters; conversation display in review.
+  - Budget, blinding, and scoring stay unchanged.
+- [ ] **S3b. Whole-conversation evaluation.**
+  - Multi-turn generation with a scripted or simulated user, so the input stays controlled.
+  - Needs per-turn budget accounting and failure states, and larger output caps.
+  - Needs a conversation rubric: coherence, memory, tone, task completion.
+- [ ] **S3c. Blind review of existing transcripts.** Import conversations as evidence (no generation), with explicit provenance labels.
+
+### S4. Imported evidence and baselines
+- [ ] **Human baseline as a configuration.** Import human-written answers to compare against AI output. Uses the same imported-evidence source as S3c.
+- [ ] **LLM-judge calibration.** Add an automated judge as a separate, clearly labeled reviewer class. Show agreement and disagreement with the human cohort before anyone relies on it (spec §16.3 item 5).
+
+### Out of scope even as stretch goals
+Large-scale statistical benchmarking, public leaderboards, fully automated scoring without human review, and any shared or platform-paid generation.

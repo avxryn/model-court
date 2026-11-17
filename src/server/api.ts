@@ -24,7 +24,7 @@ import { isRouteEnabled, PROVIDER_NAMES, PROVIDER_REGISTRY_VERSION } from '../do
 import { hitRateLimit } from './db/sql'
 import type { Deps, VerifiedCaller } from './deps'
 import { ApiError, errorResponse, idempotencyKey, ifMatchRevision, noContent, ok, pathId, readBody, requestIdOf } from './http'
-import { listCredentials, removeCredential, saveCredential } from './services/credentials'
+import { listCredentials, removeCredential, renewCredential, saveCredential } from './services/credentials'
 import { createEvaluation, deleteEvaluation, getEvaluation, listEvaluations, saveDraft } from './services/evaluations'
 import { getResults, recordVerdict } from './services/results'
 import { createInvite, getReview, redeemInvite, reveal, revokeInvite, revokeSession, saveReview, submitReview } from './services/reviews'
@@ -99,7 +99,7 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
       credentialWritesEnabled: deps(c).config.credentialWritesEnabled,
       providers: Object.entries(PROVIDER_NAMES).map(([id, name]) => ({ id, name })),
       models: deps(c).routes.map((route) => ({ key: route.key, provider: route.provider, modelId: route.modelId, label: route.label, enabled: isRouteEnabled(route), verifiedAt: route.verifiedAt })),
-      limits: { maxCases: LIMITS.maxCases, configurations: LIMITS.configurationsPerRun, maxOutputTokens: LIMITS.maxOutputTokens, maxAttemptsPerGeneration: LIMITS.maxAttemptsPerGeneration, ...deps(c).config.limits },
+      limits: { maxCases: LIMITS.maxCases, configurations: LIMITS.configurationsPerRun, maxOutputTokens: LIMITS.maxOutputTokens, maxAttemptsPerGeneration: LIMITS.maxAttemptsPerGeneration, credentialTtlDays: Math.round(deps(c).config.credentialTtlMs / 86_400_000), ...deps(c).config.limits },
     }),
   )
 
@@ -109,6 +109,11 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     const input = await readBody(c, createCredentialSchema, LIMITS.credentialRequestBytes)
     const result = await saveCredential(deps(c), user(c), input, idempotencyKey(c), optionalIfMatch(c), rid(c))
     return ok(c, result.data, result.status)
+  })
+  api.post('/credentials/:id/renew', async (c) => {
+    const ifMatch = ifMatchRevision(c)
+    await readBody(c, emptySchema)
+    return ok(c, await renewCredential(deps(c), user(c), pathId(c, 'id'), ifMatch, rid(c)))
   })
   api.delete('/credentials/:id', async (c) => {
     await removeCredential(deps(c), user(c), pathId(c, 'id'), optionalIfMatch(c), rid(c))
