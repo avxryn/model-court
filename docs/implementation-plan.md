@@ -110,6 +110,14 @@ Collected on Nov 17, 2026 from use-case discussions. These come after the Nov 20
   Historical runs keep their recorded rubric version.
 - [ ] **Decision export for procurement / vendor selection.** Dated, owner-only export of cases, responses, ratings, rationale, and snapshot hash. Builds on the P1 JSON export.
 - [ ] **Per-language breakdown for localization reviews.** Tag cases by language; show results per language with native-speaker reviewers.
+- [ ] **Easier juror access** (supports S1 "Domain-expert sign-off"). Today jurors join from a single-use, 24-hour invite link (3 slots) and sign in, with no API key needed. This never touches BYOK, because jurors never generate.
+  - **a. Email-link sign-in (preferred first step).** Jurors still sign in, but without needing a GitHub or Google account. Not yet checked whether DeepSpace auth supports email links.
+  - **b. Accountless jurors (later, optional).** A juror joins from the invite link with only a display name. Needs its own design before starting:
+    - a review-scoped, HttpOnly, owner-revocable, rate-limited juror cookie as a second way into the API;
+    - live notifications for jurors who aren't signed in;
+    - resuming a half-finished review on another device;
+    - abuse limits per invite link;
+    - re-proving every pre-reveal blinding guarantee for the new path.
 
 ### S3. Conversation evaluation
 - [ ] **S3a. Next-turn evaluation (recommended first).**
