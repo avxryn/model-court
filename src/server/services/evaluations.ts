@@ -25,10 +25,22 @@ export interface EvaluationSummary {
   updatedAt: number
 }
 
+/** A new case starts on the low-cost pair when it can run; registry order would put the priciest model first (D-48). */
+const PREFERRED_DEFAULTS: Record<ModelRoute['provider'], string> = { openai: 'openai-gpt-6-luna', anthropic: 'anthropic-claude-haiku-5-5' }
+
 function defaultModelKeys(routes: readonly ModelRoute[]): [string, string] {
-  const openai = routes.find((route) => route.provider === 'openai' && isRouteEnabled(route)) ?? routes.find((r) => r.provider === 'openai')
-  const anthropic = routes.find((route) => route.provider === 'anthropic' && isRouteEnabled(route)) ?? routes.find((r) => r.provider === 'anthropic')
-  return [openai?.key ?? MODEL_ROUTES[0].key, anthropic?.key ?? MODEL_ROUTES[1].key]
+  const pick = (provider: ModelRoute['provider']) => {
+    const ofProvider = routes.filter((route) => route.provider === provider)
+    const preferred = ofProvider.find((route) => route.key === PREFERRED_DEFAULTS[provider])
+    return (
+      (preferred && isRouteEnabled(preferred) ? preferred : undefined) ??
+      ofProvider.find(isRouteEnabled) ??
+      preferred ??
+      ofProvider[0] ??
+      MODEL_ROUTES.find((route) => route.provider === provider)!
+    ).key
+  }
+  return [pick('openai'), pick('anthropic')]
 }
 
 function encodeCursor(updatedAt: number, id: string): string {

@@ -27,14 +27,14 @@ describe('rubric versions (D-35)', () => {
   })
 
   it('snapshots record the draft rubric, defaulting when absent', () => {
-    const draft = makeExampleDraft(newId, [MODEL_ROUTES[0].key, MODEL_ROUTES[1].key])
+    const draft = makeExampleDraft(newId, ['openai-gpt-6-luna', 'anthropic-claude-haiku-5-5'])
     expect(buildSnapshot({ ...draft, schemaVersion: 1 }, MODEL_ROUTES, 'test', 0).rubricVersion).toBe('reference-qa-v1')
     expect(buildSnapshot({ ...draft, rubricVersion: 'writing-v1', schemaVersion: 1 }, MODEL_ROUTES, 'test', 0).rubricVersion).toBe('writing-v1')
     expect(draftInputSchema.safeParse({ ...draft, rubricVersion: 'nope' }).success).toBe(false)
   })
 
   it('language tags are optional, trimmed, and never blank', () => {
-    const draft = makeExampleDraft(newId, [MODEL_ROUTES[0].key, MODEL_ROUTES[1].key])
+    const draft = makeExampleDraft(newId, ['openai-gpt-6-luna', 'anthropic-claude-haiku-5-5'])
     const tagged = draftInputSchema.parse({ ...draft, cases: draft.cases.map((c) => ({ ...c, language: ' es ' })) })
     expect(tagged.cases[0].language).toBe('es')
     expect(draftInputSchema.safeParse({ ...draft, cases: draft.cases.map((c) => ({ ...c, language: '' })) }).success).toBe(false)

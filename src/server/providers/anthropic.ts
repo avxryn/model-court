@@ -1,33 +1,46 @@
 /**
  * Anthropic Messages API adapter (BYOK). Fixed endpoint; `x-api-key` with the
- * owner's workspace key; pinned API version; thinking disabled so the 512-token
- * cap is spent on visible text. Schema per platform.claude.com docs (2026-11-16);
+ * owner's workspace key; pinned API version; thinking disabled (or turned as far
+ * down as each model allows, D-48) so the 512-token cap is spent on visible text. Schema per platform.claude.com docs (2026-11-16);
  * live response mapping must be confirmed by the smoke record.
  */
 
 import type { TranscriptMessage } from '../../domain/contracts'
+import { LIMITS } from '../../domain/limits'
 import { classifyHttpError, finishText, isFailure, isRecord, nonNegativeInt, postJson, type Adapter } from './common'
 
 export const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages'
 export const ANTHROPIC_VERSION = '2026-10-21'
 
-/** With a single user message this is byte-identical to the v1 body (D-39). */
-export function anthropicRequestBody(modelId: string, system: string, messages: readonly TranscriptMessage[], maxOutputTokens: number) {
-  return {
+/**
+ * How the request turns thinking down (D-48), per the thinking docs' per-model table:
+ * - `disabled`: `thinking: {type: "disabled"}` (`anthropic-messages-v1`/`-v2`).
+ * - `between_tools`: Claude Sonnet 5.5 rejects `disabled`; `between_tools` turns off up-front
+ *   thinking, and with no tools the reply is text only (`anthropic-messages-between-tools-v1`).
+ * - `adaptive-low`: Fable and Opus 5.5 cannot turn thinking off, so effort goes to `low` and the
+ *   cap gets `LIMITS.reasoningHeadroomTokens`, since thinking counts toward `max_tokens`
+ *   (`anthropic-messages-adaptive-low-v1`). Thinking text stays omitted.
+ */
+export type AnthropicThinking = 'disabled' | 'between_tools' | 'adaptive-low'
+
+/** With a single user message and thinking `disabled` this is byte-identical to the v1 body (D-39). */
+export function anthropicRequestBody(modelId: string, system: string, messages: readonly TranscriptMessage[], maxOutputTokens: number, thinking: AnthropicThinking = 'disabled') {
+  const base = {
     model: modelId,
-    max_tokens: maxOutputTokens,
+    max_tokens: thinking === 'adaptive-low' ? maxOutputTokens + LIMITS.reasoningHeadroomTokens : maxOutputTokens,
     system,
     messages: messages.map((message) => ({ role: message.role, content: message.content })),
-    thinking: { type: 'disabled' },
   }
+  if (thinking === 'adaptive-low') return { ...base, thinking: { type: 'adaptive', display: 'omitted' }, output_config: { effort: 'low' } }
+  return { ...base, thinking: { type: thinking } }
 }
 
-export const anthropicAdapter: Adapter = async (fetchFn, request, timeoutSignal) => {
+export const makeAnthropicAdapter = (thinking: AnthropicThinking): Adapter => async (fetchFn, request, timeoutSignal) => {
   const raw = await postJson(
     fetchFn,
     ANTHROPIC_MESSAGES_URL,
     { 'x-api-key': request.apiKey, 'anthropic-version': ANTHROPIC_VERSION },
-    anthropicRequestBody(request.modelId, request.system, request.messages, request.maxOutputTokens),
+    anthropicRequestBody(request.modelId, request.system, request.messages, request.maxOutputTokens, thinking),
     request.signal,
     timeoutSignal,
     'request-id',
@@ -69,3 +82,6 @@ export const anthropicAdapter: Adapter = async (fetchFn, request, timeoutSignal)
     truncated: stopReason === 'max_tokens',
   })
 }
+
+/** Thinking disabled: the `anthropic-messages-v1` and `-v2` transport. */
+export const anthropicAdapter = makeAnthropicAdapter('disabled')

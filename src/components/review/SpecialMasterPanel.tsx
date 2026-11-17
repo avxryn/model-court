@@ -12,7 +12,7 @@ import { Fold } from '@/components/court/Fold'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ModelSelect } from '@/components/evaluations/ModelPicker'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PROVIDER_NAMES, type ProviderId } from '@/domain/registry'
 import { DIMENSIONS, formatScore, rubricLines } from '@/domain/rubric'
@@ -217,18 +217,7 @@ function StartForm({ runId, catalog, keys, plannedCalls, partyProviders, onStart
     <div className="mt-4 space-y-3 rounded-md border border-border bg-slip/60 px-4 py-4">
       <div className="space-y-1.5 sm:max-w-sm">
         <Label htmlFor="special-master-model">Grader model</Label>
-        <Select value={modelKey || null} onValueChange={(value) => setModelKey(String(value))} items={models.map((m) => ({ value: m.key, label: m.label }))}>
-          <SelectTrigger id="special-master-model" className="w-full bg-exhibit">
-            <SelectValue placeholder="Choose a model" />
-          </SelectTrigger>
-          <SelectContent>
-            {models.map((m) => (
-              <SelectItem key={m.key} value={m.key}>
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ModelSelect id="special-master-model" models={models} value={modelKey} onChange={setModelKey} className="bg-exhibit" />
         {model && !key && <p className="text-xs text-destructive">Add your {providerName} key in Settings first.</p>}
         {model && partyProviders.includes(model.provider) && <p className="text-xs text-warning">This provider also made one of the parties’ answers; the grader may favor its style.</p>}
       </div>

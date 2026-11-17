@@ -37,7 +37,7 @@ describe('chat-v1 template (D-39)', () => {
 })
 
 describe('conversation validation', () => {
-  const draft = () => makeExampleDraft(() => crypto.randomUUID(), [MODEL_ROUTES[0].key, MODEL_ROUTES[1].key])
+  const draft = () => makeExampleDraft(() => crypto.randomUUID(), ['openai-gpt-6-luna', 'anthropic-claude-haiku-5-5'])
   const withHistory = (messages: unknown) => {
     const d = draft()
     return draftInputSchema.safeParse({ ...d, cases: d.cases.map((c, i) => (i === 0 ? { ...c, messages } : c)) })

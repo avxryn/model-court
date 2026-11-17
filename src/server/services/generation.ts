@@ -183,7 +183,7 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
   }
   const conversation = buildConversation(context.snapshot.messageTemplateVersion ?? MESSAGE_TEMPLATE_VERSION, configuration.systemPrompt, testCase)
   // Dispatch by the adapter version this hearing recorded (D-39); refuse, unsent, if it cannot carry the messages.
-  const adapter = adapterFor(configuration.adapterVersion, conversation.messages.length)
+  const adapter = adapterFor(configuration.adapterVersion, context.provider, conversation.messages.length)
   if (!adapter) {
     return finishAttempt(deps, { attemptId, fence, job, context, requestId }, { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }, true)
   }

@@ -70,6 +70,7 @@ Updated 2026-11-17. Sign-in, registration, secrets, deploy, the Durable Object s
 - Playwright two-account specs: skipped by your choice (Nov 17); no DeepSpace test accounts were created. The live two-account run you do by hand covers the same isolation checks.
 - Authenticated screens with real data; keyboard-only review; 200% zoom; 390px width; Firefox and Safari.
 - Performance targets N01–N03 (T25), backup/restore (V9, T27).
+- The 26 routes added in D-48: each needs one recorded live call (`npm run smoke:providers`, single and multi) before a hearing can use it. Checked by the agent only with unit tests (request body per route, endpoint and auth header per provider, version dispatch) and in the local picker (Nov 17: grouping, facts panel, model-comparison exclusion, three parties, 375 px, blocker naming an unchecked model, draft saved with an unchecked model).
 
 ## B. Human verification (you)
 

@@ -11,7 +11,7 @@ Written Nov 17, 2026 against the `next` branch (SDK `deepspace@0.44.2`). Docs on
 
 Findings that cut across notes:
 - **Never rebuild `generations`.** With FKs on, dropping it cascades into the evidence tables. Every note uses additive tables.
-- `ADAPTERS` is keyed by provider while snapshots record `adapterVersion`. Phase 5 must key it by version.
+- ~~`ADAPTERS` is keyed by provider while snapshots record `adapterVersion`. Phase 5 must key it by version.~~ Done in D-48.
 - `DIMENSIONS` and `draftRatingSchema` are hard-wired to the three `reference-qa-v1` fields. Phases 5 and 6 depend on
   phase 3's versioned rubrics.
 - Phase 7 depends on D-13 (read rate limiting).

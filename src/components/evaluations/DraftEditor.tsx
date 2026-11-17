@@ -11,6 +11,7 @@ import { ExhibitSticker } from '@/components/court/CaseFile'
 import { ChoiceCard, ChoiceCardGroup } from '@/components/court/ChoiceCard'
 import { CountedField } from '@/components/evaluations/CountedField'
 import { ImportedPartyFields } from '@/components/evaluations/ImportedPartyFields'
+import { ModelFacts, ModelSelect } from '@/components/evaluations/ModelPicker'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -47,6 +48,7 @@ export function ConfigurationsEditor({
   const modelParties = draft.configurations.filter((c): c is ModelConfiguration => !isImported(c))
   const hasImported = modelParties.length < draft.configurations.length
   const sharedPrompt = modelParties[0]?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT
+  const hasHistory = draft.cases.some((testCase) => (testCase.messages?.length ?? 0) > 0)
 
   const append = (party: Configuration, mode = draft.comparisonMode) => onChange({ ...draft, comparisonMode: mode, configurations: [...draft.configurations, party] })
   const addModelParty = () => {
@@ -110,22 +112,16 @@ export function ConfigurationsEditor({
                 <ImportedPartyFields party={configuration} index={index} errors={errors} onChange={(party) => replaceParty(index, party)} renderAnswers={renderImportedAnswers} />
               ) : (
                 <>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     <Label htmlFor={`cfg-${configuration.key}-model`}>Model</Label>
-                    <Select value={configuration.modelKey} onValueChange={(value) => replaceParty(index, { ...configuration, modelKey: String(value) })} items={models.map((m) => ({ value: m.key, label: m.label }))}>
-                      <SelectTrigger id={`cfg-${configuration.key}-model`} className="w-full">
-                        <SelectValue placeholder="Choose a model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {models.map((model) => (
-                          <SelectItem key={model.key} value={model.key} disabled={!model.enabled}>
-                            {model.label}
-                            {!model.enabled && ' (not yet verified)'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">Output limit: {LIMITS.maxOutputTokens} tokens. No tools, browsing, or streaming.</p>
+                    <ModelSelect
+                      id={`cfg-${configuration.key}-model`}
+                      models={models}
+                      value={configuration.modelKey}
+                      onChange={(modelKey) => replaceParty(index, { ...configuration, modelKey })}
+                      disabledKeys={draft.comparisonMode === 'model' ? new Set(modelParties.filter((c) => c.key !== configuration.key).map((c) => c.modelKey)) : undefined}
+                    />
+                    <ModelFacts model={models.find((m) => m.key === configuration.modelKey)} needsConversation={hasHistory || undefined} />
                   </div>
                   {draft.comparisonMode === 'configuration' && (
                     <CountedField

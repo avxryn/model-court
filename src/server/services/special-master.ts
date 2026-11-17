@@ -253,7 +253,7 @@ export async function handleGradingJob(deps: Deps, job: GradingJob, jobSignal: A
   const text = await responseText(db, context)
   const snapshot = parseSnapshot(context.snapshotJson)
   const testCase = snapshot.cases.find((c) => c.key === context.caseKey)
-  const adapter = adapterFor(context.config.adapterVersion, 1)
+  const adapter = adapterFor(context.config.adapterVersion, context.config.provider, 1)
   if (text === null || !testCase || !adapter) return finishGrading(deps, { attemptId, fence, job, context, requestId }, unsentFailure('INVALID_PROVIDER_RESPONSE'), true)
 
   const request = buildGraderRequest(rubricLines(context.config.rubricVersion), {

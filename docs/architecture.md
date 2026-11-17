@@ -25,7 +25,7 @@ flowchart LR
 | `src/server/api.ts` | `/api/v1` boundary: identity, origin check, rate limits, body caps, HTTP mapping. |
 | `src/server/services/*` | Use cases: evaluations, credentials, runs (admission/retry/cancel/open review), generation (outbox/claim/commit/lease), reviews (invites/sessions/reveal), results (scoring/verdict), maintenance (cron). |
 | `src/server/db/*` | `ModelCourtStore` Durable Object + D1-compatible adapter, migrations, guarded-batch helper, budget/reservation statements, audit, rate buckets. |
-| `src/server/providers/*` | Two fixed-endpoint BYOK adapters plus shared transport rules (no redirects, byte ceiling, normalized outcomes, no retries). |
+| `src/server/providers/*` | Two fixed-endpoint BYOK transports (OpenAI Responses, Anthropic Messages), dispatched by the adapter version a snapshot records (D-48), plus shared transport rules (no redirects, byte ceiling, normalized outcomes, no retries). |
 | `src/server/credential-crypto.ts` | AES-256-GCM seal/open with canonical AAD, plus HMAC. Web Crypto only. |
 | `src/server/platform.ts` | Production wiring: `verifyJwt`, `enqueueJob`, RecordRoom notice writes, `fetch`. |
 | `src/pages`, `src/components` | UI on shadcn/ui (`base-nova`, Base UI). Imports server modules for types only. |

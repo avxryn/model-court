@@ -40,11 +40,11 @@ describe('v2 request bodies (D-39)', () => {
 
 describe('dispatch by recorded adapter version', () => {
   it('v1 versions carry only a single message; v2 versions carry a conversation; unknown versions are refused', () => {
-    expect(adapterFor('openai-responses-v1', 1)).toBeTypeOf('function')
-    expect(adapterFor('openai-responses-v1', 3)).toBeNull()
-    expect(adapterFor('anthropic-messages-v1', 3)).toBeNull()
-    expect(adapterFor('openai-responses-v2', 3)).toBeTypeOf('function')
-    expect(adapterFor('anthropic-messages-v2', 3)).toBeTypeOf('function')
-    expect(adapterFor('made-up-v9', 1)).toBeNull()
+    expect(adapterFor('openai-responses-v1', 'openai', 1)).toBeTypeOf('function')
+    expect(adapterFor('openai-responses-v1', 'openai', 3)).toBeNull()
+    expect(adapterFor('anthropic-messages-v1', 'anthropic', 3)).toBeNull()
+    expect(adapterFor('openai-responses-v2', 'openai', 3)).toBeTypeOf('function')
+    expect(adapterFor('anthropic-messages-v2', 'anthropic', 3)).toBeTypeOf('function')
+    expect(adapterFor('made-up-v9', 'openai', 1)).toBeNull()
   })
 })

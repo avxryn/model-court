@@ -23,11 +23,28 @@ export type OwnerRunView = Extract<RunView, { role: 'owner' }>
 export type ResultsView = Resolved<typeof getResults>
 export type SpecialMasterView = Resolved<typeof getSpecialMaster>
 
+/** One route as the catalog shows it (D-48): registry metadata, never the adapter version. */
+export interface CatalogModel {
+  key: string
+  provider: 'openai' | 'anthropic'
+  modelId: string
+  label: string
+  line: string
+  contextTokens: number
+  providerMaxOutputTokens: number
+  reasoning: 'off' | 'low'
+  retiresNotBefore: string | null
+  docsUrl: string
+  enabled: boolean
+  verifiedAt: string | null
+  multiTurnVerifiedAt: string | null
+}
+
 export interface CatalogView {
   providerRegistryVersion: string
   generationEnabled: boolean
   credentialWritesEnabled: boolean
   providers: Array<{ id: 'openai' | 'anthropic'; name: string }>
-  models: Array<{ key: string; provider: 'openai' | 'anthropic'; modelId: string; label: string; enabled: boolean; verifiedAt: string | null; multiTurnVerifiedAt: string | null }>
-  limits: { maxCases: number; configurations: number; minConfigurations: number; maxOutputTokens: number; maxAttemptsPerGeneration: number; credentialTtlDays: number; dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number }
+  models: CatalogModel[]
+  limits: { maxCases: number; configurations: number; minConfigurations: number; maxOutputTokens: number; reasoningHeadroomTokens: number; maxAttemptsPerGeneration: number; credentialTtlDays: number; dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number }
 }

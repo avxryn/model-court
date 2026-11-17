@@ -6,7 +6,7 @@
 import { CANONICALIZATION_VERSION } from './canonical'
 import { isImported, type CaseInput, type ComparisonMode, type Configuration, type Draft, type ImportedConfiguration, type ModelConfiguration } from './contracts'
 import { templateFor, type MessageTemplateVersion } from './messages'
-import { findRoute, isRouteEnabled, PROVIDER_REGISTRY_VERSION, type ModelRoute, type ProviderId } from './registry'
+import { findRoute, isRouteEnabled, PROVIDER_NAMES, PROVIDER_REGISTRY_VERSION, type ModelRoute, type ProviderId } from './registry'
 import { RUBRIC_VERSION, type RubricVersion } from './rubric'
 
 /** A generated party, frozen with its resolved route. Older snapshots have no `source` field. */
@@ -94,8 +94,10 @@ export function describeIssue(issue: ReadinessIssue): string {
   switch (issue.kind) {
     case 'unknown_model':
       return 'A configuration uses a model that is not in the catalog.'
-    case 'model_unavailable':
-      return 'A selected model route has not been verified with a real call yet, so it cannot run.'
+    case 'model_unavailable': {
+      const route = findRoute(issue.modelKey)
+      return `${route ? `${PROVIDER_NAMES[route.provider]} ${route.label}` : 'A selected model'} has not passed its live check yet (one real call, recorded), so a hearing cannot use it. Choose a checked model or record that call first.`
+    }
     case 'model_mode_instructions_differ':
       return 'Model comparison requires identical system instructions. Switch to configuration comparison to vary them.'
     case 'model_mode_same_model':

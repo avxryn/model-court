@@ -8,7 +8,7 @@ import { MODEL_ROUTES } from '@/domain/registry'
 import { CASE_TEMPLATES } from './templates'
 
 const newId = () => crypto.randomUUID()
-const seed = () => makeExampleDraft(newId, [MODEL_ROUTES[0].key, MODEL_ROUTES[1].key])
+const seed = () => makeExampleDraft(newId, ['openai-gpt-6-luna', 'anthropic-claude-haiku-5-5'])
 
 describe('case templates', () => {
   it.each(CASE_TEMPLATES.map((t) => [t.id, t] as const))('%s produces a valid, runnable draft', (_id, template) => {

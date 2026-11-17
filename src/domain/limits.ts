@@ -20,6 +20,11 @@ export const LIMITS = {
   evaluationTitle: { min: 1, max: 120 },
   taskDescription: { min: 0, max: 2_000 },
   maxOutputTokens: 512,
+  /**
+   * Extra output tokens sent to models whose reasoning cannot be turned off (D-48): their
+   * reasoning counts against the provider's output cap, and with 512 alone the answer can be empty.
+   */
+  reasoningHeadroomTokens: 8_192,
   draftJsonBytes: 96 * 1024,
   /** CSV case import (browser-side parse). */
   caseImportCsvBytes: 128 * 1024,
