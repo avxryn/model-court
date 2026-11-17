@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Outlet } from 'react-router-dom'
 import { AuthGate, AuthOverlay } from 'deepspace'
+import { Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -17,14 +18,17 @@ function SignedOutPanel() {
   const [open, setOpen] = useState(false)
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4 py-16">
-      <Card className="w-full max-w-sm text-center">
-        <CardHeader>
-          <CardTitle className="text-lg">Sign in to continue</CardTitle>
+      <Card className="w-full max-w-sm py-8 text-center">
+        <CardHeader className="justify-items-center">
+          <span aria-hidden className="mb-3 grid size-11 place-items-center rounded-full bg-accent text-accent-foreground ring-1 ring-brass/25">
+            <Lock className="size-5" />
+          </span>
+          <CardTitle className="font-heading text-xl font-semibold tracking-tight">Sign in to continue</CardTitle>
           <CardDescription>Evaluations, reviews, and API keys are private to your account.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <Button onClick={() => setOpen(true)}>Sign in</Button>
-          <Link to="/sample" className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+        <CardContent className="mt-2 flex flex-col gap-3">
+          <Button className="h-9" onClick={() => setOpen(true)}>Sign in</Button>
+          <Link to="/sample" className="rounded-sm text-sm text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
             Explore the sample instead
           </Link>
         </CardContent>

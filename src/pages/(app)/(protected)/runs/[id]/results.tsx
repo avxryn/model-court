@@ -60,8 +60,8 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
         actions={<StatusBadge status={data.status} />}
       />
 
-      <section aria-labelledby="mapping" className="mb-8">
-        <h2 id="mapping" className="mb-3 text-lg font-semibold">
+      <section aria-labelledby="mapping" className="mb-12">
+        <h2 id="mapping" className="mb-4 text-xl font-semibold tracking-tight">
           Revealed configurations
         </h2>
         <div className="grid gap-4 md:grid-cols-2">
@@ -75,8 +75,8 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
               </CardHeader>
               <CardContent>
                 <details>
-                  <summary className="cursor-pointer text-sm text-muted-foreground">System instructions</summary>
-                  <p className="mt-2 whitespace-pre-wrap rounded-md bg-secondary/60 p-3 text-sm">{c.systemPrompt}</p>
+                  <summary className="cursor-pointer text-sm text-muted-foreground transition-colors hover:text-foreground">System instructions</summary>
+                  <p className="mt-3 rounded-lg bg-secondary/70 p-3 text-sm leading-relaxed whitespace-pre-wrap">{c.systemPrompt}</p>
                 </details>
               </CardContent>
             </Card>
@@ -87,8 +87,8 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
         </p>
       </section>
 
-      <section aria-labelledby="scores" className="mb-8">
-        <h2 id="scores" className="mb-3 text-lg font-semibold">
+      <section aria-labelledby="scores" className="mb-12">
+        <h2 id="scores" className="mb-4 text-xl font-semibold tracking-tight">
           Scores by cohort
         </h2>
         <Tabs defaultValue={data.cohorts.invited.reviewerCount > 0 ? 'invited' : 'owner'}>
@@ -106,11 +106,11 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
         </Tabs>
       </section>
 
-      <section aria-labelledby="coverage" className="mb-8">
-        <h2 id="coverage" className="mb-3 text-lg font-semibold">
+      <section aria-labelledby="coverage" className="mb-12">
+        <h2 id="coverage" className="mb-4 text-xl font-semibold tracking-tight">
           Generation coverage
         </h2>
-        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+        <div className="surface overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
@@ -149,7 +149,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
       </section>
 
       {(unblinded > 0 || data.disagreements.length > 0 || data.eligibleCaseKeys.length < 3) && (
-        <Alert className="mb-8">
+        <Alert className="mb-12">
           <AlertTriangle aria-hidden />
           <AlertTitle>Read these scores with care</AlertTitle>
           <AlertDescription>
@@ -162,20 +162,20 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
         </Alert>
       )}
 
-      <section aria-labelledby="evidence" className="mb-8">
-        <h2 id="evidence" className="mb-3 text-lg font-semibold">
+      <section aria-labelledby="evidence" className="mb-12">
+        <h2 id="evidence" className="mb-4 text-xl font-semibold tracking-tight">
           Case evidence
         </h2>
         <div className="space-y-4">
           {data.cases.map((testCase, index) => (
-            <details key={testCase.key} className="rounded-lg border border-border bg-card" open={index === 0}>
-              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-3">
+            <details key={testCase.key} className="surface overflow-hidden" open={index === 0}>
+              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-5 py-4 transition-colors duration-150 hover:bg-secondary/50">
                 <span className="font-medium">
                   Case {index + 1}: {testCase.title}
                 </span>
                 {!testCase.eligible && <span className="text-xs text-warning">Excluded from scores</span>}
               </summary>
-              <div className="space-y-4 border-t border-border px-4 py-4">
+              <div className="space-y-5 border-t border-border px-5 py-5">
                 <p className="text-sm"><span className="text-muted-foreground">Request:</span> {testCase.input}</p>
                 <p className="text-xs text-muted-foreground">Reviewer guide: {testCase.expectedBehavior}</p>
                 <div className="grid gap-4 lg:grid-cols-2">
@@ -189,7 +189,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
                         </span>
                       </div>
                       {response.text ? (
-                        <div className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-secondary/60 p-3 text-sm" tabIndex={0} role="region" aria-label={`${labels[response.configurationKey]} response`}>
+                        <div className="max-h-72 overflow-y-auto rounded-lg bg-secondary/70 px-4 py-3 text-sm leading-relaxed break-words whitespace-pre-wrap ring-1 ring-foreground/5 ring-inset" tabIndex={0} role="region" aria-label={`${labels[response.configurationKey]} response`}>
                           {response.text}
                         </div>
                       ) : (
@@ -248,12 +248,12 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
 
 function CohortTable({ cohort, configurations }: { cohort: CohortResult; configurations: ResultsView['configurations'] }) {
   if (!cohort.byConfiguration) {
-    return <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">No reviews in this cohort.</p>
+    return <p className="rounded-xl bg-secondary/70 px-5 py-4 text-sm text-muted-foreground">No reviews in this cohort.</p>
   }
   const by = cohort.byConfiguration
   const tie = cohort.highest.length > 1
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-card">
+    <div className="surface overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
@@ -278,7 +278,7 @@ function CohortTable({ cohort, configurations }: { cohort: CohortResult; configu
               ))}
             </TableRow>
           ))}
-          <TableRow className="font-semibold">
+          <TableRow className="bg-secondary/40 font-semibold hover:bg-secondary/40">
             <TableCell>Overall mean</TableCell>
             {configurations.map((c) => (
               <TableCell key={c.key} className={cn('text-right tabular-nums', cohort.highest.includes(c.key) && !tie && 'text-primary')}>
@@ -297,13 +297,14 @@ function VerdictSection({ data, reload }: { data: ResultsView; reload: () => Pro
   const isOwner = data.role === 'owner'
   const latest = data.verdicts.at(-1)
   return (
-    <section aria-labelledby="verdict" className="rounded-lg border border-brass/40 bg-card p-4 sm:p-6">
-      <h2 id="verdict" className="flex items-center gap-2 text-lg font-semibold">
+    <section aria-labelledby="verdict" className="surface relative overflow-hidden p-6 pl-7 sm:p-8 sm:pl-9">
+      <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-brass" />
+      <h2 id="verdict" className="flex items-center gap-2 text-xl font-semibold tracking-tight">
         <Gavel className="size-5 text-brass" aria-hidden /> Verdict
       </h2>
       {latest ? (
         <div className="mt-3 space-y-1">
-          <p className="font-heading text-xl">{latest.outcome === 'selected' ? `Selected: ${data.configurations.find((c) => c.key === latest.selectedConfigurationKey)?.label}` : latest.outcome === 'tie' ? 'Tie' : 'Inconclusive'}</p>
+          <p className="font-heading text-2xl leading-snug font-semibold tracking-tight">{latest.outcome === 'selected' ? `Selected: ${data.configurations.find((c) => c.key === latest.selectedConfigurationKey)?.label}` : latest.outcome === 'tie' ? 'Tie' : 'Inconclusive'}</p>
           <p className="whitespace-pre-wrap text-sm">{latest.rationale}</p>
           {latest.limitations && <p className="whitespace-pre-wrap text-sm text-muted-foreground">Limitations: {latest.limitations}</p>}
           <p className="text-xs text-muted-foreground">
@@ -318,7 +319,7 @@ function VerdictSection({ data, reload }: { data: ResultsView; reload: () => Pro
           <summary className="cursor-pointer text-sm text-muted-foreground">Earlier revisions ({data.verdicts.length - 1})</summary>
           <ol className="mt-2 space-y-2 text-sm">
             {data.verdicts.slice(0, -1).reverse().map((v) => (
-              <li key={v.revision} className="rounded-md bg-secondary/60 p-2">
+              <li key={v.revision} className="rounded-lg bg-secondary/70 px-3 py-2">
                 <span className="font-medium">Revision {v.revision}: {v.outcome}</span> — {v.rationale}
               </li>
             ))}
@@ -362,16 +363,16 @@ function VerdictForm({ data, reload, revising }: { data: ResultsView; reload: ()
 
   return (
     <form
-      className="mt-5 space-y-4 border-t border-border pt-5"
+      className="mt-6 space-y-5 border-t border-border pt-6"
       onSubmit={(event) => {
         event.preventDefault()
         void submit()
       }}
     >
-      <h3 className="text-base font-semibold">{revising ? 'Revise the verdict' : 'Record a verdict'}</h3>
+      <h3 className="text-lg font-semibold">{revising ? 'Revise the verdict' : 'Record a verdict'}</h3>
       <RadioGroup aria-label="Decision" value={choice || null} onValueChange={(v) => setChoice(String(v))} className="grid gap-2 sm:grid-cols-2">
         {[...data.configurations.map((c) => ({ value: c.key, label: `Select ${c.label}` })), { value: 'tie', label: 'Tie' }, { value: 'inconclusive', label: 'Inconclusive' }].map((option) => (
-          <Label key={option.value} htmlFor={`verdict-${option.value}`} className={cn('flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 font-normal', choice === option.value ? 'border-primary/40 bg-primary/5' : 'border-border')}>
+          <Label key={option.value} htmlFor={`verdict-${option.value}`} className={cn('flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 font-normal transition-colors duration-150', choice === option.value ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/15' : 'border-border bg-card hover:border-input hover:bg-secondary/60')}>
             <RadioGroupItem id={`verdict-${option.value}`} value={option.value} aria-labelledby={`verdict-${option.value}-text`} />
             <span id={`verdict-${option.value}-text`}>{option.label}</span>
           </Label>

@@ -168,17 +168,26 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
         </Alert>
       )}
 
-      <nav aria-label="Cases" className="mb-6 flex flex-wrap gap-2">
-        {review.cases.map((c, index) => (
-          <Button key={c.caseKey} size="sm" variant={index === caseIndex ? 'default' : 'outline'} aria-current={index === caseIndex ? 'step' : undefined} onClick={() => void goTo(index)}>
-            {caseDone(index) && <CheckCircle2 aria-label="complete" />}
-            Case {index + 1}
-          </Button>
-        ))}
+      <nav aria-label="Cases" className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="inline-flex max-w-full flex-wrap gap-1 rounded-xl bg-secondary p-1 ring-1 ring-foreground/5">
+          {review.cases.map((c, index) => (
+            <Button
+              key={c.caseKey}
+              size="sm"
+              variant="ghost"
+              className={cn('h-8 px-3', index === caseIndex ? 'bg-card text-foreground shadow-xs ring-1 ring-foreground/10 hover:bg-card' : 'text-muted-foreground hover:bg-card/60')}
+              aria-current={index === caseIndex ? 'step' : undefined}
+              onClick={() => void goTo(index)}
+            >
+              {caseDone(index) && <CheckCircle2 aria-label="complete" className="text-success" />}
+              Case {index + 1}
+            </Button>
+          ))}
+        </div>
         {review.cases.length === 1 && <span className="self-center text-xs text-muted-foreground">Only one case was eligible — treat conclusions as exploratory.</span>}
       </nav>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <div className="lg:sticky lg:top-4 lg:self-start">
           <CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} />
         </div>
@@ -191,7 +200,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
         </div>
       </div>
 
-      <div className="mt-8 flex flex-col gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-10 flex flex-col gap-4 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-2">
           <Button variant="outline" disabled={caseIndex === 0} onClick={() => void goTo(caseIndex - 1)}>
             <ChevronLeft aria-hidden /> Previous case

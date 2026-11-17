@@ -5,7 +5,7 @@
  */
 
 import type { ReactNode } from 'react'
-import { AlertCircle, CheckCircle2, Clock, Loader2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Clock, Loader2, Search, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -16,19 +16,28 @@ import { cn } from '@/lib/utils'
 
 export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: ReactNode; title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
   return (
-    <header className="flex flex-col gap-4 pb-6 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0 space-y-1.5">
-        {eyebrow && <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{eyebrow}</div>}
-        <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{title}</h1>
-        {description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
+    <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
+      <div className="min-w-0 space-y-2">
+        {eyebrow && <div className="eyebrow [&_a]:underline-offset-4 [&_a]:transition-colors [&_a:hover]:text-foreground">{eyebrow}</div>}
+        <h1 className="text-2xl leading-tight font-semibold tracking-tight text-foreground sm:text-3xl">{title}</h1>
+        {description && <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pb-0.5">{actions}</div>}
     </header>
   )
 }
 
+/** Section heading inside a page: one size for every h2 below the page title. */
+export function SectionHeading({ id, children, className }: { id?: string; children: ReactNode; className?: string }) {
+  return (
+    <h2 id={id} className={cn('mb-4 text-xl font-semibold tracking-tight', className)}>
+      {children}
+    </h2>
+  )
+}
+
 export function Page({ children, width = 'default' }: { children: ReactNode; width?: 'default' | 'wide' | 'narrow' }) {
-  return <div className={cn('mx-auto w-full px-4 py-8 sm:py-10', width === 'wide' ? 'max-w-6xl' : width === 'narrow' ? 'max-w-2xl' : 'max-w-4xl')}>{children}</div>
+  return <div className={cn('mx-auto w-full px-4 py-8 sm:px-6 sm:py-12', width === 'wide' ? 'max-w-6xl' : width === 'narrow' ? 'max-w-2xl' : 'max-w-4xl')}>{children}</div>
 }
 
 const RUN_STATUS: Record<string, { label: string; tone: 'neutral' | 'active' | 'good' | 'warn' | 'bad' }> = {
@@ -146,8 +155,11 @@ export function StaleNotice({ onRetry }: { onRetry: () => void }) {
 export function NotFoundPanel() {
   return (
     <div className="mx-auto max-w-md py-16 text-center">
-      <h1 className="text-xl font-semibold">Not found</h1>
-      <p className="mt-2 text-sm text-muted-foreground">This page does not exist, was deleted, or is not shared with your account.</p>
+      <span aria-hidden className="mx-auto mb-5 grid size-11 place-items-center rounded-full bg-secondary text-muted-foreground ring-1 ring-foreground/10">
+        <Search className="size-5" />
+      </span>
+      <h1 className="text-2xl font-semibold tracking-tight">Not found</h1>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">This page does not exist, was deleted, or is not shared with your account.</p>
       <Button className="mt-6" render={<Link to="/evaluations" />} nativeButton={false}>
         Back to evaluations
       </Button>
@@ -157,11 +169,35 @@ export function NotFoundPanel() {
 
 export function PageSkeleton({ label = 'Loading' }: { label?: string }) {
   return (
-    <div aria-busy="true" aria-label={label} className="space-y-4">
-      <Skeleton className="h-8 w-64" />
-      <Skeleton className="h-4 w-96 max-w-full" />
-      <Skeleton className="h-40 w-full" />
-      <Skeleton className="h-40 w-full" />
+    <div aria-busy="true" aria-label={label}>
+      <div className="mb-8 space-y-3">
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-8 w-72 max-w-full" />
+        <Skeleton className="h-4 w-md max-w-full" />
+      </div>
+      <div className="surface divide-y divide-border overflow-hidden">
+        {[0, 1, 2, 3].map((row) => (
+          <div key={row} className="flex items-center gap-4 px-5 py-4">
+            <Skeleton className="h-4 flex-1" />
+            <Skeleton className="h-5 w-20 rounded-full" />
+            <Skeleton className="hidden h-4 w-24 sm:block" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Designed empty state: what is empty, why, and the next step. */
+export function EmptyState({ icon: Icon, title, children, actions }: { icon: LucideIcon; title: ReactNode; children?: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="surface px-6 py-14 text-center">
+      <span aria-hidden className="mx-auto grid size-12 place-items-center rounded-full bg-accent text-accent-foreground ring-1 ring-brass/25">
+        <Icon className="size-5" />
+      </span>
+      <h2 className="mt-4 text-xl font-semibold tracking-tight">{title}</h2>
+      {children && <div className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">{children}</div>}
+      {actions && <div className="mt-6 flex flex-wrap justify-center gap-2">{actions}</div>}
     </div>
   )
 }

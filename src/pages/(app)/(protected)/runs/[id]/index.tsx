@@ -47,7 +47,7 @@ function ReviewerRun({ run }: { run: Extract<RunView, { role: 'reviewer' }> }) {
   return (
     <>
       <PageHeader eyebrow="Invited review" title={run.evaluationTitle} actions={<StatusBadge status={run.status} />} />
-      <p className="text-sm text-muted-foreground">{revealed ? 'The owner has revealed the models. Results include every submitted review.' : 'Score the anonymous responses. Other reviewers cannot see your ratings, and you cannot see theirs, until the owner reveals the models.'}</p>
+      <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{revealed ? 'The owner has revealed the models. Results include every submitted review.' : 'Score the anonymous responses. Other reviewers cannot see your ratings, and you cannot see theirs, until the owner reveals the models.'}</p>
       <div className="mt-6 flex gap-2">
         <Button render={<Link to={`/runs/${run.runId}/review`} />} nativeButton={false} variant={revealed ? 'outline' : 'default'}>
           {run.session?.status === 'draft' && !revealed ? 'Continue review' : 'View my review'}
@@ -105,9 +105,9 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
         }
       />
 
-      <section aria-labelledby="progress-heading" className="space-y-3 rounded-lg border border-border bg-card p-4">
+      <section aria-labelledby="progress-heading" className="surface space-y-4 p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="progress-heading" className="text-base font-semibold">
+          <h2 id="progress-heading" className="text-lg font-semibold">
             Generation
           </h2>
           <span className="text-sm tabular-nums text-muted-foreground" role="status">
@@ -123,7 +123,7 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
               <TableRow>
                 <TableHead>Case</TableHead>
                 {run.configurations.map((c) => (
-                  <TableHead key={c.key}>
+                  <TableHead key={c.key} className="h-auto py-2.5 text-sm text-foreground">
                     {c.label}
                     <span className="block text-xs font-normal text-muted-foreground">
                       {PROVIDER_NAMES[c.provider]} · {c.modelId}
@@ -285,18 +285,18 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
   }
 
   return (
-    <section aria-labelledby="review-heading" className="mt-6 space-y-4 rounded-lg border border-border bg-card p-4">
+    <section aria-labelledby="review-heading" className="surface mt-6 space-y-4 p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="review-heading" className="text-base font-semibold">
+        <h2 id="review-heading" className="text-lg font-semibold">
           Blind review
         </h2>
         <span className="text-sm tabular-nums text-muted-foreground" role="status">
           {run.review.submittedCount} submitted · {run.review.pendingCount} unfinished (drafts and unused invitations)
         </span>
       </div>
-      <ul className="divide-y divide-border rounded-md border border-border">
+      <ul className="divide-y divide-border rounded-lg border border-border">
         {run.review.participants.map((p) => (
-          <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+          <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
             <span>{p.label}</span>
             <span className="flex items-center gap-2">
               <StatusBadge status={p.status} />
@@ -311,7 +311,7 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
         {run.review.invites
           .filter((i) => i.state !== 'redeemed')
           .map((invite) => (
-            <li key={invite.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground">
+            <li key={invite.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm text-muted-foreground">
               <span>Invitation · expires {formatTime(invite.expiresAt)}</span>
               <span className="flex items-center gap-2">
                 <StatusBadge status={invite.state} />

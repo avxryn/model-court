@@ -34,9 +34,9 @@ function ReviewerEvaluation({ evaluation }: { evaluation: Extract<EvaluationView
   return (
     <Page>
       <PageHeader eyebrow="Invited review" title={evaluation.title} description="You were invited to review runs of this evaluation. Configuration details stay hidden until the owner reveals them." />
-      <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+      <ul className="surface divide-y divide-border overflow-hidden">
         {evaluation.runs.map((run) => (
-          <li key={run.id} className="flex items-center justify-between gap-4 px-4 py-3">
+          <li key={run.id} className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
             <span className="text-sm">Run started {formatTime(run.createdAt)}</span>
             <span className="flex items-center gap-3">
               <StatusBadge status={run.status} />
@@ -157,9 +157,9 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
       )}
 
       {blockers.length > 0 && (
-        <div role="status" className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm">
-          <div className="font-medium">Before you can run</div>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-muted-foreground">
+        <div role="status" className="mb-8 rounded-xl bg-accent/60 px-5 py-4 text-sm ring-1 ring-brass/25">
+          <div className="font-medium text-accent-foreground">Before you can run</div>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-foreground/80 marker:text-brass">
             {blockers.map((b) => (
               <li key={b}>{b}</li>
             ))}
@@ -174,21 +174,21 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
           <TabsTrigger value="runs">Runs ({evaluation.runs.length})</TabsTrigger>
           <TabsTrigger value="settings">Delete</TabsTrigger>
         </TabsList>
-        <TabsContent value="cases" className="pt-4">
+        <TabsContent value="cases" className="pt-6">
           <CasesEditor cases={draft.cases} errors={errors} newId={newIntentKey} onChange={(cases) => change({ ...draft, cases })} />
         </TabsContent>
-        <TabsContent value="configurations" className="pt-4">
+        <TabsContent value="configurations" className="pt-6">
           <ConfigurationsEditor draft={draft} catalog={catalog.data} errors={errors} onChange={change} />
           <KeyStatus providers={providers} keys={keys} />
         </TabsContent>
-        <TabsContent value="runs" className="pt-4">
+        <TabsContent value="runs" className="pt-6">
           {evaluation.runs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No runs yet. Each run freezes an immutable snapshot of the saved draft.</p>
+            <p className="rounded-xl bg-secondary/70 px-5 py-4 text-sm text-muted-foreground">No runs yet. Each run freezes an immutable snapshot of the saved draft.</p>
           ) : (
-            <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+            <ul className="surface divide-y divide-border overflow-hidden">
               {evaluation.runs.map((run) => (
                 <li key={run.id}>
-                  <Link to={`/runs/${run.id}`} className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-secondary/60">
+                  <Link to={`/runs/${run.id}`} className="flex items-center justify-between gap-4 px-5 py-4 transition-colors duration-150 hover:bg-secondary/50 focus-visible:bg-secondary/60 focus-visible:outline-none">
                     <span className="text-sm">Started {formatTime(run.createdAt)}</span>
                     <StatusBadge status={run.status} />
                   </Link>
@@ -197,7 +197,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
             </ul>
           )}
         </TabsContent>
-        <TabsContent value="settings" className="pt-4">
+        <TabsContent value="settings" className="pt-6">
           <DeleteEvaluation evaluationId={evaluation.id} title={evaluation.title} revision={revision} />
         </TabsContent>
       </Tabs>
@@ -207,11 +207,11 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
 
 function KeyStatus({ providers, keys }: { providers: ProviderId[]; keys: CredentialMetadata[] }) {
   return (
-    <div className="mt-6 rounded-lg border border-border bg-card p-4">
-      <h2 className="flex items-center gap-2 text-base font-semibold">
-        <KeyRound className="size-4" aria-hidden /> Keys this comparison needs
+    <div className="surface mt-6 p-5">
+      <h2 className="flex items-center gap-2 text-lg font-semibold">
+        <KeyRound className="size-4 text-muted-foreground" aria-hidden /> Keys this comparison needs
       </h2>
-      <ul className="mt-2 space-y-1 text-sm">
+      <ul className="mt-3 space-y-1.5 text-sm">
         {providers.map((provider) => {
           const key = keys.find((k) => k.provider === provider)
           return (
@@ -222,7 +222,7 @@ function KeyStatus({ providers, keys }: { providers: ProviderId[]; keys: Credent
           )
         })}
       </ul>
-      <p className="mt-2 text-xs text-muted-foreground">Comparing two models from the same provider needs only one key. Invited reviewers never need keys.</p>
+      <p className="mt-3 text-xs text-muted-foreground">Comparing two models from the same provider needs only one key. Invited reviewers never need keys.</p>
     </div>
   )
 }
@@ -287,7 +287,7 @@ function RunDialog({ evaluationId, revision, draft, providers, keys, blockers }:
           <dt className="text-muted-foreground">Output limit</dt>
           <dd>{LIMITS.maxOutputTokens} tokens per response</dd>
         </dl>
-        <div className="space-y-3 rounded-md border border-border bg-secondary/50 p-3 text-sm">
+        <div className="space-y-3 rounded-lg bg-secondary/70 p-4 text-sm ring-1 ring-foreground/5">
           <div className="flex items-start gap-2">
             <Checkbox id="consent-processing" checked={consent} onCheckedChange={(c) => setConsent(c === true)} />
             <Label htmlFor="consent-processing" className="font-normal leading-snug">
@@ -333,9 +333,9 @@ function DeleteEvaluation({ evaluationId, title, revision }: { evaluationId: str
     }
   }
   return (
-    <div className="max-w-xl space-y-3 rounded-lg border border-destructive/30 bg-card p-4">
-      <h2 className="text-base font-semibold">Delete this evaluation</h2>
-      <p className="text-sm text-muted-foreground">
+    <div className="max-w-xl space-y-4 rounded-xl border border-destructive/30 bg-card p-5 shadow-xs">
+      <h2 className="text-lg font-semibold">Delete this evaluation</h2>
+      <p className="text-sm leading-relaxed text-muted-foreground">
         Access stops immediately for you and every reviewer. Runs, responses, ratings, and verdicts are permanently removed within 24 hours. A provider request already in flight may still be charged. Your saved API keys are not affected. Deleting here cannot remove data the providers already received.
       </p>
       <div className="space-y-1.5">

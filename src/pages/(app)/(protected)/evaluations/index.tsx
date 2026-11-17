@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Scale } from 'lucide-react'
-import { ErrorPanel, formatTime, Page, PageHeader, PageSkeleton, StaleNotice, StatusBadge } from '@/components/common'
+import { EmptyState as EmptyPanel, ErrorPanel, formatTime, Page, PageHeader, PageSkeleton, StaleNotice, StatusBadge } from '@/components/common'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -27,13 +27,13 @@ export default function EvaluationsPage() {
         <EmptyState />
       ) : (
         <>
-          <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+          <ul className="surface divide-y divide-border overflow-hidden">
             {list.data?.items.map((item) => (
               <li key={item.id}>
-                <Link to={`/evaluations/${item.id}`} className="flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-secondary/60 focus-visible:bg-secondary/60 focus-visible:outline-none sm:flex-row sm:items-center sm:gap-4">
+                <Link to={`/evaluations/${item.id}`} className="flex flex-col gap-1.5 px-5 py-4 transition-colors duration-150 hover:bg-secondary/50 focus-visible:bg-secondary/60 focus-visible:outline-none sm:flex-row sm:items-center sm:gap-4">
                   <span className="min-w-0 flex-1 truncate font-medium">{item.title}</span>
                   <span className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="rounded border border-border px-1.5 py-0.5">{item.role === 'owner' ? 'Owner' : 'Reviewer'}</span>
+                    <span className="rounded-full bg-secondary px-2 py-0.5 font-medium text-secondary-foreground">{item.role === 'owner' ? 'Owner' : 'Reviewer'}</span>
                     {item.latestRunStatus ? <StatusBadge status={item.latestRunStatus} /> : <span>No runs yet</span>}
                     <span className="tabular-nums">{formatTime(item.updatedAt)}</span>
                   </span>
@@ -41,7 +41,7 @@ export default function EvaluationsPage() {
               </li>
             ))}
           </ul>
-          <div className="mt-4 flex justify-between">
+          <div className="mt-6 flex justify-between">
             <Button variant="ghost" size="sm" disabled={!cursor} onClick={() => setCursor(null)}>
               First page
             </Button>
@@ -57,19 +57,20 @@ export default function EvaluationsPage() {
 
 function EmptyState() {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center">
-      <Scale className="mx-auto size-8 text-muted-foreground" aria-hidden />
-      <h2 className="mt-3 text-lg font-semibold">No evaluations yet</h2>
-      <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-        A new evaluation starts with a five-case customer-support example you can edit or replace. You will need your own provider keys to run it.
-      </p>
-      <div className="mt-5 flex flex-wrap justify-center gap-2">
-        <CreateEvaluationDialog />
-        <Button variant="outline" render={<Link to="/sample" />} nativeButton={false}>
-          Explore the sample
-        </Button>
-      </div>
-    </div>
+    <EmptyPanel
+      icon={Scale}
+      title="No evaluations yet"
+      actions={
+        <>
+          <CreateEvaluationDialog />
+          <Button variant="outline" render={<Link to="/sample" />} nativeButton={false}>
+            Explore the sample
+          </Button>
+        </>
+      }
+    >
+      <p>A new evaluation starts with a five-case customer-support example you can edit or replace. You will need your own provider keys to run it.</p>
+    </EmptyPanel>
   )
 }
 

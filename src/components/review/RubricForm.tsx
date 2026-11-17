@@ -27,10 +27,10 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
   const noteInvalid = needsNote && noteLength < LIMITS.ratingNote.min
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {DIMENSIONS.map((dimension) => (
         <FieldSet key={dimension} className="space-y-2" disabled={disabled}>
-          <FieldLegend id={`${id}-${dimension}-legend`} className="text-sm font-medium">
+          <FieldLegend id={`${id}-${dimension}-legend`} className="mb-0 text-sm font-semibold">
             {RUBRIC[dimension].label} <span className="sr-only">for response {label}</span>
           </FieldLegend>
           <RadioGroup
@@ -48,15 +48,15 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
                   key={score}
                   htmlFor={itemId}
                   className={cn(
-                    'flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 text-sm font-normal leading-snug transition-colors',
-                    checked ? 'border-primary/40 bg-primary/5' : 'border-border hover:bg-secondary',
+                    'flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 text-sm leading-snug font-normal transition-colors duration-150',
+                    checked ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/15' : 'border-border bg-card hover:border-input hover:bg-secondary/60',
                     disabled && 'cursor-not-allowed opacity-70',
                   )}
                 >
                   <RadioGroupItem id={itemId} value={String(score)} className="mt-0.5" aria-labelledby={`${itemId}-text`} />
                   <span id={`${itemId}-text`}>
-                    <span className="font-semibold tabular-nums">{score}</span>
-                    <span className="text-muted-foreground"> — {RUBRIC[dimension].anchors[score]}</span>
+                    <span className="font-semibold text-foreground tabular-nums">{score}</span>
+                    <span className={checked ? 'text-foreground/80' : 'text-muted-foreground'}> — {RUBRIC[dimension].anchors[score]}</span>
                   </span>
                 </Label>
               )
@@ -85,16 +85,16 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
         </FieldDescription>
       </div>
 
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-3 rounded-lg bg-secondary/60 px-3 py-3">
         <Checkbox
           id={`${id}-clue`}
           checked={rating.suspectedIdentityClue}
           disabled={disabled}
           onCheckedChange={(checked) => onChange({ ...rating, suspectedIdentityClue: checked === true })}
         />
-        <Label htmlFor={`${id}-clue`} className="text-sm font-normal leading-snug">
+        <Label htmlFor={`${id}-clue`} className="flex-col items-start gap-1 text-sm leading-snug font-normal text-pretty">
           This response hints at which model wrote it
-          <span className="block text-xs text-muted-foreground">Flagged sessions are counted as potentially unblinded in results.</span>
+          <span className="block text-xs leading-snug text-muted-foreground">Flagged sessions are counted as potentially unblinded in results.</span>
         </Label>
       </div>
     </div>

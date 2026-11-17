@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthOverlay, useAuth } from 'deepspace'
+import { EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, describeError } from '@/lib/api-client'
@@ -51,14 +52,17 @@ export default function JoinPage() {
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4 py-16">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md py-7">
         <CardHeader>
-          <CardTitle className="text-xl">You’re invited to review</CardTitle>
-          <CardDescription>
+          <span aria-hidden className="mb-3 grid size-11 place-items-center rounded-full bg-accent text-accent-foreground ring-1 ring-brass/25">
+            <EyeOff className="size-5" />
+          </span>
+          <CardTitle className="font-heading text-2xl font-semibold tracking-tight">You’re invited to review</CardTitle>
+          <CardDescription className="leading-relaxed">
             You will score anonymous AI responses against a rubric. You don’t need any API key, and you won’t see which models produced the responses — or anyone else’s ratings — until the owner reveals them.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="mt-2 space-y-4">
           {status === 'missing' && <p className="text-sm text-destructive">This page needs an invitation link. Ask the evaluation owner for a new one.</p>}
           {status === 'error' && (
             <p role="alert" className="text-sm text-destructive">
