@@ -4,7 +4,7 @@ import { AlertTriangle, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, Plain, StatusBadge } from '@/components/common'
 import { Caption, ConversationSoFar, Sheet, SheetIndex, SheetSection, Stamp, Term } from '@/components/court/CaseFile'
-import { HearingNav } from '@/components/court/HearingNav'
+import { HearingFolder } from '@/components/court/HearingNav'
 import { FindingsChart } from '@/components/court/FindingsChart'
 import { SpecialMasterPanel } from '@/components/review/SpecialMasterPanel'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -55,8 +55,8 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
   const rubricName = (RUBRICS as Record<string, { name: string }>)[data.rubricVersion]?.name ?? data.rubricVersion
   return (
     <Page width="wide">
-      <HearingNav runId={data.runId} caseId={data.evaluationId} caseTitle={data.evaluationTitle} role={data.role} status={data.status} />
-      <Sheet className="rounded-t-none">
+      <HearingFolder runId={data.runId} caseId={data.evaluationId} caseTitle={data.evaluationTitle} role={data.role} status={data.status}>
+      <Sheet>
       <Caption
         title={data.evaluationTitle}
         parties={data.configurations.map((c) => c.label)}
@@ -297,6 +297,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
       {data.role === 'owner' && <SpecialMasterPanel results={data} />}
       {data.role === 'owner' && <CertifiedRecord runId={data.runId} />}
       </Sheet>
+      </HearingFolder>
     </Page>
   )
 }

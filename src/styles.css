@@ -168,6 +168,16 @@
   box-shadow: 0 1px 0 var(--paper-rule), 0 12px 28px -12px rgb(60 45 15 / 0.22);
 }
 
+/* The opened case folder's back panel (D-45): manila card with a warm edge and a soft drop. */
+@utility folder-back {
+  box-shadow: 0 0 0 1px var(--paper-edge), 0 18px 36px -18px rgb(60 45 15 / 0.35);
+}
+
+/* An index divider under the top sheet: card edge plus a faint shadow where the sheet overlaps it. */
+@utility divider-under {
+  box-shadow: inset 0 0 0 1px var(--paper-edge), inset 0 -5px 5px -4px rgb(60 45 15 / 0.2);
+}
+
 /* A white exhibit-edged panel inside a sheet: lists, tables, transcripts. */
 @utility exhibit-panel {
   @apply rounded-[2px] bg-white ring-1 ring-exhibit-edge;

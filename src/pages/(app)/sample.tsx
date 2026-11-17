@@ -8,7 +8,8 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, ChevronLeft, ChevronRight, FlaskConical, RotateCcw } from 'lucide-react'
 import { Breadcrumbs, Page } from '@/components/common'
-import { Caption, CaseProgress, DocketNumber, Sheet, Stamp, Term } from '@/components/court/CaseFile'
+import { Caption, CaseStage, DocketNumber, Sheet, Stamp, Term } from '@/components/court/CaseFile'
+import { CaseFolder } from '@/components/court/Folder'
 import { FindingsChart } from '@/components/court/FindingsChart'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
@@ -69,8 +70,8 @@ export default function SamplePage() {
           Open your own case
         </Button>
       </div>
-        <CaseProgress step={revealed ? 'judgment' : 'deliberate'} />
-        <Sheet className="rounded-t-none">
+        <CaseFolder docket="MC-SAMPLE" title="Support policy answers">
+        <Sheet>
           <Caption
             title="Support policy answers"
             parties={revealed ? [SAMPLE_CONFIGURATIONS[0].label, SAMPLE_CONFIGURATIONS[1].label] : ['Sealed party', 'Sealed party']}
@@ -80,6 +81,7 @@ export default function SamplePage() {
                   Case no. <DocketNumber>MC-SAMPLE</DocketNumber>
                 </div>
                 <div>Practice hearing · illustrative</div>
+                <CaseStage step={revealed ? 'judgment' : 'deliberate'} />
                 <div>
                   Presiding: <span className="italic">you, as judge</span>
                 </div>
@@ -268,6 +270,7 @@ export default function SamplePage() {
             )}
           </div>
         </Sheet>
+        </CaseFolder>
     </Page>
   )
 }

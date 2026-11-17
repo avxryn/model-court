@@ -5,7 +5,8 @@ import { toast } from 'sonner'
 import { Breadcrumbs, ErrorPanel, formatTime, Note, Page, PageSkeleton, Panel, SaveIndicator, StatusBadge, type SaveState } from '@/components/common'
 import { useShellFocus } from '@/components/shell/ShellContext'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Caption, CaseProgress, DocketNumber, Sheet, Stamp } from '@/components/court/CaseFile'
+import { Caption, CaseStage, DocketNumber, Sheet, Stamp } from '@/components/court/CaseFile'
+import { CaseFolder, DividerTabs } from '@/components/court/Folder'
 import { CasesEditor, ConfigurationsEditor, RubricPicker, type FieldErrors } from '@/components/evaluations/DraftEditor'
 import { ImportedAnswers, type SavedImport } from '@/components/evaluations/ImportedAnswers'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -14,7 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { draftInputSchema, type DraftInput } from '@/domain/contracts'
 import { LIMITS } from '@/domain/limits'
 import { PROVIDER_NAMES, type ModelRoute, type ProviderId } from '@/domain/registry'
@@ -154,8 +155,22 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
         <Breadcrumbs items={[{ label: 'Your cases', to: '/evaluations' }, { label: evaluation.title }]} />
         <CaseActions onDelete={() => setDeleting(true)} />
       </div>
-      <CaseProgress {...progress} />
-      <Sheet className="rounded-t-none">
+      <Tabs value={tab} onValueChange={(value) => setTab(String(value))} className="block">
+      <CaseFolder
+        docket={docketNumber(evaluation.id)}
+        title={evaluation.title}
+        dividers={
+          <DividerTabs
+            label="Case sections"
+            items={[
+              { value: 'cases', label: 'Questions', count: draft.cases.length },
+              { value: 'configurations', label: 'Parties', count: draft.configurations.length },
+              { value: 'runs', label: 'Hearings', count: evaluation.runs.length },
+            ]}
+          />
+        }
+      >
+      <Sheet>
       <Caption
         title={evaluation.title}
         parties={draft.configurations.map((c) => c.label || 'Unnamed party')}
@@ -164,6 +179,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
             <div>
               Case no. <DocketNumber>{docketNumber(evaluation.id)}</DocketNumber>
             </div>
+            <CaseStage {...progress} />
             <div>
               {evaluation.runs.length} hearing{evaluation.runs.length === 1 ? '' : 's'}
               {latestRun && <> · latest {formatTime(latestRun.createdAt)}</>}
@@ -198,17 +214,11 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
       )}
 
 
-      <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
-        <TabsList className="max-w-full justify-start overflow-x-auto overflow-y-hidden">
-          <TabsTrigger value="cases">Questions ({draft.cases.length})</TabsTrigger>
-          <TabsTrigger value="configurations">Parties ({draft.configurations.length})</TabsTrigger>
-          <TabsTrigger value="runs">Hearings ({evaluation.runs.length})</TabsTrigger>
-        </TabsList>
-        <TabsContent value="cases" className="pt-6">
+        <TabsContent value="cases">
           <RubricPicker value={draft.rubricVersion} onChange={(rubricVersion) => change({ ...draft, rubricVersion })} />
           <CasesEditor cases={draft.cases} errors={errors} newId={newIntentKey} onChange={(cases) => change({ ...draft, cases })} />
         </TabsContent>
-        <TabsContent value="configurations" className="pt-6">
+        <TabsContent value="configurations">
           <ConfigurationsEditor
             draft={draft}
             catalog={catalog.data}
@@ -233,7 +243,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
           />
           <KeyStatus providers={providers} keys={keys} />
         </TabsContent>
-        <TabsContent value="runs" className="pt-6">
+        <TabsContent value="runs">
           {evaluation.runs.length === 0 ? (
             <Note>No hearings yet. Each hearing freezes an unchangeable copy of the saved draft.</Note>
           ) : (
@@ -249,7 +259,6 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
             </Panel>
           )}
         </TabsContent>
-      </Tabs>
       </div>
       <ActionBar
         saveState={dirty && saveState === 'idle' ? 'idle' : saveState}
@@ -261,6 +270,8 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
         start={<RunDialog evaluationId={evaluation.id} revision={revision} draft={draft} providers={providers} keys={keys} blockers={blockers} />}
       />
       </Sheet>
+      </CaseFolder>
+      </Tabs>
       <DeleteEvaluation open={deleting} onOpenChange={setDeleting} evaluationId={evaluation.id} title={evaluation.title} revision={revision} />
     </Page>
   )

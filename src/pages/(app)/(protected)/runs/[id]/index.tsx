@@ -4,7 +4,7 @@ import { ChevronRight, Copy, Link2, RefreshCw, Wifi, WifiOff } from 'lucide-reac
 import { toast } from 'sonner'
 import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, Plain, StaleNotice, StatusBadge } from '@/components/common'
 import { Caption, DocketNumber, ExhibitSticker, Sheet, Stamp } from '@/components/court/CaseFile'
-import { HearingNav, StageLine } from '@/components/court/HearingNav'
+import { HearingFolder, StageLine } from '@/components/court/HearingNav'
 import { docketNumber, recordStamp } from '@/lib/court'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
@@ -71,8 +71,8 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
   const deliberating = run.status === 'reviewing' || run.status === 'revealed' || run.status === 'decided'
   return (
     <>
-      <HearingNav runId={run.runId} caseId={run.evaluationId} caseTitle={run.evaluationTitle} role="owner" status={run.status} />
-      <Sheet className="rounded-t-none">
+      <HearingFolder runId={run.runId} caseId={run.evaluationId} caseTitle={run.evaluationTitle} role="owner" status={run.status}>
+      <Sheet>
       <Caption
         title={run.evaluationTitle}
         parties={run.configurations.map((c) => c.label)}
@@ -218,6 +218,7 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
 
       {(run.status === 'reviewing' || run.status === 'revealed' || run.status === 'decided') && <ReviewPanel run={run} busy={busy} act={act} />}
       </Sheet>
+      </HearingFolder>
     </>
   )
 }

@@ -1,6 +1,6 @@
 /**
- * Case-file building blocks (D-25): paper sheets, the case caption, folder
- * tabs for progress, exhibits, jury instructions, testimony transcripts, and
+ * Case-file building blocks (D-25): paper sheets, the case caption, the stage
+ * line, exhibits, jury instructions, testimony transcripts, and
  * rubber stamps. Presentation only; every caller passes anonymous data.
  */
 
@@ -43,37 +43,25 @@ export function SectionLabel({ id, name, children, className }: { id?: string; n
   )
 }
 
-/** Folder tabs showing where a case stands. */
-export function CaseProgress({ step, complete = false, className }: { step: CaseStep; complete?: boolean; className?: string }) {
-  const currentIndex = CASE_STEPS.findIndex((s) => s.key === step)
+/**
+ * Where a case stands, for the caption: "Stage 3 of 5 · Deliberate (review
+ * blind)" and five small marks (grey done, red current). Not a control.
+ */
+export function CaseStage({ step, complete = false }: { step: CaseStep; complete?: boolean }) {
+  const index = CASE_STEPS.findIndex((s) => s.key === step)
+  const entry = CASE_STEPS[index]
   return (
-    <ol aria-label="Case progress" className={cn('grid grid-cols-[repeat(5,auto)] items-end gap-0.5 sm:grid-cols-5 sm:gap-1', className)}>
-      {CASE_STEPS.map((s, index) => {
-        const isCurrent = !complete && index === currentIndex
-        const done = complete || index < currentIndex
-        return (
-          <li key={s.key} className="min-w-0" aria-current={isCurrent ? 'step' : undefined}>
-            <div
-              className={cn(
-                'rounded-t-lg px-1.5 pt-1.5 pb-2 sm:px-3 sm:pt-2 sm:pb-2.5',
-                isCurrent ? 'bg-paper ring-1 ring-paper-edge [clip-path:inset(-2px_-2px_0_-2px)]' : done ? 'mt-1.5 bg-manila text-manila-foreground' : 'mt-1.5 bg-tab-idle text-tab-idle-foreground',
-              )}
-            >
-              <div className={cn('typewriter text-[0.625rem] font-bold sm:text-[0.6875rem]', isCurrent ? 'text-stamp' : '')}>
-                <span className="sm:hidden">{index + 1}</span>
-                <span className="hidden sm:inline">
-                  STEP {index + 1}
-                  {isCurrent ? ' · NOW' : done ? ' · DONE' : ''}
-                </span>
-                <span className="sr-only">{isCurrent ? ' (current)' : done ? ' (done)' : ''}</span>
-              </div>
-              <div className={cn('truncate font-heading leading-tight', isCurrent ? 'text-xs font-bold text-foreground sm:text-base' : 'text-xs sm:text-[0.9375rem]')}>{s.name}</div>
-              <div className={cn('hidden text-xs leading-snug sm:block', isCurrent ? 'text-muted-foreground' : '')}>{s.plain}</div>
-            </div>
-          </li>
-        )
-      })}
-    </ol>
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+      <span>
+        Stage {index + 1} of {CASE_STEPS.length} · {entry.name}
+        <span className="font-sans text-xs text-muted-foreground"> ({complete ? 'done' : entry.plain.toLowerCase()})</span>
+      </span>
+      <span aria-hidden className="inline-flex gap-[3px]">
+        {CASE_STEPS.map((s, i) => (
+          <span key={s.key} className={cn('h-1 w-3.5 rounded-[1px]', complete || i < index ? 'bg-mark' : i === index ? 'bg-stamp' : 'ring-1 ring-mark ring-inset')} />
+        ))}
+      </span>
+    </div>
   )
 }
 

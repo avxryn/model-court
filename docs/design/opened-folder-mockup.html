@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opened folder — Model Court mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/*
+ * Standalone design mockup for the "opened manila folder" case and hearing
+ * pages. Every colour below is a token copied from src/styles.css; the only
+ * values that are not are the mockup's own review chrome (.review-*).
+ */
+:root {
+  --foreground: oklch(0.22 0.025 262);
+  --muted-foreground: oklch(0.46 0.02 262);
+  --primary: oklch(0.36 0.075 262);
+  --primary-foreground: oklch(0.985 0.004 85);
+  --ring: oklch(0.52 0.09 262);
+  --warning: oklch(0.53 0.13 65);
+  --success: oklch(0.5 0.12 155);
+  --desk: #e9e2d3;
+  --paper: #fffdf6;
+  --paper-rule: #e4dcc8;
+  --paper-edge: #c9bb97;
+  --margin-rule: #d9a79f;
+  --manila: #dccfae;
+  --manila-foreground: #4a3b1c;
+  --sticker: #f2cf5b;
+  --sticker-foreground: #3d2e00;
+  --stamp: #a8261c;
+  --exhibit-edge: #dcd3be;
+  --slip: #f6f1e4;
+  --slip-edge: #b9a87e;
+  --tab-idle: #e0d6bf;
+  --tab-idle-foreground: #5a4e36;
+  --mark: #8c8270;
+  --drawer: #e2d9c5;
+  --drawer-edge: #cfc3a6;
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-heading: 'Libre Caslon Text', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --font-typewriter: 'Courier Prime', 'Courier New', ui-monospace, monospace;
+  --shadow-ink: 60 45 15;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--desk); color: var(--foreground); font: 15px/1.5 var(--font-sans); -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { font-family: var(--font-heading); letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+a { color: inherit; }
+:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); }
+.typewriter { font-family: var(--font-typewriter); letter-spacing: 0.06em; }
+.court-label { font-family: var(--font-heading); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+.plain { font-family: var(--font-sans); font-size: 0.75rem; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--muted-foreground); }
+.muted { color: var(--muted-foreground); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- mockup review chrome (not part of the design) ---------- */
+.review-bar { position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; align-items: center; padding: 0.6rem 1rem; background: var(--foreground); color: var(--paper); font-size: 0.8125rem; }
+.review-bar strong { font-family: var(--font-heading); font-size: 0.9375rem; }
+.review-bar fieldset { display: flex; gap: 0.25rem; align-items: center; border: 0; margin: 0; padding: 0; }
+.review-bar legend { float: left; margin-right: 0.4rem; opacity: 0.75; }
+.review-bar label { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.55rem; border-radius: 999px; cursor: pointer; }
+.review-bar label:has(input:checked) { background: var(--paper); color: var(--foreground); }
+.review-bar input { accent-color: var(--stamp); margin: 0; }
+.review-caption { max-width: 72rem; margin: 2rem auto 0.5rem; padding: 0 1rem; font-family: var(--font-heading); font-size: 1.125rem; }
+.review-caption small { display: block; font-family: var(--font-sans); font-size: 0.8125rem; color: var(--muted-foreground); }
+.review-notes { max-width: 72rem; margin: 2.5rem auto 4rem; padding: 0 1rem; font-size: 0.875rem; color: var(--muted-foreground); }
+.review-notes ol { padding-left: 1.2rem; }
+.review-notes li { margin: 0.35rem 0; }
+.frame { container-type: inline-size; margin: 0 auto; border: 1px dashed var(--drawer-edge); background: var(--desk); }
+body[data-width="desktop"] .frame { max-width: 82rem; }
+body[data-width="phone"] .frame { width: 375px; }
+
+/* ---------- app shell (simplified) ---------- */
+.app { display: grid; grid-template-columns: 15rem 1fr; min-height: 100%; }
+.drawer { background: var(--drawer); border-right: 1px solid var(--drawer-edge); padding: 1rem 0.75rem; font-size: 0.875rem; }
+.drawer .brand { font-family: var(--font-heading); font-weight: 700; letter-spacing: 0.12em; font-size: 0.8125rem; padding: 0 0.5rem 1rem; }
+.drawer .group { margin-top: 0.75rem; padding: 0 0.5rem 0.25rem; font-size: 0.75rem; color: var(--muted-foreground); }
+.drawer a { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border-radius: 6px; text-decoration: none; color: var(--tab-idle-foreground); }
+.drawer a[aria-current] { background: var(--paper); color: var(--foreground); box-shadow: 0 0 0 1px var(--paper-edge); }
+.drawer .sub { padding-left: 1.6rem; font-size: 0.8125rem; }
+.mini-folder { width: 14px; height: 10px; border-radius: 1px 2px 1px 1px; background: var(--manila); box-shadow: inset 0 0 0 1px var(--paper-edge); position: relative; flex: none; }
+.mini-folder::before { content: ""; position: absolute; left: 1px; top: -3px; width: 6px; height: 3px; border-radius: 2px 2px 0 0; background: var(--manila); box-shadow: inset 0 1px 0 0 var(--paper-edge); }
+.mobile-bar { display: none; }
+.page { min-width: 0; padding: 2.25rem 2.5rem 3rem; }
+.crumbs { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; font-size: 0.875rem; color: var(--muted-foreground); margin-bottom: 1.1rem; }
+.crumbs a { text-decoration: none; border-radius: 4px; }
+.crumbs a:hover { color: var(--foreground); text-decoration: underline; }
+.crumbs [aria-current] { color: var(--foreground); }
+
+/* ---------- the opened folder ---------- */
+.folder { position: relative; --tab-h: 2.4rem; }
+/*
+ * The tab and the back panel are one piece of card: the filter outlines and
+ * shadows their combined silhouette, so there is no seam where the tab rises.
+ */
+.folder {
+  filter: drop-shadow(0 -1px 0 var(--paper-edge)) drop-shadow(1px 0 0 var(--paper-edge)) drop-shadow(-1px 0 0 var(--paper-edge)) drop-shadow(0 1px 0 var(--paper-edge)) drop-shadow(0 14px 16px rgb(var(--shadow-ink) / 0.2));
+}
+/* The case's label tab: sloped shoulders with a small fillet where they meet the folder's top edge. */
+.folder-tab { position: relative; display: flex; align-items: stretch; width: max-content; max-width: min(28rem, 75%); height: 2.6rem; margin-left: 1.4rem; }
+.folder-tab .shoulder { flex: none; width: 1.75rem; height: 100%; fill: var(--manila); display: block; }
+.folder-tab .shoulder.right { transform: scaleX(-1); }
+.folder-tab .middle { display: flex; align-items: center; min-width: 0; margin: 0 -1px; padding: 0.35rem 0.5rem 0.2rem; background: var(--manila); }
+.label-slip {
+  display: flex; align-items: baseline; gap: 0.6rem; min-width: 0; padding: 0.15rem 0.6rem 0.2rem;
+  background: var(--paper); border-radius: 1px; box-shadow: 0 0 0 1px var(--paper-edge);
+}
+/* A file label: white, with a coloured band across the top. */
+.folder-tab .label-slip { border-top: 3px solid var(--stamp); }
+.label-slip .docket { font-weight: 700; font-size: 0.8125rem; color: var(--stamp); white-space: nowrap; }
+.label-slip .title { font-family: var(--font-heading); font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.folder-back {
+  position: relative; margin-top: -1px; padding: 1.4rem 1.6rem 1.6rem 2.6rem;
+  background: var(--manila); border-radius: 3px 8px 8px 8px;
+}
+/* The fold: a darker spine down the left where the front cover was opened. */
+.folder-back::before {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 1.1rem; border-radius: 4px 0 0 10px;
+  background: linear-gradient(to right, var(--paper-edge), var(--manila));
+  box-shadow: inset -1px 0 0 rgb(var(--shadow-ink) / 0.12);
+}
+body[data-label="corner"] .folder-tab { display: none; }
+body[data-label="corner"] .folder-back { border-radius: 8px; }
+.corner-label { display: none; }
+body[data-label="corner"] .corner-label { display: flex; }
+
+/* Dividers stick up out of the paper stack, inside the folder. */
+.tabs-row { position: relative; z-index: 2; display: flex; align-items: flex-end; gap: 0.75rem; min-height: var(--tab-h); }
+.corner-label { align-self: center; margin-right: 0.5rem; flex: none; max-width: 22rem; }
+.dividers { display: flex; align-items: flex-end; gap: 0.2rem; min-width: 0; overflow-x: auto; padding: 4px 4px 0; margin: -4px -4px 0; scrollbar-width: none; }
+/* Lettered index dividers. The open one is the white sheet in front; the rest are buff card underneath. */
+.dividers { counter-reset: divider; }
+.divider {
+  position: relative; display: inline-flex; flex-direction: column; justify-content: center; flex: none;
+  min-height: 2.1rem; padding: 0.3rem 1rem 0.4rem 0.85rem; border-radius: 7px 7px 0 0;
+  background: var(--tab-idle); color: var(--tab-idle-foreground); text-decoration: none; font-size: 0.875rem; line-height: 1.2;
+  box-shadow: inset 0 0 0 1px var(--paper-edge), inset 0 -5px 5px -4px rgb(var(--shadow-ink) / 0.2); clip-path: inset(-4px -4px 0 -4px);
+  margin-bottom: 1px; transition: transform 150ms ease, color 150ms ease;
+}
+.divider > :first-child::before { counter-increment: divider; content: counter(divider, upper-alpha); font-family: var(--font-typewriter); font-weight: 700; font-size: 0.6875rem; color: var(--mark); margin-right: 0.45rem; }
+a.divider:hover { transform: translateY(-3px); color: var(--foreground); }
+.divider[aria-current] {
+  z-index: 3; background: var(--paper); color: var(--foreground); font-family: var(--font-heading); font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--paper-edge); transform: none; min-height: 2.6rem; padding-bottom: 0.6rem; margin-bottom: -1px;
+}
+.divider[aria-current] > :first-child::before { color: var(--stamp); }
+.divider[aria-disabled] { cursor: not-allowed; background: color-mix(in oklab, var(--tab-idle) 55%, transparent); color: color-mix(in oklab, var(--tab-idle-foreground) 75%, transparent); box-shadow: none; outline: 1px dashed var(--paper-edge); outline-offset: -1px; }
+.divider .why { font-size: 0.6875rem; font-family: var(--font-sans); font-weight: 400; color: var(--muted-foreground); display: flex; align-items: center; gap: 0.25rem; }
+.divider .count { font-family: var(--font-typewriter); font-size: 0.75rem; color: var(--muted-foreground); margin-left: 0.2rem; }
+.lock { width: 0.65rem; height: 0.65rem; flex: none; }
+@media (prefers-reduced-motion: reduce) { .divider { transition: none; } a.divider:hover { transform: none; } }
+
+/* Two sheets peek out under the top page. */
+.stack { position: relative; }
+.stack .edge { position: absolute; border-radius: 2px; background: var(--paper); box-shadow: 0 0 0 1px var(--paper-edge); }
+.stack .edge.e1 { inset: 6px -5px -5px 4px; transform: rotate(0.25deg); }
+.stack .edge.e2 { inset: 12px -10px -9px 9px; transform: rotate(-0.35deg); background: var(--slip); }
+.sheet {
+  position: relative; z-index: 1; background: var(--paper); border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--paper-edge), 0 1px 0 var(--paper-rule), 0 10px 22px -14px rgb(var(--shadow-ink) / 0.3);
+}
+.sheet .margin { position: absolute; inset: 0 auto 0 3rem; width: 4px; border-left: 1px solid var(--margin-rule); border-right: 1px solid var(--margin-rule); pointer-events: none; }
+.sheet .body { padding-left: 3rem; }
+
+/* Caption */
+.caption { position: relative; padding: 1.75rem 2rem 1.5rem; }
+.court-head { text-align: center; }
+.court-head .c1 { font-family: var(--font-heading); font-weight: 700; font-size: 0.875rem; letter-spacing: 0.18em; }
+.court-head .c2 { font-size: 0.6875rem; letter-spacing: 0.14em; color: var(--muted-foreground); margin-top: 0.2rem; }
+.caption-box { display: flex; flex-wrap: wrap; margin-top: 1.25rem; border-top: 1px solid var(--foreground); border-bottom: 1px solid var(--foreground); }
+.caption-box .left { flex: 3 1 18rem; min-width: 0; padding: 1rem 1.25rem 1rem 0; border-right: 1px solid var(--foreground); }
+.caption-box .right { flex: 2 1 13rem; min-width: 0; padding: 1rem 0 1rem 1.25rem; font-family: var(--font-heading); font-size: 0.875rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.inre { font-family: var(--font-heading); font-style: italic; font-size: 0.875rem; }
+.caption h1 { font-size: 1.75rem; line-height: 1.2; margin-top: 0.15rem; }
+.parties { margin-top: 0.75rem; font-family: var(--font-heading); }
+.parties .v { font-style: italic; font-size: 0.875rem; margin: 0.1rem 0 0.1rem 1.5rem; }
+.stamp { position: absolute; top: 1.5rem; right: 2rem; display: inline-flex; flex-direction: column; align-items: center; padding: 0.35rem 1rem; border: 3px double currentColor; border-radius: 4px; font-family: var(--font-typewriter); font-weight: 700; letter-spacing: 0.16em; font-size: 1.125rem; line-height: 1.15; transform: rotate(-6deg); background: rgb(255 253 246 / 0.6); }
+.stamp.draft { color: var(--muted-foreground); }
+.stamp.sealed { color: var(--stamp); transform: rotate(-9deg); }
+.stamp small { font-size: 0.6875rem; letter-spacing: 0.08em; }
+
+/* The stage line: replaces the five step tabs. */
+.stage { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.6rem; }
+.marks { display: inline-flex; gap: 3px; }
+.marks i { width: 0.9rem; height: 0.3rem; border-radius: 1px; background: transparent; box-shadow: inset 0 0 0 1px var(--mark); }
+.marks i.done { background: var(--mark); }
+.marks i.now { background: var(--stamp); box-shadow: none; }
+.stage .plain { font-size: 0.75rem; }
+
+/* Sheet sections */
+.section { border-top: 1px solid var(--paper-rule); padding: 1.5rem 2rem; }
+.section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem; margin-bottom: 1rem; }
+.panel { background: #fff; border-radius: 2px; box-shadow: 0 0 0 1px var(--exhibit-edge); }
+.row { display: grid; grid-template-columns: 3.25rem 1fr auto; gap: 0.75rem; align-items: baseline; padding: 0.75rem 1rem; border-top: 1px solid var(--paper-rule); }
+.row:first-child { border-top: 0; }
+.row .n { font-family: var(--font-typewriter); font-weight: 700; font-size: 0.75rem; color: var(--stamp); }
+.row .q { font-family: var(--font-heading); font-size: 0.9375rem; }
+.row .meta { font-size: 0.75rem; color: var(--muted-foreground); white-space: nowrap; }
+.btn { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2rem; padding: 0 0.85rem; border-radius: 6px; font: 500 0.875rem var(--font-sans); border: 1px solid var(--paper-edge); background: var(--paper); color: var(--foreground); cursor: pointer; }
+.btn.primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted-foreground); }
+.actionbar { position: sticky; bottom: 0; z-index: 4; display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-left: -3rem; padding: 0.7rem 2rem; background: color-mix(in oklab, var(--slip) 95%, transparent); border-top: 1px solid var(--paper-edge); border-radius: 0 0 2px 2px; }
+.actionbar .todo { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.875rem; color: var(--warning); }
+.bar { height: 0.5rem; border-radius: 999px; background: var(--paper-rule); overflow: hidden; }
+.bar > span { display: block; height: 100%; width: 100%; background: var(--primary); }
+table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+th, td { text-align: left; padding: 0.55rem 0.75rem; border-top: 1px solid var(--paper-rule); }
+th { font-weight: 500; font-size: 0.8125rem; color: var(--muted-foreground); border-top: 0; }
+.badge { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.75rem; box-shadow: inset 0 0 0 1px currentColor; }
+.badge.good { color: var(--success); }
+.badge.active { color: var(--primary); }
+.juror-strip { margin-top: 1.5rem; }
+
+/* ---------- phone: the folder shrinks to a thin manila edge ---------- */
+@container (max-width: 640px) {
+  .app { grid-template-columns: 1fr; }
+  .drawer { display: none; }
+  .mobile-bar { display: flex; position: sticky; top: 0; z-index: 10; height: 3.5rem; align-items: center; gap: 0.75rem; padding: 0 1rem; background: var(--drawer); border-bottom: 1px solid var(--drawer-edge); font-family: var(--font-heading); font-weight: 700; font-size: 0.8125rem; letter-spacing: 0.12em; }
+  .mobile-bar .menu { width: 1.1rem; height: 0.8rem; border-top: 2px solid var(--foreground); border-bottom: 2px solid var(--foreground); position: relative; }
+  .mobile-bar .menu::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px solid var(--foreground); transform: translateY(-50%); }
+  .page { padding: 1rem 0.75rem 2rem; }
+  .crumbs { font-size: 0.8125rem; margin-bottom: 0.75rem; }
+  .folder-tab, body[data-label="corner"] .corner-label { display: none; }
+  .folder-back { padding: 0.5rem 0.35rem 0.4rem 0.6rem; border-radius: 6px; }
+  .folder-back::before { width: 0.35rem; border-radius: 6px 0 0 6px; }
+  .tabs-row { min-height: 2.15rem; }
+  .divider { padding: 0.3rem 0.7rem 0.4rem; font-size: 0.8125rem; }
+  .divider { flex-direction: row; align-items: center; gap: 0.3rem; }
+  .divider .why-text { display: none; }
+  .stack .edge.e1 { inset: 4px -3px -3px 2px; }
+  .stack .edge.e2 { display: none; }
+  .sheet .margin { left: 1.5rem; }
+  .sheet .body { padding-left: 1.5rem; }
+  .caption { padding: 1.25rem 1rem 1rem; }
+  .stamp { position: static; margin: 0 0 0.75rem auto; display: flex; width: max-content; font-size: 0.875rem; padding: 0.2rem 0.6rem; }
+  .caption-box .left { border-right: 0; padding-right: 0; }
+  .caption-box .right { padding-left: 0; border-top: 1px solid var(--paper-rule); }
+  .caption h1 { font-size: 1.5rem; }
+  .section { padding: 1.25rem 1rem; }
+  .row { grid-template-columns: 2.5rem 1fr; }
+  .row .meta { grid-column: 2; }
+  .actionbar { margin-left: -1.5rem; padding: 0.6rem 0.75rem; }
+  .hide-sm { display: none; }
+  .table-wrap { overflow-x: auto; }
+}
+</style>
+</head>
+<body data-label="top" data-width="desktop">
+
+<form class="review-bar" aria-label="Mockup options">
+  <strong>Opened folder · mockup</strong>
+  <fieldset><legend>Case label</legend>
+    <label><input type="radio" name="label" value="top" checked> Tab on the folder edge</label>
+    <label><input type="radio" name="label" value="corner"> Folder corner</label>
+  </fieldset>
+  <fieldset><legend>Width</legend>
+    <label><input type="radio" name="width" value="desktop" checked> Desktop</label>
+    <label><input type="radio" name="width" value="phone"> Phone 375</label>
+  </fieldset>
+</form>
+
+<!-- =============================== CASE PAGE =============================== -->
+<div class="review-caption">1 · Case page<small>The judge's draft. Stage line replaces the five step tabs; Questions / Parties / Hearings become dividers.</small></div>
+<div class="frame">
+<div class="app">
+  <aside class="drawer" aria-label="Case files">
+    <div class="brand">THE MODEL COURT</div>
+    <a href="#">Your cases</a>
+    <div class="group">Open case files</div>
+    <a href="#" aria-current="page"><span class="mini-folder"></span>Support policy answers</a>
+    <a href="#" class="sub">Hearing · 14 Nov</a>
+    <a href="#"><span class="mini-folder"></span>Refund tone check</a>
+    <a href="#">Glossary</a>
+  </aside>
+  <div>
+    <div class="mobile-bar"><span class="menu" aria-hidden="true"></span>THE MODEL COURT</div>
+    <main class="page">
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="#">Your cases</a><span aria-hidden="true">›</span><span aria-current="page">Support policy answers</span><span style="margin-left:auto"><button class="btn ghost" type="button">Case actions ▾</button></span></nav>
+
+      <div class="folder">
+        <div class="folder-tab"><svg class="shoulder left" viewBox="0 0 20 38" preserveAspectRatio="none" aria-hidden="true"><path d="M0 38 C4 38 5.5 36.5 6.5 33 L13 5 C13.8 1.8 15.8 0 19 0 L20 0 L20 38 Z"/></svg><div class="middle"><span class="label-slip"><span class="docket typewriter">MC-4F2A</span><span class="title">Support policy answers</span></span></div><svg class="shoulder right" viewBox="0 0 20 38" preserveAspectRatio="none" aria-hidden="true"><path d="M0 38 C4 38 5.5 36.5 6.5 33 L13 5 C13.8 1.8 15.8 0 19 0 L20 0 L20 38 Z"/></svg></div>
+        <div class="folder-back">
+          <div class="tabs-row">
+            <span class="corner-label label-slip"><span class="docket typewriter">MC-4F2A</span><span class="title">Support policy answers</span></span>
+            <div class="dividers" role="tablist" aria-label="Case sections">
+              <a href="#" class="divider" role="tab" aria-selected="true" aria-current="true"><span>Questions<span class="count"> 3</span></span></a>
+              <a href="#" class="divider" role="tab" aria-selected="false"><span>Parties<span class="count"> 2</span></span></a>
+              <a href="#" class="divider" role="tab" aria-selected="false"><span>Hearings<span class="count"> 1</span></span></a>
+            </div>
+          </div>
+          <div class="stack">
+            <span class="edge e2" aria-hidden="true"></span><span class="edge e1" aria-hidden="true"></span>
+            <article class="sheet">
+              <span class="margin" aria-hidden="true"></span>
+              <div class="body">
+                <div class="caption">
+                  <span class="stamp draft" role="img" aria-label="draft">DRAFT</span>
+                  <div class="court-head"><div class="c1">IN THE MODEL COURT</div><div class="c2">BLIND REVIEW DIVISION</div></div>
+                  <div class="caption-box">
+                    <div class="left">
+                      <div class="inre">In re:</div>
+                      <h1>Support policy answers</h1>
+                      <div class="parties"><div>Imported answers,</div><div class="v">v.</div><div>Claude Sonnet 5.5.</div></div>
+                    </div>
+                    <div class="right">
+                      <div>Case no. <span class="typewriter" style="font-weight:700">MC-4F2A</span></div>
+                      <div class="stage"><span>Stage 1 of 5 · File <span class="plain">(set up the case)</span></span><span class="marks" aria-hidden="true"><i class="now"></i><i></i><i></i><i></i><i></i></span></div>
+                      <div>1 hearing · latest 14 Nov, 16:02</div>
+                      <div>Presiding: <i>you, as judge</i></div>
+                    </div>
+                  </div>
+                </div>
+                <section class="section" aria-labelledby="q-head">
+                  <div class="section-head"><h2 id="q-head" class="court-label">Questions presented <span class="plain">what every party answers</span></h2><button class="btn" type="button">+ Add question</button></div>
+                  <div class="panel">
+                    <div class="row"><span class="n">Q-1</span><span class="q">A customer asks for a refund 40 days after purchase. What do you say?</span><span class="meta">English · exhibit attached</span></div>
+                    <div class="row"><span class="n">Q-2</span><span class="q">¿Puedo cambiar la dirección de envío después de pagar?</span><span class="meta">Spanish</span></div>
+                    <div class="row"><span class="n">Q-3</span><span class="q">Explain the warranty for a refurbished laptop in two sentences.</span><span class="meta">English</span></div>
+                  </div>
+                </section>
+                <div class="actionbar">
+                  <span style="display:flex;gap:0.6rem;align-items:center"><button class="btn" type="button">Save<span class="hide-sm"> draft</span></button><span class="muted hide-sm" style="font-size:0.75rem">Saved 2 min ago</span></span>
+                  <span style="display:flex;gap:0.6rem;align-items:center"><span class="todo">⚠ 1<span class="hide-sm"> thing to do before the hearing</span></span><button class="btn primary" type="button">Start hearing</button></span>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</div>
+
+<!-- ============================== HEARING PAGE ============================== -->
+<div class="review-caption">2 · Hearing page (judge, Proceedings)<small>Deliberation is open, so Your review is open; Record and Judgment are locked and say why.</small></div>
+<div class="frame">
+<div class="app">
+  <aside class="drawer" aria-label="Case files">
+    <div class="brand">THE MODEL COURT</div>
+    <a href="#">Your cases</a>
+    <div class="group">Open case files</div>
+    <a href="#"><span class="mini-folder"></span>Support policy answers</a>
+    <a href="#" class="sub" aria-current="page">Hearing · 14 Nov</a>
+    <a href="#"><span class="mini-folder"></span>Refund tone check</a>
+    <a href="#">Glossary</a>
+  </aside>
+  <div>
+    <div class="mobile-bar"><span class="menu" aria-hidden="true"></span>THE MODEL COURT</div>
+    <main class="page">
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="#">Your cases</a><span aria-hidden="true">›</span><a href="#">Support policy answers</a><span aria-hidden="true">›</span><span aria-current="page">Hearing</span></nav>
+
+      <div class="folder">
+        <div class="folder-tab"><svg class="shoulder left" viewBox="0 0 20 38" preserveAspectRatio="none" aria-hidden="true"><path d="M0 38 C4 38 5.5 36.5 6.5 33 L13 5 C13.8 1.8 15.8 0 19 0 L20 0 L20 38 Z"/></svg><div class="middle"><span class="label-slip"><span class="docket typewriter">MC-4F2A</span><span class="title">Support policy answers</span></span></div><svg class="shoulder right" viewBox="0 0 20 38" preserveAspectRatio="none" aria-hidden="true"><path d="M0 38 C4 38 5.5 36.5 6.5 33 L13 5 C13.8 1.8 15.8 0 19 0 L20 0 L20 38 Z"/></svg></div>
+        <div class="folder-back">
+          <div class="tabs-row">
+            <span class="corner-label label-slip"><span class="docket typewriter">MC-4F2A</span><span class="title">Support policy answers</span></span>
+            <nav class="dividers" aria-label="Hearing">
+              <a href="#" class="divider" aria-current="page"><span>Proceedings</span></a>
+              <a href="#" class="divider"><span>Your review</span></a>
+              <span class="divider" aria-disabled="true" title="Opens when the judge unseals the record"><span>Record</span><span class="why"><svg class="lock" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5 7V5a3 3 0 1 1 6 0v2h1v7H4V7h1Zm1.5 0h3V5a1.5 1.5 0 0 0-3 0v2Z"/></svg><span class="why-text">at unsealing</span></span><span class="sr-only">: Opens when the judge unseals the record</span></span>
+              <span class="divider" aria-disabled="true" title="Opens when the judge unseals the record"><span>Judgment</span><span class="why"><svg class="lock" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5 7V5a3 3 0 1 1 6 0v2h1v7H4V7h1Zm1.5 0h3V5a1.5 1.5 0 0 0-3 0v2Z"/></svg><span class="why-text">at unsealing</span></span><span class="sr-only">: Opens when the judge unseals the record</span></span>
+            </nav>
+          </div>
+          <div class="stack">
+            <span class="edge e2" aria-hidden="true"></span><span class="edge e1" aria-hidden="true"></span>
+            <article class="sheet">
+              <span class="margin" aria-hidden="true"></span>
+              <div class="body">
+                <div class="caption">
+                  <span class="stamp sealed" role="img" aria-label="sealed">SEALED</span>
+                  <div class="court-head"><div class="c1">IN THE MODEL COURT</div><div class="c2">BLIND REVIEW DIVISION</div></div>
+                  <div class="caption-box">
+                    <div class="left">
+                      <div class="inre">In re:</div>
+                      <h1>Support policy answers</h1>
+                      <div class="parties"><div>Imported answers,</div><div class="v">v.</div><div>Claude Sonnet 5.5.</div></div>
+                    </div>
+                    <div class="right">
+                      <div>Case no. <span class="typewriter" style="font-weight:700">MC-4F2A</span></div>
+                      <div>Hearing · 14 Nov, 16:02</div>
+                      <div class="stage"><span>Stage 3 of 5 · Deliberate <span class="plain">(review blind)</span></span><span class="marks" aria-hidden="true"><i class="done"></i><i class="done"></i><i class="now"></i><i></i><i></i></span></div>
+                      <div style="font-family:var(--font-sans);margin-top:0.25rem"><span class="badge active">Under review</span></div>
+                    </div>
+                  </div>
+                </div>
+                <section class="section" aria-labelledby="p-head">
+                  <div class="section-head"><h2 id="p-head" class="court-label">Hearing testimony <span class="plain">generating responses</span></h2><span class="muted" style="font-size:0.875rem">6/6 finished · 6 succeeded</span></div>
+                  <div class="bar" role="progressbar" aria-valuenow="100" aria-label="Generation progress"><span></span></div>
+                  <div class="table-wrap" style="margin-top:1rem">
+                    <table>
+                      <thead><tr><th>Case</th><th>Imported answers</th><th>Claude Sonnet 5.5</th></tr></thead>
+                      <tbody>
+                        <tr><td>Q-1 Refund after 40 days</td><td><span class="badge good">Succeeded</span></td><td><span class="badge good">Succeeded</span></td></tr>
+                        <tr><td>Q-2 Dirección de envío</td><td><span class="badge good">Succeeded</span></td><td><span class="badge good">Succeeded</span></td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+                <section class="section" aria-labelledby="j-head">
+                  <div class="section-head"><h2 id="j-head" class="court-label">The jury <span class="plain">who reviews blind</span></h2><button class="btn" type="button">Invite jurors</button></div>
+                  <p class="muted" style="font-size:0.875rem">2 of 3 jurors have filed findings.</p>
+                </section>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+
+      <!-- The juror's view of the same divider row, for comparison. -->
+      <div class="juror-strip">
+        <div class="muted" style="font-size:0.8125rem;margin-bottom:0.4rem">A juror sees two dividers:</div>
+        <div class="folder"><div class="folder-back" style="padding-bottom:0">
+          <div class="tabs-row">
+            <span class="corner-label label-slip"><span class="docket typewriter">MC-4F2A</span><span class="title">Support policy answers</span></span>
+            <nav class="dividers" aria-label="Hearing (juror)">
+              <a href="#" class="divider" aria-current="page"><span>Your worksheet</span></a>
+              <span class="divider" aria-disabled="true" title="Opens when the judge unseals the record"><span>Record</span><span class="why"><svg class="lock" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5 7V5a3 3 0 1 1 6 0v2h1v7H4V7h1Zm1.5 0h3V5a1.5 1.5 0 0 0-3 0v2Z"/></svg><span class="why-text">at unsealing</span></span><span class="sr-only">: Opens when the judge unseals the record</span></span>
+            </nav>
+          </div>
+          <div class="stack"><div class="sheet" style="height:1.5rem;border-radius:2px 2px 0 0"></div></div>
+        </div></div>
+      </div>
+    </main>
+  </div>
+</div>
+</div>
+
+<div class="review-notes">
+  <strong style="color:var(--foreground)">Decisions (approved 2026-11-17)</strong>
+  <ol>
+    <li><b>Two kinds of tab.</b> The manila tab on the folder's top edge names the case; it carries a white file label with a red band and is not clickable. Every clickable tab is a lettered index divider.</li>
+    <li><b>Dividers.</b> The open section is the white sheet in front, joined to the page. Other sections are buff card underneath and lift slightly on hover. Locked sections stay visible, flat and dashed, with a lock and when they open.</li>
+    <li><b>Case page.</b> Questions / Parties / Hearings are dividers A&ndash;C, like the hearing's A&ndash;D. Case progress is a stage line in the caption.</li>
+    <li><b>Phones.</b> The folder shrinks to a thin manila edge and the label tab is dropped; locked dividers keep the lock icon.</li>
+    <li><b>Printing.</b> The folder, dividers and sheet edges are dropped; the judgment prints as plain paper.</li>
+    <li><b>Motion.</b> Only the hover lift on idle dividers; nothing moves under reduced motion.</li>
+  </ol>
+</div>
+
+<script>
+  document.querySelector('.review-bar').addEventListener('change', (event) => {
+    document.body.dataset[event.target.name] = event.target.value
+  })
+</script>
+</body>
+</html>
