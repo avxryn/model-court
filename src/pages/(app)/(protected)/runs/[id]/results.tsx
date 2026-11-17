@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, StatusBadge } from '@/components/common'
 import { Caption, CaseProgress, Sheet, SheetSection, Stamp, Term } from '@/components/court/CaseFile'
+import { FindingsChart } from '@/components/court/FindingsChart'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -16,7 +17,7 @@ import { LIMITS } from '@/domain/limits'
 import { PROVIDER_NAMES } from '@/domain/registry'
 import { DIMENSIONS, formatScore, RUBRIC, type CohortResult } from '@/domain/rubric'
 import { codePointLength } from '@/domain/text'
-import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
+import { api, ApiClientError, apiDownload, describeError, newIntentKey, saveBlob } from '@/lib/api-client'
 import type { ResultsView } from '@/lib/dto'
 import { useApi } from '@/lib/use-api'
 import { cn } from '@/lib/utils'
@@ -239,6 +240,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
       </SheetSection>
 
       <VerdictSection data={data} reload={reload} />
+      {data.role === 'owner' && <CertifiedRecord runId={data.runId} />}
       </Sheet>
     </Page>
   )
@@ -251,6 +253,8 @@ function CohortTable({ cohort, configurations }: { cohort: CohortResult; configu
   const by = cohort.byConfiguration
   const tie = cohort.highest.length > 1
   return (
+    <>
+    <FindingsChart cohort={cohort} parties={configurations} />
     <div className="overflow-x-auto rounded-[2px] bg-white ring-1 ring-exhibit-edge">
       <Table>
         <TableHeader>
@@ -288,6 +292,51 @@ function CohortTable({ cohort, configurations }: { cohort: CohortResult; configu
         </TableBody>
       </Table>
     </div>
+    </>
+  )
+}
+
+/** Owner-only download of the certified record (D-28, D-29). Each export is logged in the audit trail. */
+function CertifiedRecord({ runId }: { runId: string }) {
+  const [busy, setBusy] = useState<'json' | 'csv' | null>(null)
+  const [hash, setHash] = useState<string | null>(null)
+  const download = async (format: 'json' | 'csv') => {
+    setBusy(format)
+    try {
+      if (format === 'json') {
+        const record = await api<{ certification: { contentSha256: string } }>('GET', `/runs/${runId}/export?format=json`)
+        setHash(record.certification.contentSha256)
+        saveBlob(new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' }), `model-court-record-${runId}.json`)
+      } else {
+        const { blob, filename } = await apiDownload(`/runs/${runId}/export?format=csv`)
+        saveBlob(blob, filename ?? `model-court-record-${runId}.csv`)
+      }
+      toast.success('Certified record downloaded')
+    } catch (caught) {
+      toast.error(describeError(caught))
+    } finally {
+      setBusy(null)
+    }
+  }
+  return (
+    <SheetSection id="certified-record" label={<Term name="certified" />}>
+      <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        A copy of this hearing’s record for your files: questions, testimony, every rating, findings, failures, and judgments. It never includes API keys, invitation links, or account ids. Only you, the judge, can download it, and each download is logged.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button variant="outline" disabled={busy !== null} onClick={() => void download('json')}>
+          <Download aria-hidden /> {busy === 'json' ? 'Preparing…' : 'Download record (JSON)'}
+        </Button>
+        <Button variant="outline" disabled={busy !== null} onClick={() => void download('csv')}>
+          <Download aria-hidden /> {busy === 'csv' ? 'Preparing…' : 'Download ratings (CSV)'}
+        </Button>
+      </div>
+      {hash && (
+        <p className="mt-3 text-xs break-all text-muted-foreground">
+          Content fingerprint (SHA-256): <span className="typewriter text-foreground">{hash}</span>. Two copies of the same record have the same fingerprint. It is not a signature.
+        </p>
+      )}
+    </SheetSection>
   )
 }
 

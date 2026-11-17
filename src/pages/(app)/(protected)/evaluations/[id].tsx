@@ -222,7 +222,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
           <CasesEditor cases={draft.cases} errors={errors} newId={newIntentKey} onChange={(cases) => change({ ...draft, cases })} />
         </TabsContent>
         <TabsContent value="configurations" className="pt-6">
-          <ConfigurationsEditor draft={draft} catalog={catalog.data} errors={errors} onChange={change} />
+          <ConfigurationsEditor draft={draft} catalog={catalog.data} errors={errors} newId={newIntentKey} onChange={change} />
           <KeyStatus providers={providers} keys={keys} />
         </TabsContent>
         <TabsContent value="runs" className="pt-6">

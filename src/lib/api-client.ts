@@ -77,6 +77,42 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: st
   return payload.data as T
 }
 
+/** GET a non-JSON body (e.g. a CSV export) with the bearer token; errors use the normal JSON envelope. */
+export async function apiDownload(path: string): Promise<{ blob: Blob; filename: string | null }> {
+  const token = await getAuthToken()
+  if (!token) throw new ApiClientError(401, 'UNAUTHENTICATED', 'Sign in to continue.')
+  let response: Response
+  try {
+    response = await fetch(`/api/v1${path}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
+  } catch {
+    throw new ApiClientError(0, 'NETWORK', 'Could not reach Model Court. Check your connection and try again.')
+  }
+  if (!response.ok) {
+    let payload: { error?: { code: string; message: string }; requestId?: string } = {}
+    try {
+      payload = await response.json()
+    } catch {
+      // fall through to the generic message
+    }
+    throw new ApiClientError(response.status, payload.error?.code ?? 'HTTP_ERROR', payload.error?.message ?? `Request failed (${response.status}).`, [], {}, payload.requestId ?? null)
+  }
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? null
+  return { blob: await response.blob(), filename }
+}
+
+/** Hand a blob to the browser as a file download. */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.documentElement.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 export function describeError(error: unknown): string {
   if (error instanceof ApiClientError) return error.message
   return 'Something went wrong.'

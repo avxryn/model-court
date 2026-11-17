@@ -9,7 +9,7 @@ import { Sheet } from '@/components/court/CaseFile'
 import { Button } from '@/components/ui/button'
 import { CASE_STEPS, TERMS } from '@/lib/court'
 
-const ORDER = ['case', 'judge', 'juror', 'parties', 'question', 'exhibit', 'instructions', 'hearing', 'testimony', 'summons', 'worksheet', 'file', 'unseal', 'findings', 'record', 'judgment', 'docket'] as const
+const ORDER = ['case', 'judge', 'juror', 'parties', 'question', 'exhibit', 'instructions', 'hearing', 'testimony', 'summons', 'worksheet', 'file', 'unseal', 'findings', 'record', 'judgment', 'certified', 'docket'] as const
 
 export default function GlossaryPage() {
   return (

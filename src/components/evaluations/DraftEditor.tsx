@@ -4,6 +4,7 @@
  */
 
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
+import { CaseImport } from '@/components/evaluations/CaseImport'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -48,6 +49,7 @@ export function CasesEditor({ cases, onChange, errors, newId, disabled }: { case
   return (
     <fieldset disabled={disabled} className="space-y-4">
       <legend className="sr-only">Questions</legend>
+      <CaseImport currentCount={cases.length} newId={newId} onImport={onChange} disabled={disabled} />
       {cases.map((testCase, index) => (
         <Card key={testCase.key} className="rounded-[2px] bg-white ring-exhibit-edge">
           <CardHeader>
@@ -108,8 +110,19 @@ export function CasesEditor({ cases, onChange, errors, newId, disabled }: { case
   )
 }
 
-export function ConfigurationsEditor({ draft, onChange, errors, catalog, disabled }: { draft: DraftInput; onChange: (next: DraftInput) => void; errors: FieldErrors; catalog: CatalogView | null; disabled?: boolean }) {
+export function ConfigurationsEditor({ draft, onChange, errors, catalog, disabled, newId }: { draft: DraftInput; onChange: (next: DraftInput) => void; errors: FieldErrors; catalog: CatalogView | null; disabled?: boolean; newId: () => string }) {
   const models = catalog?.models ?? []
+  const minParties = catalog?.limits.minConfigurations ?? LIMITS.minConfigurationsPerRun
+  const maxParties = catalog?.limits.configurations ?? LIMITS.minConfigurationsPerRun
+  const addParty = () => {
+    const last = draft.configurations[draft.configurations.length - 1]
+    const unused = models.find((m) => m.enabled && !draft.configurations.some((c) => c.modelKey === m.key))
+    onChange({
+      ...draft,
+      configurations: [...draft.configurations, { ...last, key: newId(), label: `Party ${draft.configurations.length + 1}`, modelKey: unused?.key ?? last.modelKey }],
+    })
+  }
+  const removeParty = (index: number) => onChange({ ...draft, configurations: draft.configurations.filter((_, i) => i !== index) })
   const setMode = (mode: ComparisonMode) => {
     // Model comparison shares one instruction text across both candidates.
     const configurations = mode === 'model' ? draft.configurations.map((c) => ({ ...c, systemPrompt: draft.configurations[0].systemPrompt })) : draft.configurations
@@ -145,7 +158,7 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
       {draft.comparisonMode === 'model' && (
         <TextField
           id="shared-system-prompt"
-          label="System instructions (shared, sent to both parties)"
+          label="System instructions (shared, sent to every party)"
           multiline
           rows={4}
           value={draft.configurations[0].systemPrompt}
@@ -155,13 +168,20 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
         />
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className={cn('grid gap-4 md:grid-cols-2', draft.configurations.length > 2 && 'xl:grid-cols-3')}>
         {draft.configurations.map((configuration, index) => (
           <Card key={configuration.key} className="rounded-[2px] bg-white ring-exhibit-edge">
             <CardHeader>
               <CardTitle className="court-label">
                 Party <span className="typewriter font-normal tracking-normal">{index + 1}</span>
               </CardTitle>
+              {draft.configurations.length > minParties && (
+                <CardAction>
+                  <Button size="icon-sm" variant="ghost" aria-label={`Remove party ${index + 1}`} onClick={() => removeParty(index)}>
+                    <Trash2 aria-hidden />
+                  </Button>
+                </CardAction>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               <TextField id={`cfg-${configuration.key}-label`} label="Name (sealed from jurors until you unseal)" value={configuration.label} max={LIMITS.configurationLabel.max} error={errors[`configurations.${index}.label`]} onChange={(label) => updateConfig(index, { label })} />
@@ -198,6 +218,16 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
           </Card>
         ))}
       </div>
+      {maxParties > draft.configurations.length && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="outline" onClick={addParty}>
+            <Plus aria-hidden /> Add a party ({draft.configurations.length}/{maxParties})
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Each party adds one paid call per question.{draft.comparisonMode === 'model' && ' In a model comparison, every party needs a different model.'}
+          </span>
+        </div>
+      )}
     </fieldset>
   )
 }

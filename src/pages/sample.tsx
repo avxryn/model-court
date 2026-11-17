@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom'
 import { CheckCircle2, ChevronLeft, ChevronRight, FlaskConical, RotateCcw } from 'lucide-react'
 import { BrandMark } from '@/components/BrandMark'
 import { Caption, CaseProgress, DocketNumber, Sheet, Stamp, Term } from '@/components/court/CaseFile'
+import { FindingsChart } from '@/components/court/FindingsChart'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -199,6 +200,8 @@ export default function SamplePage() {
                     Your practice findings
                   </h2>
                   {practice?.byConfiguration ? (
+                    <>
+                    <FindingsChart cohort={practice} parties={SAMPLE_CONFIGURATIONS} />
                     <div className="overflow-hidden rounded-[2px] bg-white ring-1 ring-exhibit-edge">
                       <Table>
                         <TableHeader>
@@ -233,6 +236,7 @@ export default function SamplePage() {
                         </TableBody>
                       </Table>
                     </div>
+                    </>
                   ) : (
                     <p className="rounded-[2px] bg-slip px-5 py-4 text-sm leading-relaxed text-muted-foreground">
                       Score every testimony on all three lines (with a note for any 0) to see practice findings. In a real hearing, findings appear only for filed worksheets.
