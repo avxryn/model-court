@@ -29,7 +29,7 @@ See `docs/implementation-plan.md` for the checklist, `docs/verification.md` for 
 | DeepSpace primitive | Use |
 |---|---|
 | Authentication (platform auth worker, `verifyJwt`, `AuthGate`, `AuthOverlay`) | Identity for every API call; no custom auth |
-| Managed D1 (`[[d1_databases]] database_id = "auto"`) | Authoritative domain data with transactional guards (ADR-01) |
+| SQLite Durable Object (`ModelCourtStore`, in the app DO manifest) | Authoritative domain data with transactional guards. Managed D1 needs an admin tier, so this replaces it (D-20) |
 | JobRoom + `enqueueJob` | Durable generation, one job per attempt, IDs-only payloads |
 | CronRoom (`mc-maintenance`, every minute) | Outbox re-dispatch, lease expiry, cleanup |
 | RecordRoom (`mc_notices`, own-row read) | Safe live invalidation notices |
@@ -66,7 +66,7 @@ npx deepspace dev start
 | Command | What it covers |
 |---|---|
 | `npm run test:unit` | Pure rules: scoring, validation, prompt construction, adapter mappings |
-| `npm run test:integration` | Real Hono API + real local D1 + real JWT verification. Stubbed: auth issuer key, JobRoom queue, notices, provider HTTP. **No paid calls are possible.** |
+| `npm run test:integration` / `test:integration:store` | Real Hono API + real local D1 / the real `ModelCourtStore` Durable Object + real JWT verification. Stubbed: auth issuer key, JobRoom queue, notices, provider HTTP. **No paid calls are possible.** |
 | `npx deepspace test run` | Scaffold Playwright suites (needs sign-in) |
 | `npm run smoke:providers` | **Paid**, manual: one request per provider; keys typed into a hidden prompt in your own terminal |
 

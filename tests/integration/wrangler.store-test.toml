@@ -1,0 +1,13 @@
+# Test-only Worker config: the production ModelCourtStore Durable Object.
+name = "model-court-store-test"
+main = "store-test-worker.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[durable_objects.bindings]]
+name = "STORE"
+class_name = "ModelCourtStore"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ModelCourtStore"]

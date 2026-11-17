@@ -21,6 +21,8 @@ import { registerAuthRoutes, registerStaticRoutes } from './src/server/http-rout
 import { platformDeps } from './src/server/platform.js'
 import { registerRealtimeRoutes } from './src/server/realtime-routes.js'
 
+export { ModelCourtStore } from './src/server/db/store-object.js'
+
 // Dynamic deploy reads this manifest to create the app's DO bindings.
 export const __DO_MANIFEST__ = [
   { binding: 'RECORD_ROOMS', className: 'AppRecordRoom', sqlite: true },
@@ -29,6 +31,8 @@ export const __DO_MANIFEST__ = [
   { binding: 'PRESENCE_ROOMS', className: 'AppPresenceRoom', sqlite: true },
   { binding: 'CRON_ROOMS', className: 'AppCronRoom', sqlite: true },
   { binding: 'JOB_ROOMS', className: 'AppJobRoom', sqlite: true },
+  // Model Court's authoritative relational store (SQLite Durable Object; D-20).
+  { binding: 'MODEL_COURT_STORE', className: 'ModelCourtStore', sqlite: true },
 ] as const satisfies DOManifest
 
 export class AppRecordRoom extends RecordRoom<Env> {
@@ -73,8 +77,6 @@ export class AppJobRoom extends JobRoom<Env> {
 
 export interface Env extends DOBindings<typeof __DO_MANIFEST__>, ConfigEnv {
   ASSETS: Fetcher
-  /** Model Court domain authority (managed D1, spec ADR-01). */
-  MODEL_COURT_DB: D1Database
   PLATFORM_WORKER?: Fetcher
   PLATFORM_WORKER_URL?: string
   APP_IDENTITY_TOKEN?: string

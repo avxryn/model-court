@@ -7,7 +7,7 @@ Never paste secret values into commands, chats, or documents.
 
 | Setting | Where | Default |
 |---|---|---|
-| `MODEL_COURT_DB` | `wrangler.toml` `[[d1_databases]]`, `database_id = "auto"` | provisioned on first deploy |
+| `MODEL_COURT_STORE` | Durable Object binding (`ModelCourtStore`, migration `v2`) | created on first deploy; one app-wide instance |
 | `GENERATION_ENABLED` | `wrangler.toml [vars]` | `"false"`: the fail-closed spending switch |
 | `CREDENTIAL_WRITES_ENABLED` | `[vars]` | `"true"`; set `"false"` to pause add/replace (removal always works) |
 | `CREDENTIAL_ACTIVE_KEY_VERSION` | `[vars]` | `"v1"` |

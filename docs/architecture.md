@@ -4,7 +4,7 @@
 flowchart LR
     B[Browser] -->|platform sign-in| A[DeepSpace auth worker]
     B -->|Bearer JWT + JSON| API["/api/v1 (Hono in app Worker)"]
-    API --> D[(Managed D1: MODEL_COURT_DB)]
+    API --> D[(ModelCourtStore: SQLite Durable Object)]
     API -->|IDs-only notice| R[RecordRoom mc_notices]
     R -->|own rows only, WebSocket| B
     API -->|outbox → enqueueJob| Q[JobRoom]
@@ -24,7 +24,7 @@ flowchart LR
 | `src/domain/*` | Pure, browser-safe rules: Zod contracts, limits, rubric and scoring, transitions, prompt template `qa-v1`, canonical hashing, snapshot/readiness, registry. No React, SDK, or I/O (lint-enforced). |
 | `src/server/api.ts` | `/api/v1` boundary: identity, origin check, rate limits, body caps, HTTP mapping. |
 | `src/server/services/*` | Use cases: evaluations, credentials, runs (admission/retry/cancel/open review), generation (outbox/claim/commit/lease), reviews (invites/sessions/reveal), results (scoring/verdict), maintenance (cron). |
-| `src/server/db/*` | Migrations, guarded-batch helper, budget/reservation statements, audit, rate buckets. |
+| `src/server/db/*` | `ModelCourtStore` Durable Object + D1-compatible adapter, migrations, guarded-batch helper, budget/reservation statements, audit, rate buckets. |
 | `src/server/providers/*` | Two fixed-endpoint BYOK adapters plus shared transport rules (no redirects, byte ceiling, normalized outcomes, no retries). |
 | `src/server/credential-crypto.ts` | AES-256-GCM seal/open with canonical AAD, plus HMAC. Web Crypto only. |
 | `src/server/platform.ts` | Production wiring: `verifyJwt`, `enqueueJob`, RecordRoom notice writes, `fetch`. |
@@ -60,8 +60,12 @@ lifetime counters with `CHECK (allocated ≤ limit)`. Reservations are released 
 when the call was provably never sent (cancel or revoke before claim, deletion, pre-send credential failure).
 Uncertain and consumed calls are never refunded.
 
-## Why D1 (ADR-01)
+## Why a relational store (ADR-01, revised by D-20)
 
 Unique submissions, atomic reveal-versus-submit ordering, frozen snapshots, and quota reservations
-need relational constraints and guarded multi-statement transactions. RecordRoom carries only safe
-invalidation notices.
+need relational constraints and guarded multi-statement transactions. The spec chose managed D1; the
+free DeepSpace tier refuses D1 bindings, so the same schema runs in an app-owned SQLite Durable Object
+(`ModelCourtStore`). Each adapter call executes inside `transactionSync`, so a batch commits or rolls back
+as a whole, and the object processes calls one at a time (single writer, like D1). Only the Worker holds
+the binding. The integration suite runs against both D1 and the real Durable Object. RecordRoom still
+carries only safe invalidation notices.

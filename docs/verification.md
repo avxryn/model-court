@@ -23,6 +23,9 @@ wrangler/workerd from the lockfile, Vitest 4.1, local D1 via `wrangler getPlatfo
 
 | 2026-11-16 | Independent code review (separate agent, read-only, not shown my conclusions) | review of src/server, domain scoring, worker wiring | No violations of identity, blinding, credential, transition, budget, or receipt rules found; 3 low-severity issues fixed (D-19). Not a substitute for your own review. | T29 (partial) |
 
+| 2026-11-17 | First deploy attempt | `npx deepspace deploy` | Refused: D1 custom binding requires an admin tier (account is free). No release created. | V3 → D-20 |
+| 2026-11-17 | Durable Object SQLite semantics | local workerd probe + `npm run test:integration:store` | Probe: trigger abort, `transactionSync` rollback on guard CHECK, partial unique, RETURNING, JSON, FK cascade all hold. Full integration suite 49/49 against the real `ModelCourtStore`; a mode check confirmed the run used the Durable Object, not D1. | V3 (revised) |
+
 ### Not yet verified by the agent (blocked or pending)
 
 - Anything requiring a DeepSpace login: `dev start`, `test run` (Playwright multi-user fixture), registration, secrets, deploy.

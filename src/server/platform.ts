@@ -11,6 +11,22 @@ import type { Env } from '../../worker'
 import { parseConfig } from './config'
 import type { Deps } from './deps'
 import { GENERATION_JOB_TYPE } from './services/generation'
+import { SqlBatchDatabase } from './db/sql-batch-database'
+import { storeStub, type ModelCourtStore } from './db/store-object'
+
+// One adapter per isolate and namespace, so migrations run once per isolate.
+const databases = new WeakMap<object, D1Database>()
+
+function storeDatabase(env: Env): D1Database {
+  const namespace = env.MODEL_COURT_STORE as unknown as DurableObjectNamespace<ModelCourtStore>
+  let db = databases.get(namespace)
+  if (!db) {
+    const stub = storeStub(namespace)
+    db = new SqlBatchDatabase((statements) => stub.execute(statements)).asD1()
+    databases.set(namespace, db)
+  }
+  return db
+}
 
 /** Trusted server write into the app RecordRoom; bypasses collection RBAC by design. */
 async function recordTool(env: Env, tool: string, params: Record<string, unknown>): Promise<void> {
@@ -28,7 +44,7 @@ async function recordTool(env: Env, tool: string, params: Record<string, unknown
 
 export function platformDeps(env: Env): Deps {
   return {
-    db: env.MODEL_COURT_DB,
+    db: storeDatabase(env),
     config: parseConfig(env),
     routes: MODEL_ROUTES,
     now: () => Date.now(),

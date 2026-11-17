@@ -10,7 +10,9 @@
  */
 
 import { Hono } from 'hono'
-import { getPlatformProxy } from 'wrangler'
+import { fileURLToPath } from 'node:url'
+import { getPlatformProxy, unstable_dev, type Unstable_DevWorker } from 'wrangler'
+import { SqlBatchDatabase } from '../../src/server/db/sql-batch-database'
 import { verifyJwt } from 'deepspace/worker'
 import { MODEL_ROUTES, type ModelRoute } from '../../src/domain/registry'
 import { createApi } from '../../src/server/api'
@@ -57,15 +59,42 @@ export const anthropicOk = (text = 'Yes — the policy allows returns within 30 
 
 export const okStub: ProviderStub = async (call) => (call.url.includes('openai') ? openAiOk() : anthropicOk())
 
+/**
+ * Storage under test. Default: local D1 (wrangler getPlatformProxy).
+ * MC_STORE=do: the production ModelCourtStore Durable Object (SQLite), one
+ * isolated instance per harness, served by tests/integration/store-test-worker.ts.
+ */
+let storeWorker: Promise<Unstable_DevWorker> | null = null
+
+async function openDatabase(): Promise<{ db: D1Database; dispose: () => Promise<void> }> {
+  if (process.env.MC_STORE === 'do') {
+    storeWorker ??= unstable_dev(fileURLToPath(new URL('./store-test-worker.ts', import.meta.url)), {
+      config: fileURLToPath(new URL('./wrangler.store-test.toml', import.meta.url)),
+      experimental: { disableExperimentalWarning: true },
+      logLevel: 'error',
+    })
+    const worker = await storeWorker
+    const name = crypto.randomUUID()
+    const db = new SqlBatchDatabase(async (statements) => {
+      const response = await worker.fetch(`http://store/?db=${name}`, { method: 'POST', body: JSON.stringify(statements) })
+      const body = (await response.json()) as { error?: string }
+      if (!response.ok) throw new Error(body.error ?? 'store error')
+      return body as never
+    }).asD1()
+    return { db, dispose: async () => {} }
+  }
+  // persist: false → a fresh in-memory local D1 per harness.
+  const proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: 'tests/integration/wrangler.test.toml', persist: false })
+  return { db: proxy.env.DB, dispose: () => proxy.dispose() }
+}
+
 export interface HarnessOptions {
   env?: Partial<ConfigEnv>
   routes?: readonly ModelRoute[]
 }
 
 export async function createHarness(options: HarnessOptions = {}) {
-  // persist: false → a fresh in-memory local D1 per harness.
-  const proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: 'tests/integration/wrangler.test.toml', persist: false })
-  const db = proxy.env.DB
+  const { db, dispose } = await openDatabase()
   await migrate(db)
 
   const signing = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
@@ -201,7 +230,7 @@ export async function createHarness(options: HarnessOptions = {}) {
     get idCount() {
       return idCounter
     },
-    dispose: () => proxy.dispose(),
+    dispose,
   }
 }
 
