@@ -118,7 +118,7 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
   const setSharedPrompt = (systemPrompt: string) => onChange({ ...draft, configurations: draft.configurations.map((c) => ({ ...c, systemPrompt })) })
 
   return (
-    <fieldset disabled={disabled} className="space-y-5">
+    <fieldset disabled={disabled} className="space-y-6">
       <legend className="sr-only">Configurations</legend>
       <div className="space-y-2">
         <Label id="mode-label">Comparison mode</Label>
@@ -129,11 +129,11 @@ export function ConfigurationsEditor({ draft, onChange, errors, catalog, disable
               ['configuration', 'Configuration comparison', 'Instructions may differ too. Not an isolated test of model quality.'],
             ] as const
           ).map(([value, title, description]) => (
-            <Label key={value} htmlFor={`mode-${value}`} className={cn('flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 font-normal', draft.comparisonMode === value ? 'border-primary/40 bg-primary/5' : 'border-border')}>
+            <Label key={value} htmlFor={`mode-${value}`} className={cn('flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-3 font-normal transition-colors duration-150', draft.comparisonMode === value ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/15' : 'border-border bg-card hover:border-input hover:bg-secondary/60')}>
               <RadioGroupItem id={`mode-${value}`} value={value} className="mt-0.5" aria-labelledby={`mode-${value}-text`} />
               <span id={`mode-${value}-text`}>
                 <span className="block text-sm font-medium">{title}</span>
-                <span className="block text-xs text-muted-foreground">{description}</span>
+                <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{description}</span>
               </span>
             </Label>
           ))}

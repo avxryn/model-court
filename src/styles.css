@@ -108,6 +108,21 @@
   --tw-exit-rotate: initial;
 }
 
+/*
+ * Product-level surface and label utilities (UI polish, docs/decisions.md).
+ * One raised surface for every panel, list, and table frame so cards, lists
+ * and evidence blocks share the same edge, radius, and depth. Built only from
+ * the palette above — no new colors.
+ */
+@utility surface {
+  @apply rounded-xl bg-card text-card-foreground shadow-xs ring-1 ring-foreground/10;
+}
+
+/* Small uppercase label above a heading or a block of evidence. */
+@utility eyebrow {
+  @apply text-xs font-medium tracking-[0.12em] text-muted-foreground uppercase;
+}
+
 @utility fade-in-0 { --tw-enter-opacity: 0; }
 @utility fade-out-0 { --tw-exit-opacity: 0; }
 @utility zoom-in-95 { --tw-enter-scale: .95; }
@@ -137,10 +152,16 @@
     font-size: 15px;
     color: var(--foreground);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   h1, h2, h3 {
     font-family: var(--font-heading);
     letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  p, li, dd {
+    text-wrap: pretty;
   }
   ::selection {
     background-color: var(--primary);

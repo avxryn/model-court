@@ -33,7 +33,7 @@ export default function ApiKeysPage() {
         title="Provider API keys"
         description="Live comparisons use your own OpenAI and Anthropic keys. Each generation is billed by the provider to your account. Invited reviewers never need a key."
       />
-      <Alert className="mb-6">
+      <Alert className="mb-8">
         <ShieldCheck aria-hidden />
         <AlertTitle>How keys are stored</AlertTitle>
         <AlertDescription>
@@ -121,8 +121,10 @@ function ProviderKeyCard({ provider, current, writesEnabled, onChanged }: { prov
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <KeyRound className="size-4 text-muted-foreground" aria-hidden />
+        <CardTitle className="flex items-center gap-2.5 text-lg font-semibold">
+          <span aria-hidden className="grid size-8 place-items-center rounded-full bg-secondary text-muted-foreground ring-1 ring-foreground/5">
+            <KeyRound className="size-4" />
+          </span>
           {name}
         </CardTitle>
         <CardDescription>

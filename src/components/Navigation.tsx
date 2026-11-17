@@ -26,7 +26,7 @@ export default function Navigation() {
         key={item.path}
         to={item.path}
         aria-current={active ? 'page' : undefined}
-        className={cn('rounded-md px-3 py-1.5 text-sm transition-colors', active ? 'bg-secondary font-medium text-foreground' : 'text-muted-foreground hover:text-foreground')}
+        className={cn('rounded-md px-3 py-1.5 text-sm transition-colors duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/50', active ? 'bg-secondary font-medium text-foreground' : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground')}
       >
         {item.label}
       </Link>
@@ -44,9 +44,9 @@ export default function Navigation() {
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-card focus:px-3 focus:py-2">
         Skip to content
       </a>
-      <nav data-testid="app-navigation" aria-label="Primary" className="border-b border-border bg-card/70 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
-          <Link to="/evaluations" className="flex items-center gap-2 text-foreground">
+      <nav data-testid="app-navigation" aria-label="Primary" className="border-b border-border bg-card/80 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4 sm:px-6">
+          <Link to="/evaluations" className="flex items-center gap-2 rounded-md text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
             <BrandMark />
           </Link>
           <div className="hidden items-center gap-1 md:flex">{nav.map(link)}</div>
@@ -94,7 +94,7 @@ export default function Navigation() {
             {mobileOpen ? <X aria-hidden /> : <Menu aria-hidden />}
           </Button>
         </div>
-        {mobileOpen && <div className="flex flex-col gap-1 border-t border-border px-2 py-2 md:hidden">{nav.map(link)}</div>}
+        {mobileOpen && <div className="flex flex-col gap-1 border-t border-border px-3 py-3 md:hidden">{nav.map(link)}</div>}
       </nav>
       {showAuth && <AuthOverlay onClose={() => setShowAuth(false)} />}
     </>
