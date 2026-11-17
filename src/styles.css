@@ -12,11 +12,11 @@
  */
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.985 0.004 85);
+  --background: #e9e2d3;
   --foreground: oklch(0.22 0.025 262);
-  --card: oklch(1 0 0);
+  --card: #fffdf6;
   --card-foreground: oklch(0.22 0.025 262);
-  --popover: oklch(1 0 0);
+  --popover: #fffdf6;
   --popover-foreground: oklch(0.22 0.025 262);
   --primary: oklch(0.36 0.075 262);
   --primary-foreground: oklch(0.985 0.004 85);
@@ -35,12 +35,33 @@
   --warning: oklch(0.56 0.13 65);
   --warning-foreground: oklch(0.985 0.004 85);
   --brass: oklch(0.6 0.11 75);
+  /* Case-file surfaces (D-25): a desk, paper sheets, manila folder tabs,
+     exhibit stickers, and the clerk's red stamp ink. */
+  --desk: #e9e2d3;
+  --paper: #fffdf6;
+  --paper-rule: #e4dcc8;
+  --paper-edge: #c9bb97;
+  --margin-rule: #d9a79f;
+  --manila: #dccfae;
+  --manila-foreground: #4a3b1c;
+  --sticker: #f2cf5b;
+  --sticker-foreground: #3d2e00;
+  --stamp: #a8261c;
+  --exhibit-edge: #dcd3be;
+  --slip: #f6f1e4;
+  --slip-edge: #b9a87e;
+  --tab-idle: #e0d6bf;
+  --tab-idle-foreground: #5a4e36;
+  --staple: #9aa0aa;
+  --mark: #8c8270;
   color-scheme: light;
 }
 
 @theme inline {
   --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-heading: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, ui-serif, serif;
+  --font-heading: 'Libre Caslon Text', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif;
+  --font-document: 'Libre Caslon Text', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif;
+  --font-typewriter: 'Courier Prime', 'Courier New', ui-monospace, monospace;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -65,6 +86,23 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-brass: var(--brass);
+  --color-desk: var(--desk);
+  --color-paper: var(--paper);
+  --color-paper-rule: var(--paper-rule);
+  --color-paper-edge: var(--paper-edge);
+  --color-margin-rule: var(--margin-rule);
+  --color-manila: var(--manila);
+  --color-manila-foreground: var(--manila-foreground);
+  --color-sticker: var(--sticker);
+  --color-sticker-foreground: var(--sticker-foreground);
+  --color-stamp: var(--stamp);
+  --color-exhibit-edge: var(--exhibit-edge);
+  --color-slip: var(--slip);
+  --color-slip-edge: var(--slip-edge);
+  --color-tab-idle: var(--tab-idle);
+  --color-tab-idle-foreground: var(--tab-idle-foreground);
+  --color-staple: var(--staple);
+  --color-mark: var(--mark);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -116,6 +154,35 @@
  */
 @utility surface {
   @apply rounded-xl bg-card text-card-foreground shadow-xs ring-1 ring-foreground/10;
+}
+
+/* A sheet of paper on the desk: warm edge, a short contact shadow, a soft drop. */
+@utility paper {
+  @apply bg-paper text-foreground ring-1 ring-paper-edge;
+  box-shadow: 0 1px 0 var(--paper-rule), 0 12px 28px -12px rgb(60 45 15 / 0.22);
+}
+
+/* Typewriter face: docket numbers, stamps, exhibit stickers. */
+@utility typewriter {
+  font-family: var(--font-typewriter);
+  letter-spacing: 0.06em;
+}
+
+/* Court label above a section of a document (QUESTION PRESENTED, JURY INSTRUCTIONS). */
+@utility court-label {
+  @apply text-xs font-bold tracking-[0.16em] text-foreground uppercase;
+  font-family: var(--font-document);
+}
+
+/* One press of a rubber stamp; skipped entirely under reduced motion (see base layer). */
+@keyframes stamp-press {
+  0% { opacity: 0; transform: scale(1.6) rotate(var(--stamp-tilt, -8deg)); }
+  60% { opacity: 1; transform: scale(0.96) rotate(var(--stamp-tilt, -8deg)); }
+  100% { opacity: 1; transform: scale(1) rotate(var(--stamp-tilt, -8deg)); }
+}
+
+@utility stamp-press {
+  animation: stamp-press 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 /* Small uppercase label above a heading or a block of evidence. */

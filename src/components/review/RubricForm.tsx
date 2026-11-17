@@ -27,11 +27,14 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
   const noteInvalid = needsNote && noteLength < LIMITS.ratingNote.min
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <div className="court-label">
+        Juror’s worksheet<span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(your ratings)</span>
+      </div>
       {DIMENSIONS.map((dimension) => (
-        <FieldSet key={dimension} className="space-y-2" disabled={disabled}>
-          <FieldLegend id={`${id}-${dimension}-legend`} className="mb-0 text-sm font-semibold">
-            {RUBRIC[dimension].label} <span className="sr-only">for response {label}</span>
+        <FieldSet key={dimension} className="space-y-1.5 border-b border-dotted border-paper-edge pb-4" disabled={disabled}>
+          <FieldLegend id={`${id}-${dimension}-legend`} className="mb-0 font-heading text-base font-bold">
+            {RUBRIC[dimension].label} <span className="sr-only">for testimony {label}</span>
           </FieldLegend>
           <RadioGroup
             value={rating[dimension] === null ? null : String(rating[dimension])}
@@ -48,15 +51,24 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
                   key={score}
                   htmlFor={itemId}
                   className={cn(
-                    'flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 text-sm leading-snug font-normal transition-colors duration-150',
-                    checked ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/15' : 'border-border bg-card hover:border-input hover:bg-secondary/60',
+                    'flex cursor-pointer items-center gap-3 rounded-md px-1.5 py-1 text-sm leading-snug font-normal transition-colors duration-150 focus-within:ring-2 focus-within:ring-ring/50',
+                    checked ? 'bg-slip' : 'hover:bg-slip/60',
                     disabled && 'cursor-not-allowed opacity-70',
                   )}
                 >
-                  <RadioGroupItem id={itemId} value={String(score)} className="mt-0.5" aria-labelledby={`${itemId}-text`} />
+                  <RadioGroupItem id={itemId} value={String(score)} className="sr-only" aria-labelledby={`${itemId}-text`} />
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'typewriter grid size-9 shrink-0 place-items-center rounded-full text-base tabular-nums transition-colors duration-150',
+                      checked ? 'bg-foreground font-bold text-paper' : 'bg-paper text-foreground ring-[1.5px] ring-mark',
+                    )}
+                  >
+                    {score}
+                  </span>
                   <span id={`${itemId}-text`}>
-                    <span className="font-semibold text-foreground tabular-nums">{score}</span>
-                    <span className={checked ? 'text-foreground/80' : 'text-muted-foreground'}> — {RUBRIC[dimension].anchors[score]}</span>
+                    <span className="sr-only">{score} — </span>
+                    <span className={checked ? 'text-foreground' : 'text-muted-foreground'}>{RUBRIC[dimension].anchors[score]}</span>
                   </span>
                 </Label>
               )
@@ -66,7 +78,7 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
       ))}
 
       <div className="space-y-1.5">
-        <Label htmlFor={`${id}-note`}>
+        <Label htmlFor={`${id}-note`} className="font-heading text-base font-bold">
           Evidence note {needsNote ? <span className="text-destructive">(required for any 0)</span> : <span className="font-normal text-muted-foreground">(optional)</span>}
         </Label>
         <Textarea
@@ -77,7 +89,8 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
           aria-invalid={noteInvalid || undefined}
           aria-describedby={`${id}-note-help`}
           onChange={(event) => onChange({ ...rating, note: event.target.value })}
-          placeholder="What in the response supports your scores?"
+          placeholder="What in the testimony supports your scores?"
+          className="bg-white font-heading"
           rows={3}
         />
         <FieldDescription id={`${id}-note-help`} className={cn('text-xs', noteInvalid && 'text-destructive')}>
@@ -85,7 +98,7 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
         </FieldDescription>
       </div>
 
-      <div className="flex items-start gap-3 rounded-lg bg-secondary/60 px-3 py-3">
+      <div className="flex items-start gap-3 rounded-md bg-slip px-3 py-3">
         <Checkbox
           id={`${id}-clue`}
           checked={rating.suspectedIdentityClue}
@@ -93,7 +106,7 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
           onCheckedChange={(checked) => onChange({ ...rating, suspectedIdentityClue: checked === true })}
         />
         <Label htmlFor={`${id}-clue`} className="flex-col items-start gap-1 text-sm leading-snug font-normal text-pretty">
-          This response hints at which model wrote it
+          This testimony hints at which party gave it
           <span className="block text-xs leading-snug text-muted-foreground">Flagged sessions are counted as potentially unblinded in results.</span>
         </Label>
       </div>

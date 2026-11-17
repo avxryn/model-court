@@ -4,6 +4,12 @@ import { createRoot, hydrateRoot } from 'react-dom/client'
 import { routes } from '@generouted/react-router/lazy'
 import { createBrowserRouter, RouterProvider } from 'react-router'
 import { installStaleChunkRecovery } from './stale-chunk-recovery'
+// Case-file typefaces, self-hosted: the CSP allows fonts only from 'self' (D-25).
+import '@fontsource/libre-caslon-text/latin-400.css'
+import '@fontsource/libre-caslon-text/latin-400-italic.css'
+import '@fontsource/libre-caslon-text/latin-700.css'
+import '@fontsource/courier-prime/latin-400.css'
+import '@fontsource/courier-prime/latin-700.css'
 import './styles.css'
 
 async function main() {
