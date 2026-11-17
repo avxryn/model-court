@@ -92,6 +92,8 @@ Status legend: `[x]` done with evidence · `[~]` implemented, evidence pending
 
 ## Stretch goals (after submission — not part of P0)
 
+The order and design for these, plus the deferred P1 features and the courtroom redesign, are in `docs/v2-plan.md` (D-25).
+
 Collected on Nov 17, 2026 from use-case discussions. These come after the Nov 20 submission, and after the spec's own P1 items (third configuration, CSV import, JSON export, result charts). Each one needs its own scope, versioning (rubric/snapshot), and tests before it starts. None of them may weaken BYOK, blinding, or evidence immutability.
 
 ### S1. Use cases that work today (document and demo; no code)
