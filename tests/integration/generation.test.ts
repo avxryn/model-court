@@ -203,7 +203,11 @@ describe('T07/T17 failures, retries, and fencing', () => {
     h.env.PROVIDER_TIMEOUT_MS = '20'
     h.setProvider((call, signal) =>
       call.url.includes('openai')
-        ? new Promise((_, reject) => signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))))
+        ? new Promise((_, reject) => {
+            // Like real fetch: an already-aborted signal rejects immediately.
+            if (signal.aborted) return reject(new DOMException('aborted', 'AbortError'))
+            signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+          })
         : Promise.resolve(anthropicOk()),
     )
     const runId = (await startRun(h, setup)).json.data.runId
