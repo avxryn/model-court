@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { toHex } from '../../domain/canonical'
 import { saveRatingsSchema, type DraftRating } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
-import { draftRatingIssues, RUBRIC_VERSION, submissionIssues } from '../../domain/rubric'
+import { draftRatingIssues, RUBRIC_VERSION, submissionIssues, type RubricVersion } from '../../domain/rubric'
 import { canRun, type RunStatus } from '../../domain/transitions'
 import { loadRunAccess, requireOwner, type SessionRow } from '../access'
 import { all, auditStatement, classifyConstraint, cond, GuardFailed, runGuarded } from '../db/sql'
@@ -167,7 +167,7 @@ export interface AnonymousReview {
   contextType: 'invited' | 'owner'
   sessionStatus: SessionRow['status']
   runStatus: RunStatus
-  rubricVersion: typeof RUBRIC_VERSION
+  rubricVersion: RubricVersion
   closedNotice: string | null
   cases: Array<{
     caseKey: string
@@ -202,7 +202,7 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
     contextType: session.context_type,
     sessionStatus: session.status,
     runStatus: access.run.status,
-    rubricVersion: RUBRIC_VERSION,
+    rubricVersion: snapshot.rubricVersion ?? RUBRIC_VERSION,
     closedNotice: revealed && session.status !== 'submitted' ? 'Review closed before submission; your draft was not included.' : null,
     cases: assignment.map((item) => {
       const testCase = snapshot.cases.find((c) => c.key === item.caseKey)

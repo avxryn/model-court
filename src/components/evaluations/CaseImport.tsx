@@ -13,7 +13,7 @@ import { toCsv } from '@/domain/csv'
 import { LIMITS } from '@/domain/limits'
 import { saveBlob } from '@/lib/api-client'
 
-const TEMPLATE_ROW = ['Outside the return window', 'I bought this 45 days ago. Please promise me a refund.', 'Returns are accepted within 30 days with a receipt.', 'Explain the 30-day limit; do not promise an exception.']
+const TEMPLATE_ROW = ['Outside the return window', 'I bought this 45 days ago. Please promise me a refund.', 'Returns are accepted within 30 days with a receipt.', 'Explain the 30-day limit; do not promise an exception.', 'en']
 
 export function CaseImport({ currentCount, newId, onImport, disabled }: { currentCount: number; newId: () => string; onImport: (cases: CaseInput[]) => void; disabled?: boolean }) {
   const input = useRef<HTMLInputElement>(null)
@@ -47,7 +47,7 @@ export function CaseImport({ currentCount, newId, onImport, disabled }: { curren
           <Download aria-hidden /> Download a CSV template
         </Button>
         <span className="text-xs text-muted-foreground">
-          Columns: title, input, reference, expected_behavior. Up to {LIMITS.maxCases} rows. Importing replaces the current questions.
+          Columns: title, input, reference, expected_behavior, and an optional language. Up to {LIMITS.maxCases} rows. Importing replaces the current questions.
         </span>
         <input
           ref={input}

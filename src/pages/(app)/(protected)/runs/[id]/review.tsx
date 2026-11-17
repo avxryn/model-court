@@ -214,7 +214,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
               <div className={cn('grid gap-6', current.responses.length > 1 && 'xl:grid-cols-2')}>
                 {current.responses.map((response) => (
                   <ResponseCard key={response.responseId} label={response.label} text={response.text}>
-                    <RubricForm label={response.label} rating={ratings[response.responseId] ?? emptyRating(response.responseId)} onChange={update} disabled={!editable} />
+                    <RubricForm label={response.label} rating={ratings[response.responseId] ?? emptyRating(response.responseId)} onChange={update} disabled={!editable} rubricVersion={review.rubricVersion} />
                   </ResponseCard>
                 ))}
               </div>

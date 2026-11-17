@@ -55,6 +55,8 @@ function buildRecordBody(results: Results, evaluationId: string) {
       input: testCase.input,
       reference: testCase.reference,
       expectedBehavior: testCase.expectedBehavior,
+      // Only when tagged, so records of untagged hearings keep their earlier fingerprint.
+      ...(testCase.language ? { language: testCase.language } : {}),
       eligible: testCase.eligible,
     })),
     responses: results.cases.flatMap((testCase) => testCase.responses.map((response) => ({ caseKey: testCase.key, ...response }))),

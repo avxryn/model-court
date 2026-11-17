@@ -4,12 +4,13 @@
  * hidden from assistive tech and every bar is labelled in text.
  */
 
-import { DIMENSIONS, formatScore, RUBRIC, type CohortResult } from '@/domain/rubric'
+import { DIMENSIONS, formatScore, rubricLines, type CohortResult } from '@/domain/rubric'
 import { cn } from '@/lib/utils'
 
 const BAR_TONES = ['bg-foreground', 'bg-primary/70', 'bg-manila-foreground/70'] as const
 
-export function FindingsChart({ cohort, parties }: { cohort: CohortResult; parties: Array<{ key: string; label: string }> }) {
+export function FindingsChart({ cohort, parties, rubricVersion }: { cohort: CohortResult; parties: Array<{ key: string; label: string }>; rubricVersion?: string }) {
+  const RUBRIC = rubricLines(rubricVersion)
   const by = cohort.byConfiguration
   if (!by) return null
   const rows = [...DIMENSIONS.map((d) => ({ key: d, label: RUBRIC[d].label, value: (k: string) => by[k].dimensions[d].mean })), { key: 'overall', label: 'Overall mean', value: (k: string) => by[k].overallMean }]

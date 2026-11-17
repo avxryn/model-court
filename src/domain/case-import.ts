@@ -17,10 +17,10 @@ import { parseCsv } from './csv'
 import { LIMITS } from './limits'
 import { utf8ByteLength } from './text'
 
-export const CASE_IMPORT_COLUMNS = ['title', 'input', 'reference', 'expected_behavior'] as const
+export const CASE_IMPORT_COLUMNS = ['title', 'input', 'reference', 'expected_behavior', 'language'] as const
 type Column = (typeof CASE_IMPORT_COLUMNS)[number]
 const REQUIRED: readonly Column[] = ['title', 'input', 'expected_behavior']
-const FIELD: Record<Column, keyof Omit<CaseInput, 'key'>> = { title: 'title', input: 'input', reference: 'reference', expected_behavior: 'expectedBehavior' }
+const FIELD: Record<Column, keyof Omit<CaseInput, 'key'>> = { title: 'title', input: 'input', reference: 'reference', expected_behavior: 'expectedBehavior', language: 'language' }
 
 export interface ImportIssue {
   /** 1-based data row (the header is row 0); null for file-level problems. */
@@ -76,6 +76,8 @@ export function parseCasesCsv(text: string, newId: () => string): CaseImportResu
     }
     const candidate: CaseInput = { key: newId(), title: '', input: '', reference: '', expectedBehavior: '' }
     columns.forEach((column, i) => {
+      // An empty language cell means "untagged", not an invalid blank tag.
+      if (column === 'language' && cells[i].trim() === '') return
       if (column) candidate[FIELD[column]] = cells[i]
     })
     const result = caseInputSchema.safeParse(candidate)

@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { verdictSchema } from '@/domain/contracts'
 import { LIMITS } from '@/domain/limits'
 import { PROVIDER_NAMES } from '@/domain/registry'
-import { DIMENSIONS, formatScore, RUBRIC, type CohortResult } from '@/domain/rubric'
+import { DIMENSIONS, formatScore, rubricLines, RUBRICS, type CohortResult } from '@/domain/rubric'
 import { codePointLength } from '@/domain/text'
 import { api, ApiClientError, apiDownload, describeError, newIntentKey, saveBlob } from '@/lib/api-client'
 import type { ResultsView } from '@/lib/dto'
@@ -49,6 +49,8 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
   const labels = Object.fromEntries(data.configurations.map((c) => [c.key, c.label]))
   const unblinded = data.cohorts.invited.potentiallyUnblindedCount + data.cohorts.owner.potentiallyUnblindedCount
   const decided = data.status === 'decided'
+  const RUBRIC = rubricLines(data.rubricVersion)
+  const rubricName = (RUBRICS as Record<string, { name: string }>)[data.rubricVersion]?.name ?? data.rubricVersion
   return (
     <Page width="wide">
       <CaseProgress step="judgment" complete={decided} />
@@ -61,6 +63,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
           <>
             <div>Hearing · {formatTime(data.createdAt)}</div>
             <div>Unsealed · {formatTime(data.revealedAt)}</div>
+            <div>Rubric · {rubricName}</div>
             <div className="text-xs leading-snug text-muted-foreground">
               Scores are 0–2 means over {data.eligibleCaseKeys.length} eligible question{data.eligibleCaseKeys.length === 1 ? '' : 's'}. No winner is declared automatically.
             </div>
@@ -99,14 +102,49 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
             <TabsTrigger value="owner">Judge’s own review, context-aware ({data.cohorts.owner.reviewerCount})</TabsTrigger>
           </TabsList>
           <TabsContent value="invited" className="pt-3">
-            <CohortTable cohort={data.cohorts.invited} configurations={data.configurations} />
+            <CohortTable cohort={data.cohorts.invited} configurations={data.configurations} rubricVersion={data.rubricVersion} />
           </TabsContent>
           <TabsContent value="owner" className="pt-3">
-            <CohortTable cohort={data.cohorts.owner} configurations={data.configurations} />
+            <CohortTable cohort={data.cohorts.owner} configurations={data.configurations} rubricVersion={data.rubricVersion} />
             <p className="mt-2 text-xs text-muted-foreground">The judge chose these parties, so this review is not blind and is never combined with the jury’s findings.</p>
           </TabsContent>
         </Tabs>
       </SheetSection>
+
+      {data.byLanguage.length > 0 && (
+        <SheetSection id="by-language" label={<>Findings by language{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(overall means; jury first, judge in brackets)</span></>}>
+          <div className="overflow-x-auto rounded-[2px] bg-white ring-1 ring-exhibit-edge">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Language</TableHead>
+                  <TableHead className="text-right">Questions</TableHead>
+                  {data.configurations.map((c) => (
+                    <TableHead key={c.key} className="text-right">
+                      {c.label}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.byLanguage.map((group) => (
+                  <TableRow key={group.language ?? 'untagged'}>
+                    <TableCell className="font-medium">{group.language ?? <span className="text-muted-foreground italic">Untagged</span>}</TableCell>
+                    <TableCell className="text-right tabular-nums">{group.caseKeys.length}</TableCell>
+                    {data.configurations.map((c) => (
+                      <TableCell key={c.key} className="text-right tabular-nums">
+                        {group.invited.byConfiguration ? formatScore(group.invited.byConfiguration[c.key].overallMean) : '—'}
+                        {group.owner.byConfiguration && <span className="ml-1 text-xs text-muted-foreground">({formatScore(group.owner.byConfiguration[c.key].overallMean)})</span>}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Each language is scored on its own questions only. With few questions per language, treat differences as exploratory.</p>
+        </SheetSection>
+      )}
 
       <SheetSection id="coverage" label={<>Testimony taken{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(generation coverage)</span></>}>
         <div className="overflow-x-auto rounded-[2px] bg-white ring-1 ring-exhibit-edge">
@@ -246,7 +284,8 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
   )
 }
 
-function CohortTable({ cohort, configurations }: { cohort: CohortResult; configurations: ResultsView['configurations'] }) {
+function CohortTable({ cohort, configurations, rubricVersion }: { cohort: CohortResult; configurations: ResultsView['configurations']; rubricVersion: string }) {
+  const RUBRIC = rubricLines(rubricVersion)
   if (!cohort.byConfiguration) {
     return <p className="rounded-[2px] bg-slip px-5 py-4 text-sm text-muted-foreground">No ratings in this group.</p>
   }
@@ -254,7 +293,7 @@ function CohortTable({ cohort, configurations }: { cohort: CohortResult; configu
   const tie = cohort.highest.length > 1
   return (
     <>
-    <FindingsChart cohort={cohort} parties={configurations} />
+    <FindingsChart cohort={cohort} parties={configurations} rubricVersion={rubricVersion} />
     <div className="overflow-x-auto rounded-[2px] bg-white ring-1 ring-exhibit-edge">
       <Table>
         <TableHeader>
@@ -345,9 +384,16 @@ function VerdictSection({ data, reload }: { data: ResultsView; reload: () => Pro
   const latest = data.verdicts.at(-1)
   return (
     <section aria-labelledby="verdict" className="relative border-t-4 border-double border-foreground px-5 pt-6 pb-10 sm:px-8">
-      <h2 id="verdict" className="court-label">
-        <Term name="judgment" />
-      </h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="verdict" className="court-label">
+          <Term name="judgment" />
+        </h2>
+        {latest && (
+          <Link to={`/runs/${data.runId}/judgment`} className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">
+            Printable judgment
+          </Link>
+        )}
+      </div>
       {latest ? (
         <div className="mt-3 space-y-2">
           <p className="font-heading text-2xl leading-snug font-bold">{latest.outcome === 'selected' ? `Selected: ${data.configurations.find((c) => c.key === latest.selectedConfigurationKey)?.label}` : latest.outcome === 'tie' ? 'Tie' : 'Inconclusive'}</p>

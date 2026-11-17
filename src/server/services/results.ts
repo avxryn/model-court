@@ -108,6 +108,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
       input: testCase.input,
       reference: testCase.reference,
       expectedBehavior: testCase.expectedBehavior,
+      language: testCase.language ?? null,
       eligible,
       responses: snapshot.configurations.map((configuration) => {
         const generation = generations.find((g) => g.case_key === testCase.key && g.configuration_key === configuration.key)
@@ -180,6 +181,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
       owner: scoreCohort('owner', manifest.caseKeys, configurationKeys, scored),
     },
     disagreements: findDisagreements(scored),
+    byLanguage: languageBreakdown(snapshot.cases, manifest.caseKeys, configurationKeys, scored),
     coverage,
     cases,
     verdicts: verdicts.map((verdict) => ({
@@ -191,6 +193,30 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
       createdAt: verdict.created_at,
     })),
   }
+}
+
+/**
+ * Findings per language tag (D-36), only when eligible questions carry at
+ * least two distinct tags. Untagged questions form their own group. Each
+ * group is scored exactly like the whole cohort, on its own questions.
+ */
+export function languageBreakdown(cases: ReadonlyArray<{ key: string; language?: string }>, eligibleCaseKeys: readonly string[], configurationKeys: readonly string[], scored: ScoredSession[]) {
+  const eligible = cases.filter((testCase) => eligibleCaseKeys.includes(testCase.key))
+  const tags = new Set(eligible.map((testCase) => testCase.language).filter((tag): tag is string => !!tag))
+  if (tags.size < 2) return []
+  const groups = new Map<string | null, string[]>()
+  for (const testCase of eligible) {
+    const tag = testCase.language ?? null
+    groups.set(tag, [...(groups.get(tag) ?? []), testCase.key])
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : a.localeCompare(b)))
+    .map(([language, caseKeys]) => ({
+      language,
+      caseKeys,
+      invited: scoreCohort('invited', caseKeys, configurationKeys, scored),
+      owner: scoreCohort('owner', caseKeys, configurationKeys, scored),
+    }))
 }
 
 export async function recordVerdict(deps: Deps, userId: string, runId: string, input: z.output<typeof verdictSchema>, ifMatch: number, key: string, requestId: string) {

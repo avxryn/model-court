@@ -7,7 +7,7 @@ import { CANONICALIZATION_VERSION } from './canonical'
 import type { CaseInput, ComparisonMode, Configuration, Draft } from './contracts'
 import { MESSAGE_TEMPLATE_VERSION } from './messages'
 import { findRoute, isRouteEnabled, PROVIDER_REGISTRY_VERSION, type ModelRoute, type ProviderId } from './registry'
-import { RUBRIC_VERSION } from './rubric'
+import { RUBRIC_VERSION, type RubricVersion } from './rubric'
 
 export interface SnapshotConfiguration extends Configuration {
   provider: ProviderId
@@ -21,7 +21,7 @@ export interface RunSnapshot {
   comparisonMode: ComparisonMode
   cases: CaseInput[]
   configurations: SnapshotConfiguration[]
-  rubricVersion: typeof RUBRIC_VERSION
+  rubricVersion: RubricVersion
   messageTemplateVersion: typeof MESSAGE_TEMPLATE_VERSION
   providerRegistryVersion: string
   appCommit: string
@@ -84,7 +84,7 @@ export function buildSnapshot(draft: Draft, routes: readonly ModelRoute[], appCo
       if (!route) throw new Error('buildSnapshot requires validated routes')
       return { ...configuration, provider: route.provider, modelId: route.modelId, adapterVersion: route.adapterVersion }
     }),
-    rubricVersion: RUBRIC_VERSION,
+    rubricVersion: draft.rubricVersion ?? RUBRIC_VERSION,
     messageTemplateVersion: MESSAGE_TEMPLATE_VERSION,
     providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
     appCommit,

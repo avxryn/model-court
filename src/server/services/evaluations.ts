@@ -112,7 +112,12 @@ export async function createEvaluation(deps: Deps, userId: string, input: z.outp
 
 export function parseStoredDraft(row: Pick<EvaluationRow, 'draft_json'>): Draft {
   const raw = JSON.parse(row.draft_json) as Draft
-  const parsed = draftInputSchema.safeParse({ comparisonMode: raw.comparisonMode, cases: raw.cases, configurations: raw.configurations })
+  const parsed = draftInputSchema.safeParse({
+    comparisonMode: raw.comparisonMode,
+    ...(raw.rubricVersion !== undefined ? { rubricVersion: raw.rubricVersion } : {}),
+    cases: raw.cases,
+    configurations: raw.configurations,
+  })
   if (!parsed.success) throw new ApiError(500, 'INTERNAL', 'Stored draft failed validation.')
   return { schemaVersion: 1, ...parsed.data }
 }

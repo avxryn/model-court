@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import type { CaseInput, ComparisonMode, Configuration, DraftInput } from '@/domain/contracts'
 import { LIMITS } from '@/domain/limits'
+import { DIMENSIONS, RUBRIC_VERSION, RUBRIC_VERSIONS, RUBRICS, type RubricVersion } from '@/domain/rubric'
 import { codePointLength } from '@/domain/text'
 import type { CatalogView } from '@/lib/dto'
 import { cn } from '@/lib/utils'
@@ -96,6 +97,17 @@ export function CasesEditor({ cases, onChange, errors, newId, disabled }: { case
                 onChange={(expectedBehavior) => update(index, { expectedBehavior })}
               />
             </div>
+            <div className="md:col-span-2 md:max-w-xs">
+              <TextField
+                id={`case-${testCase.key}-language`}
+                label="Language (optional)"
+                value={testCase.language ?? ''}
+                max={LIMITS.caseLanguage.max}
+                hint="For example en or Spanish. Tag two or more languages to see findings by language."
+                error={errors[`cases.${index}.language`]}
+                onChange={(language) => update(index, { language: language.trim() === '' ? undefined : language })}
+              />
+            </div>
           </CardContent>
         </Card>
       ))}
@@ -106,6 +118,33 @@ export function CasesEditor({ cases, onChange, errors, newId, disabled }: { case
       >
         <Plus aria-hidden /> Add a question ({cases.length}/{LIMITS.maxCases})
       </Button>
+    </fieldset>
+  )
+}
+
+/** Choose the jury's rubric (D-35). Hearings keep the version they started with. */
+export function RubricPicker({ value, onChange, disabled }: { value: RubricVersion | undefined; onChange: (next: RubricVersion) => void; disabled?: boolean }) {
+  const current = value ?? RUBRIC_VERSION
+  return (
+    <fieldset disabled={disabled} className="mb-6 space-y-2">
+      <legend id="rubric-legend" className="court-label mb-2">
+        The jury’s rubric{' '}
+        <span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(what jurors score; each line is 0–2)</span>
+      </legend>
+      <RadioGroup aria-labelledby="rubric-legend" value={current} onValueChange={(v) => onChange(v as RubricVersion)} className="grid gap-2 md:grid-cols-3">
+        {RUBRIC_VERSIONS.map((version) => {
+          const rubric = RUBRICS[version]
+          return (
+            <Label key={version} htmlFor={`rubric-${version}`} className={cn('flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 font-normal transition-colors duration-150', current === version ? 'border-foreground bg-slip' : 'border-paper-edge bg-white hover:bg-slip/60')}>
+              <RadioGroupItem id={`rubric-${version}`} value={version} className="mt-0.5" aria-labelledby={`rubric-${version}-text`} />
+              <span id={`rubric-${version}-text`} className="leading-snug">
+                <span className="block font-medium text-foreground">{rubric.name}</span>
+                <span className="block text-xs text-muted-foreground">{DIMENSIONS.map((d) => rubric.lines[d].label).join(' · ')}</span>
+              </span>
+            </Label>
+          )
+        })}
+      </RadioGroup>
     </fieldset>
   )
 }

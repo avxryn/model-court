@@ -6,6 +6,7 @@
 import { z } from 'zod'
 import { LIMITS } from './limits'
 import { PROVIDERS } from './registry'
+import { RUBRIC_VERSIONS } from './rubric'
 import { codePointLength, hasDisallowedControlChars, utf8ByteLength } from './text'
 
 const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i, 'Invalid id')
@@ -38,6 +39,8 @@ export const caseInputSchema = z.strictObject({
   input: text(LIMITS.caseInput, 'Input'),
   reference: text(LIMITS.caseReference, 'Reference'),
   expectedBehavior: text(LIMITS.caseExpectedBehavior, 'Expected behavior'),
+  /** Optional language tag for per-language results (D-36), e.g. "en" or "Spanish". */
+  language: z.string().trim().min(1, 'Language cannot be blank').max(LIMITS.caseLanguage.max, `Language is at most ${LIMITS.caseLanguage.max} characters`).optional(),
 })
 export type CaseInput = z.infer<typeof caseInputSchema>
 
@@ -63,6 +66,8 @@ export const casesSchema = z
 export const draftInputSchema = z
   .strictObject({
     comparisonMode: comparisonModeSchema,
+    /** Absent means the default rubric (reference-qa-v1), so older drafts keep their snapshot hash. */
+    rubricVersion: z.enum(RUBRIC_VERSIONS).optional(),
     cases: casesSchema,
     configurations: z
       .array(configurationSchema)

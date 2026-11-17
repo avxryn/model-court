@@ -12,7 +12,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import type { DraftRating, Score } from '@/domain/contracts'
 import { LIMITS } from '@/domain/limits'
-import { DIMENSIONS, noteRequired, RUBRIC } from '@/domain/rubric'
+import { DIMENSIONS, noteRequired, rubricLines } from '@/domain/rubric'
 import { codePointLength } from '@/domain/text'
 import { cn } from '@/lib/utils'
 
@@ -20,7 +20,8 @@ export function emptyRating(responseId: string): DraftRating {
   return { responseId, correctness: null, completeness: null, grounding: null, note: '', suspectedIdentityClue: false }
 }
 
-export function RubricForm({ label, rating, onChange, disabled }: { label: string; rating: DraftRating; onChange: (next: DraftRating) => void; disabled?: boolean }) {
+export function RubricForm({ label, rating, onChange, disabled, rubricVersion }: { label: string; rating: DraftRating; onChange: (next: DraftRating) => void; disabled?: boolean; rubricVersion?: string }) {
+  const RUBRIC = rubricLines(rubricVersion)
   const id = useId()
   const needsNote = noteRequired(rating)
   const noteLength = codePointLength(rating.note.trim())

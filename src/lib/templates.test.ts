@@ -20,7 +20,7 @@ describe('case templates', () => {
   })
 
   it('the downloadable CSV template imports cleanly', () => {
-    const csv = toCsv(CASE_IMPORT_COLUMNS, [['Outside the return window', 'I bought this 45 days ago.', 'Returns within 30 days.', 'Explain the 30-day limit.']])
+    const csv = toCsv(CASE_IMPORT_COLUMNS, [['Outside the return window', 'I bought this 45 days ago.', 'Returns within 30 days.', 'Explain the 30-day limit.', 'en']])
     const result = parseCasesCsv(csv, newId)
     expect(result.ok).toBe(true)
   })

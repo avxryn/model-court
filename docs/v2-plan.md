@@ -90,8 +90,9 @@ Size: about 2 sessions.
   hearings keep their rubric version.
 - **Printable judgment** for procurement or vendor decisions (builds on the certified record).
 - **Per-language breakdown**: tag questions by language; results per language.
-- **Email-link sign-in for jurors**: first check whether DeepSpace auth supports it; if not, record that
-  and stop.
+- ~~Email-link sign-in for jurors~~: not supported by DeepSpace 0.44.2 (D-33); dropped.
+
+Status: phases 1–3 done on `next` (D-26, D-34 to D-37); not deployed.
 Size: about 2 sessions.
 
 ### Phase 4 — Imported evidence (S3c, S4 baseline)

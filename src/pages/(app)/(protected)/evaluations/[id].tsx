@@ -4,7 +4,7 @@ import { AlertTriangle, KeyRound, Play } from 'lucide-react'
 import { toast } from 'sonner'
 import { ErrorPanel, formatTime, Page, PageSkeleton, SaveIndicator, StatusBadge, type SaveState } from '@/components/common'
 import { Caption, CaseProgress, DocketNumber, Sheet, Stamp, Term } from '@/components/court/CaseFile'
-import { CasesEditor, ConfigurationsEditor, type FieldErrors } from '@/components/evaluations/DraftEditor'
+import { CasesEditor, ConfigurationsEditor, RubricPicker, type FieldErrors } from '@/components/evaluations/DraftEditor'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
@@ -77,7 +77,7 @@ function toFieldErrors(error: unknown): FieldErrors {
 function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationView; reload: () => Promise<void> }) {
   const catalog = useApi<CatalogView>('/catalog')
   const credentials = useApi<{ items: CredentialMetadata[] }>('/credentials')
-  const [draft, setDraft] = useState<DraftInput>(() => ({ comparisonMode: evaluation.draft.comparisonMode, cases: evaluation.draft.cases, configurations: evaluation.draft.configurations }))
+  const [draft, setDraft] = useState<DraftInput>(() => ({ comparisonMode: evaluation.draft.comparisonMode, ...(evaluation.draft.rubricVersion ? { rubricVersion: evaluation.draft.rubricVersion } : {}), cases: evaluation.draft.cases, configurations: evaluation.draft.configurations }))
   const [revision, setRevision] = useState(evaluation.revision)
   const [dirty, setDirty] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>('idle')
@@ -219,6 +219,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
           <TabsTrigger value="settings">Delete</TabsTrigger>
         </TabsList>
         <TabsContent value="cases" className="pt-6">
+          <RubricPicker value={draft.rubricVersion} onChange={(rubricVersion) => change({ ...draft, rubricVersion })} />
           <CasesEditor cases={draft.cases} errors={errors} newId={newIntentKey} onChange={(cases) => change({ ...draft, cases })} />
         </TabsContent>
         <TabsContent value="configurations" className="pt-6">
