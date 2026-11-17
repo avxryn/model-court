@@ -94,7 +94,7 @@ export function ConfigurationsEditor({
             <CardHeader>
               <CardTitle className="court-label">
                 Party <span className="typewriter font-normal tracking-normal">{index + 1}</span>
-                {isImported(configuration) && <ExhibitSticker className="ml-2 px-1.5 py-0 text-[0.6875rem]">IMPORTED</ExhibitSticker>}
+                {isImported(configuration) && <ExhibitSticker className="ml-2 px-1.5 py-0 text-caption">IMPORTED</ExhibitSticker>}
               </CardTitle>
               {draft.configurations.length > minParties && (
                 <CardAction>

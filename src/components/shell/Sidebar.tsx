@@ -1,26 +1,36 @@
 /**
  * The app's one navigation surface. On wide screens it is a fixed drawer on
- * the left; on narrow screens the same element is a top bar whose menu button
- * opens the drawer over the page. Case files are folders: open one to see its
- * hearings as files, each with a status dot and its status in words.
+ * the left that folds to a 56 px icon rail (⌘B / Ctrl+B); on narrow screens
+ * the same element is a top bar whose menu button opens the drawer over the
+ * page. Case files are folders: open one to see its hearings as files, each
+ * with a status dot and its status in words.
+ *
+ * Rhythm: 32 px rows 2 px apart, group labels 24 px above and 8 px below,
+ * every icon (and every folder chevron) in one 16 px column. The open page is
+ * a paper chip with a 2 px stamp-red mark on its left edge.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from 'deepspace'
-import { BookOpen, ChevronRight, FileText, Folder, FolderOpen, KeyRound, Library, Menu, Scale, X, type LucideIcon } from 'lucide-react'
-import { statusInfo, TONE_DOT } from '@/lib/status'
+import { BookOpen, ChevronRight, FileText, Folder, FolderOpen, KeyRound, Library, Menu, PanelLeftClose, PanelLeftOpen, Plus, Scale, X, type LucideIcon } from 'lucide-react'
+import { BrandMark } from '@/components/BrandMark'
+import { NewCaseDialog } from '@/components/evaluations/NewCaseDialog'
 import { AccountMenu } from '@/components/shell/AccountMenu'
 import { useShellFocusValue } from '@/components/shell/ShellContext'
-import { BrandMark } from '@/components/BrandMark'
-import type { EvaluationSummary, EvaluationView } from '@/lib/dto'
-import { useApi } from '@/lib/use-api'
+import { MOD_KEY } from '@/components/shell/use-sidebar-rail'
 import { Button } from '@/components/ui/button'
+import { Kbd, KbdGroup } from '@/components/ui/kbd'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import type { EvaluationSummary, EvaluationView } from '@/lib/dto'
+import { prefetchProps } from '@/lib/prefetch'
+import { statusInfo, TONE_DOT } from '@/lib/status'
+import { useApi } from '@/lib/use-api'
 import { cn } from '@/lib/utils'
 
 const CASE_LIMIT = 8
 
-export function Sidebar() {
+export function Sidebar({ rail = false, onToggleRail }: { rail?: boolean; onToggleRail?: () => void }) {
   const { isSignedIn } = useAuth()
   const location = useLocation()
   const [open, setOpen] = useState(false)
@@ -36,10 +46,10 @@ export function Sidebar() {
   }, [open])
 
   return (
-    <aside data-testid="app-navigation" aria-label="Primary" className="sticky top-0 z-40 border-b border-drawer-edge bg-drawer print:hidden lg:h-screen lg:border-r lg:border-b-0">
-      <div className="flex h-14 items-center justify-between gap-2 px-4 lg:h-16 lg:px-5">
+    <aside data-testid="app-navigation" data-rail={rail || undefined} aria-label="Primary" className="sticky top-0 z-40 border-b border-drawer-edge bg-drawer print:hidden lg:h-screen lg:border-r lg:border-b-0">
+      <div className={cn('flex h-14 items-center justify-between gap-2 px-4 lg:h-16 lg:px-5', rail && 'lg:justify-center lg:px-0')}>
         <Link to={isSignedIn ? '/evaluations' : '/'} className="rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-          <BrandMark />
+          <BrandMark textClassName={rail ? 'lg:sr-only' : undefined} />
         </Link>
         <Button
           variant="ghost"
@@ -63,66 +73,120 @@ export function Sidebar() {
           'lg:static lg:max-w-none lg:border-0 lg:shadow-none',
         )}
       >
-        <nav aria-label="Main" className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 py-2">
-          <NavGroup>
-            <NavItem to="/evaluations" icon={Scale} exact>
+        <nav aria-label="Main" className={cn('min-h-0 flex-1 space-y-6 overflow-y-auto px-3 py-2', rail && 'lg:px-2')}>
+          <NavGroup rail={rail}>
+            <NavItem to="/evaluations" icon={Scale} exact rail={rail}>
               Your cases
             </NavItem>
             {isSignedIn && (
-              <NavItem to="/settings/api-keys" icon={KeyRound}>
+              <NavItem to="/settings/api-keys" icon={KeyRound} rail={rail}>
                 Provider keys
               </NavItem>
             )}
           </NavGroup>
-          {isSignedIn && <CaseFiles />}
-          <NavGroup label="Learn">
-            <NavItem to="/sample" icon={BookOpen}>
+          {isSignedIn && <CaseFiles rail={rail} />}
+          <NavGroup label="Learn" rail={rail}>
+            <NavItem to="/sample" icon={BookOpen} rail={rail}>
               Sample case
             </NavItem>
-            <NavItem to="/glossary" icon={Library}>
+            <NavItem to="/glossary" icon={Library} rail={rail}>
               Glossary
             </NavItem>
           </NavGroup>
         </nav>
-        <div className="border-t border-drawer-edge p-3">
-          <AccountMenu />
+        <div className={cn('space-y-1 border-t border-drawer-edge p-3', rail && 'lg:flex lg:flex-col lg:items-center lg:px-2')}>
+          {onToggleRail && <RailToggle rail={rail} onToggle={onToggleRail} />}
+          <AccountMenu compact={rail} />
         </div>
       </div>
     </aside>
   )
 }
 
-function NavGroup({ label, children }: { label?: string; children: ReactNode }) {
+/** Shows `label` beside its trigger, only while the sidebar is a rail. */
+function RailTip({ rail, label, children }: { rail: boolean; label: ReactNode; children: ReactElement }) {
+  return (
+    <Tooltip disabled={!rail}>
+      <TooltipTrigger render={children} />
+      {rail && <TooltipContent side="right">{label}</TooltipContent>}
+    </Tooltip>
+  )
+}
+
+function Shortcut() {
+  return (
+    <KbdGroup>
+      <Kbd>{MOD_KEY}</Kbd>
+      <Kbd>B</Kbd>
+    </KbdGroup>
+  )
+}
+
+function RailToggle({ rail, onToggle }: { rail: boolean; onToggle: () => void }) {
+  const Icon = rail ? PanelLeftOpen : PanelLeftClose
+  const label = rail ? 'Expand the sidebar' : 'Collapse the sidebar'
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button variant="ghost" className={cn('hidden h-8 w-full justify-start gap-2.5 px-2 font-normal text-muted-foreground hover:bg-paper/60 lg:flex', rail && 'lg:size-8 lg:justify-center lg:px-0')} onClick={onToggle} aria-label={label} aria-keyshortcuts="Meta+B Control+B" />
+        }
+      >
+        <Icon className="size-4" strokeWidth={1.75} aria-hidden />
+        <span className={cn('flex-1 text-left text-sm', rail && 'lg:hidden')}>Collapse</span>
+        <span className={cn(rail && 'lg:hidden')}>
+          <Shortcut />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="right">
+        {label} <Shortcut />
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function NavGroup({ label, action, rail, children }: { label?: string; action?: ReactNode; rail: boolean; children: ReactNode }) {
   return (
     <div>
-      {label && <div className="px-2 pb-1.5 text-xs font-medium text-muted-foreground">{label}</div>}
+      {label && (
+        <div className={cn('mb-2 flex h-6 items-center justify-between pr-1 pl-2', rail && 'lg:hidden')}>
+          <span className="text-xs font-medium text-muted-foreground">{label}</span>
+          {action}
+        </div>
+      )}
+      {label && rail && <div aria-hidden className="mx-auto mb-2 hidden h-px w-6 bg-drawer-edge lg:block" />}
       <ul className="space-y-0.5">{children}</ul>
     </div>
   )
 }
 
-function rowClass(active: boolean) {
+function rowClass(active: boolean, rail = false) {
   return cn(
-    'flex h-8 min-w-0 items-center gap-2.5 rounded-md px-2 text-sm outline-none transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/50',
-    active ? 'bg-paper font-medium text-foreground shadow-[0_1px_0_var(--paper-edge)] ring-1 ring-paper-edge' : 'text-foreground/80 hover:bg-paper/60 hover:text-foreground',
+    'relative flex h-8 min-w-0 items-center gap-2.5 rounded-md px-2 text-sm outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50',
+    active
+      ? 'bg-paper font-medium text-foreground ring-1 ring-paper-edge before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-stamp'
+      : 'text-foreground/80 hover:bg-paper/60 hover:text-foreground',
+    rail && 'lg:justify-center lg:px-0',
   )
 }
 
-function NavItem({ to, icon: Icon, exact = false, children }: { to: string; icon: LucideIcon; exact?: boolean; children: ReactNode }) {
+function NavItem({ to, icon: Icon, exact = false, rail, children }: { to: string; icon: LucideIcon; exact?: boolean; rail: boolean; children: string }) {
   const { pathname } = useLocation()
   const active = exact ? pathname === to : pathname === to || pathname.startsWith(`${to}/`)
   return (
     <li>
-      <Link to={to} aria-current={active ? 'page' : undefined} className={rowClass(active)}>
-        <Icon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden />
-        <span className="truncate">{children}</span>
-      </Link>
+      <RailTip rail={rail} label={children}>
+        <Link to={to} aria-current={active ? 'page' : undefined} className={rowClass(active, rail)} {...prefetchProps(to)}>
+          <Icon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden />
+          <span className={cn('truncate', rail && 'lg:sr-only')}>{children}</span>
+        </Link>
+      </RailTip>
     </li>
   )
 }
 
 /** The most recent cases as folders; the case on screen opens automatically. */
-function CaseFiles() {
+function CaseFiles({ rail }: { rail: boolean }) {
   const { pathname } = useLocation()
   const focus = useShellFocusValue()
   const list = useApi<{ items: EvaluationSummary[]; nextCursor: string | null }>(`/evaluations?limit=${CASE_LIMIT}`)
@@ -146,7 +210,30 @@ function CaseFiles() {
 
   const items = list.data?.items ?? []
   return (
-    <NavGroup label="Case files">
+    <NavGroup
+      label="Case files"
+      rail={rail}
+      action={
+        <NewCaseDialog
+          trigger={
+            <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:bg-paper/60" aria-label="Open a new case">
+              <Plus aria-hidden />
+            </Button>
+          }
+        />
+      }
+    >
+      {rail && (
+        <li className="hidden lg:block">
+          <NewCaseDialog
+            trigger={
+              <Button variant="ghost" className="h-8 w-full px-0 text-muted-foreground hover:bg-paper/60" aria-label="Open a new case" title="Open a new case">
+                <Plus className="size-4" aria-hidden />
+              </Button>
+            }
+          />
+        </li>
+      )}
       {list.loading && !list.data && (
         <li className="space-y-1 px-2 py-1" aria-label="Loading case files">
           {[0, 1, 2].map((i) => (
@@ -154,11 +241,12 @@ function CaseFiles() {
           ))}
         </li>
       )}
-      {list.data && items.length === 0 && <li className="px-2 py-1 text-xs leading-relaxed text-muted-foreground">No cases yet. Open one from Your cases.</li>}
+      {list.data && items.length === 0 && <li className={cn('px-2 py-1 text-xs leading-relaxed text-muted-foreground', rail && 'lg:hidden')}>No cases yet. Open one with +.</li>}
       {items.map((item) => (
         <CaseFolder
           key={item.id}
           item={item}
+          rail={rail}
           open={expanded.has(item.id)}
           current={focus.caseId === item.id}
           currentRunId={focus.runId}
@@ -173,8 +261,8 @@ function CaseFiles() {
         />
       ))}
       {list.data?.nextCursor && (
-        <li>
-          <Link to="/evaluations" className="block rounded-md px-2 py-1 text-xs text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
+        <li className={cn(rail && 'lg:hidden')}>
+          <Link to="/evaluations" className="flex h-8 items-center rounded-md pr-2 pl-[2.125rem] text-xs text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
             All cases
           </Link>
         </li>
@@ -185,7 +273,7 @@ function CaseFiles() {
 
 const shortTime = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
-function CaseFolder({ item, open, current, currentRunId, onToggle }: { item: EvaluationSummary; open: boolean; current: boolean; currentRunId?: string; onToggle: () => void }) {
+function CaseFolder({ item, rail, open, current, currentRunId, onToggle }: { item: EvaluationSummary; rail: boolean; open: boolean; current: boolean; currentRunId?: string; onToggle: () => void }) {
   const { pathname } = useLocation()
   const detail = useApi<EvaluationView>(open ? `/evaluations/${item.id}` : null)
   const { reload } = detail
@@ -202,47 +290,55 @@ function CaseFolder({ item, open, current, currentRunId, onToggle }: { item: Eva
 
   return (
     <li>
-      <div className={cn(rowClass(onCase), 'gap-1 pr-1 pl-0.5')}>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-label={`${open ? 'Close' : 'Open'} the ${item.title} folder`}
-          className="text-muted-foreground hover:bg-transparent aria-expanded:bg-transparent"
-        >
-          <ChevronRight className={cn('size-3.5 motion-safe:transition-transform motion-safe:duration-150', open && 'rotate-90')} aria-hidden />
-        </Button>
-        <Link to={casePath} aria-current={onCase ? 'page' : undefined} className="flex min-w-0 flex-1 items-center gap-2 self-stretch outline-none focus-visible:underline" title={item.title}>
-          <FolderIcon className={cn('size-4 shrink-0', current ? 'text-manila-foreground' : 'text-muted-foreground')} strokeWidth={1.75} aria-hidden />
-          <span className="truncate">{item.title}</span>
-          {item.role === 'reviewer' && <span className="typewriter ml-auto shrink-0 rounded-[3px] bg-sticker px-1 text-[0.6875rem] font-bold text-sticker-foreground">JUROR</span>}
-        </Link>
-      </div>
-      {open && (
-        <ul className="mt-0.5 ml-[1.125rem] space-y-0.5 border-l border-drawer-edge pl-2" aria-label={`Hearings in ${item.title}`}>
-          {detail.loading && !detail.data && <li className="h-6 animate-pulse rounded bg-paper/60 motion-reduce:animate-none" aria-label="Loading hearings" />}
-          {detail.data && runs.length === 0 && <li className="px-2 py-1 text-xs text-muted-foreground">No hearings yet</li>}
-          {runs.map((run) => {
-            const info = statusInfo(run.status)
-            const runPath = `/runs/${run.id}`
-            const active = currentRunId === run.id || pathname === runPath || pathname.startsWith(`${runPath}/`)
-            return (
-              <li key={run.id}>
-                <Link to={runPath} aria-current={active ? 'page' : undefined} className={cn(rowClass(active), 'h-7 gap-2 text-[0.8125rem]')} title={`Hearing on ${shortTime.format(run.createdAt)}: ${info.label}`}>
-                  <FileText className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden />
-                  <span className="truncate tabular-nums">{shortTime.format(run.createdAt)}</span>
-                  <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[0.6875rem] text-muted-foreground">
-                    <span aria-hidden className={cn('size-1.5 rounded-full', TONE_DOT[info.tone])} />
-                    <span className="sr-only">{info.label}</span>
-                    <span aria-hidden className="hidden xl:inline">{info.label}</span>
-                  </span>
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
+      {rail && (
+        <RailTip rail label={item.title}>
+          <Link to={casePath} aria-current={onCase ? 'page' : undefined} className={cn(rowClass(onCase || current, true), 'hidden lg:flex')} aria-label={item.title} {...prefetchProps(casePath)}>
+            <FolderIcon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden />
+          </Link>
+        </RailTip>
       )}
+      <div className={cn(rail && 'lg:hidden')}>
+        <div className={rowClass(onCase)}>
+          <Button
+            variant="ghost"
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-label={`${open ? 'Close' : 'Open'} the ${item.title} folder`}
+            className="size-4 shrink-0 rounded-sm p-0 text-muted-foreground hover:bg-transparent hover:text-foreground aria-expanded:bg-transparent"
+          >
+            <ChevronRight className={cn('size-3.5 motion-safe:transition-transform', open && 'rotate-90')} aria-hidden />
+          </Button>
+          <Link to={casePath} aria-current={onCase ? 'page' : undefined} className="flex min-w-0 flex-1 items-center gap-2 self-stretch outline-none focus-visible:underline" title={item.title} {...prefetchProps(casePath)}>
+            <FolderIcon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden />
+            <span className="truncate">{item.title}</span>
+            {item.role === 'reviewer' && <span className="typewriter ml-auto shrink-0 rounded-[3px] bg-sticker px-1 text-caption font-bold text-sticker-foreground">JUROR</span>}
+          </Link>
+        </div>
+        {open && (
+          <ul className="mt-0.5 ml-4 space-y-0.5 border-l border-drawer-edge pl-2" aria-label={`Hearings in ${item.title}`}>
+            {detail.loading && !detail.data && <li className="h-7 animate-pulse rounded bg-paper/60 motion-reduce:animate-none" aria-label="Loading hearings" />}
+            {detail.data && runs.length === 0 && <li className="flex h-7 items-center px-2 text-xs text-muted-foreground">No hearings yet</li>}
+            {runs.map((run) => {
+              const info = statusInfo(run.status)
+              const runPath = `/runs/${run.id}`
+              const active = currentRunId === run.id || pathname === runPath || pathname.startsWith(`${runPath}/`)
+              return (
+                <li key={run.id}>
+                  <Link to={runPath} aria-current={active ? 'page' : undefined} className={cn(rowClass(active), 'h-7 gap-2 text-small')} title={`Hearing on ${shortTime.format(run.createdAt)}: ${info.label}`} {...prefetchProps(runPath)}>
+                    <FileText className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden />
+                    <span className="truncate tabular-nums">{shortTime.format(run.createdAt)}</span>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-caption text-muted-foreground">
+                      <span aria-hidden className={cn('size-1.5 rounded-full', TONE_DOT[info.tone])} />
+                      <span className="sr-only">{info.label}</span>
+                      <span aria-hidden className="hidden xl:inline">{info.label}</span>
+                    </span>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
       {!open && status && <span className="sr-only">Latest hearing: {status.label}</span>}
     </li>
   )

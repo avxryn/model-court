@@ -158,7 +158,7 @@ function Specimen() {
       </div>
       <div className="mt-5 space-y-3">
         {SPECIMEN_CASE.responses.map((response) => (
-          <div key={response.responseId} className="rounded-[2px] bg-white p-4 ring-1 ring-exhibit-edge">
+          <div key={response.responseId} className="rounded-[2px] bg-exhibit p-4 ring-1 ring-exhibit-edge">
             <div className="flex items-center gap-2">
               <ExhibitSticker className="bg-foreground text-paper">TESTIMONY {response.label}</ExhibitSticker>
             </div>

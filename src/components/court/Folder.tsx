@@ -21,7 +21,7 @@ export function CaseFolder({ docket, title, dividers, children }: { docket?: str
       <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 rounded-l-lg bg-linear-to-r from-paper-edge to-manila sm:w-4 print:hidden" />
       <div className={cn('relative z-[2] flex items-end gap-3 sm:gap-4 print:hidden', !dividers && 'sm:pb-3')}>
         <span className="hidden max-w-[45%] min-w-0 shrink-0 items-baseline gap-2.5 self-center rounded-[1px] border-t-[3px] border-stamp bg-paper px-2.5 pt-0.5 pb-1 ring-1 ring-paper-edge sm:flex">
-          {docket && <span className="typewriter text-[0.8125rem] font-bold whitespace-nowrap text-stamp">{docket}</span>}
+          {docket && <span className="typewriter text-small font-bold whitespace-nowrap text-stamp">{docket}</span>}
           <span className="truncate font-heading text-sm">{title}</span>
         </span>
         {dividers}
@@ -40,7 +40,7 @@ const ROW = 'relative -mx-1 -mt-1 -mb-px flex min-w-0 items-end gap-0.5 overflow
 /** The shape of a divider; `state` picks the open, idle, or locked card. */
 export function dividerClass(state: 'open' | 'idle' | 'locked') {
   return cn(
-    'group/divider relative flex shrink-0 items-center gap-1.5 rounded-t-md px-2 text-[0.8125rem] whitespace-nowrap outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:px-3.5 sm:text-sm',
+    'group/divider relative flex shrink-0 items-center gap-1.5 rounded-t-md px-2 text-small whitespace-nowrap outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:px-3.5 sm:text-sm',
     state === 'open' && 'z-[1] h-10 bg-paper font-heading font-bold text-foreground ring-1 ring-paper-edge [clip-path:inset(-4px_-4px_0_-4px)]',
     state === 'idle' && 'divider-under mb-px h-8 bg-tab-idle text-tab-idle-foreground hover:text-foreground motion-safe:transition-transform motion-safe:duration-150 motion-safe:hover:not-data-active:-translate-y-0.5',
     state === 'locked' && 'mb-px h-8 cursor-not-allowed border border-dashed border-paper-edge bg-tab-idle/50 text-tab-idle-foreground/75',
@@ -50,7 +50,7 @@ export function dividerClass(state: 'open' | 'idle' | 'locked') {
 /** Index letter on a divider: A, B, C… */
 function Letter({ index }: { index: number }) {
   return (
-    <span aria-hidden className="typewriter text-[0.6875rem] font-bold text-mark group-aria-[current=page]/divider:text-stamp group-data-active/divider:text-stamp">
+    <span aria-hidden className="typewriter text-caption font-bold text-mark group-aria-[current=page]/divider:text-stamp group-data-active/divider:text-stamp">
       {String.fromCharCode(65 + index)}
     </span>
   )
@@ -86,7 +86,7 @@ export function DividerNav({ label, items, current }: { label: string; items: Di
               <Letter index={index} />
               {item.label}
               <Lock className="size-3" aria-hidden />
-              {item.lockedShort && <span className="hidden font-sans text-[0.6875rem] text-muted-foreground sm:inline">{item.lockedShort}</span>}
+              {item.lockedShort && <span className="hidden font-sans text-caption text-muted-foreground sm:inline">{item.lockedShort}</span>}
               <span className="sr-only">: {item.locked}</span>
             </span>
           )

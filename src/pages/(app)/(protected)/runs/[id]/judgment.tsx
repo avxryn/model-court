@@ -118,7 +118,7 @@ function Judgment({ data, reload }: { data: ResultsView; reload: () => Promise<v
               </div>
             )}
 
-            <p className="text-[0.6875rem] leading-snug text-muted-foreground">Printed from Model Court, a decision aid, not a benchmark or certification. The full certified record, with its content fingerprint, can be downloaded by the judge from this page.</p>
+            <p className="text-caption leading-snug text-muted-foreground">Printed from Model Court, a decision aid, not a benchmark or certification. The full certified record, with its content fingerprint, can be downloaded by the judge from this page.</p>
           </div>
           {isOwner && <CertifiedRecord runId={data.runId} className="print:hidden" />}
         </Sheet>

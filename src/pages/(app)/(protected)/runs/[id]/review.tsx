@@ -16,7 +16,7 @@ import { Page } from '@/components/layout/Page'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
 import { isComplete, useWorksheet } from '@/components/review/use-worksheet'
-import { QuestionPager, QuestionStepper, WorksheetGrid } from '@/components/review/Worksheet'
+import { QuestionPager, QuestionStepper, useWorksheetKeys, WorksheetGrid, WorksheetKeyLegend } from '@/components/review/Worksheet'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
@@ -32,7 +32,7 @@ export default function ReviewPage() {
   const resource = useApi<AnonymousReview>(`/runs/${id}/review`, { pollMs: guest ? 20_000 : undefined })
   const { data, error, loading, reload } = resource
 
-  if (loading && !data) return <Page width="wide"><PageSkeleton label="Loading review" /></Page>
+  if (loading && !data) return <Page width="wide"><PageSkeleton variant="sheet" label="Loading the worksheet" /></Page>
   if (error && !data) return <Page><ErrorPanel error={error} onRetry={reload} /></Page>
   if (!data) return null
   return <ReviewWorkspace key={data.sessionId} review={data} reload={reload} />
@@ -50,6 +50,10 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
     setCaseIndex(index)
     window.scrollTo({ top: 0 })
   }
+  useWorksheetKeys({
+    onNextQuestion: caseIndex < review.cases.length - 1 ? () => goTo(caseIndex + 1) : undefined,
+    onPreviousQuestion: caseIndex > 0 ? () => goTo(caseIndex - 1) : undefined,
+  })
   const current = review.cases[caseIndex]
   const isOwner = review.contextType === 'owner'
   const filed = review.sessionStatus === 'submitted'
@@ -127,6 +131,11 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
             <div className="flex flex-wrap items-center gap-3">
               <QuestionPager count={review.cases.length} current={caseIndex} isDone={(index) => review.cases[index].responses.every((r) => isComplete(w.ratings[r.responseId]))} onSelect={(index) => void goTo(index)} />
               {review.cases.length === 1 && <span className="text-xs text-muted-foreground">Only one question was eligible — treat conclusions as exploratory.</span>}
+              {w.editable && (
+                <div className="ml-auto">
+                  <WorksheetKeyLegend />
+                </div>
+              )}
             </div>
 
             <WorksheetGrid

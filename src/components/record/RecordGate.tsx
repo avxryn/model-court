@@ -16,7 +16,7 @@ import { useApi } from '@/lib/use-api'
 
 export function RecordGate({ runId, sealedText, children }: { runId: string; sealedText: string; children: (data: ResultsView, reload: () => Promise<void>) => ReactNode }) {
   const results = useApi<ResultsView>(`/runs/${runId}/results`)
-  if (results.loading && !results.data) return <Page width="wide"><PageSkeleton label="Loading the record" /></Page>
+  if (results.loading && !results.data) return <Page width="wide"><PageSkeleton variant="sheet" label="Loading the record" /></Page>
   if (results.error && !results.data) {
     if (results.error.isConflict) {
       return (

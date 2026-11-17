@@ -7,18 +7,21 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthOverlay, signOut, useAuthProfileReady } from 'deepspace'
-import { ChevronsUpDown, FolderOpen, KeyRound, LogIn, LogOut } from 'lucide-react'
+import { ChevronsUpDown, FolderOpen, KeyRound, LogIn, LogOut, Monitor, Moon, Sun } from 'lucide-react'
 import { AccountAvatar } from '@/components/shell/AccountChip'
 import { Button } from '@/components/ui/button'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { clearAccountHint, writeAccountHint } from '@/lib/account-hint'
 import { pendingInviteToken } from '@/lib/invite-token'
+import { setThemeChoice, useTheme, type ThemeChoice } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
-export function AccountMenu({ className }: { className?: string }) {
+/** `compact`: the avatar alone, for the sidebar rail on wide screens. */
+export function AccountMenu({ className, compact = false }: { className?: string; compact?: boolean }) {
   const { isLoaded, isSignedIn, user, userLoading } = useAuthProfileReady({ requireUser: true })
   const navigate = useNavigate()
   const [showAuth, setShowAuth] = useState(false)
+  const { choice } = useTheme()
 
   useEffect(() => {
     if (!isLoaded) return
@@ -39,8 +42,8 @@ export function AccountMenu({ className }: { className?: string }) {
   if (!isSignedIn || !user) {
     return (
       <>
-        <Button data-testid="nav-sign-in-button" variant="outline" className={cn("w-full bg-paper", className)} onClick={() => setShowAuth(true)}>
-          <LogIn aria-hidden /> Sign in
+        <Button data-testid="nav-sign-in-button" variant="outline" className={cn('w-full bg-paper', compact && 'lg:size-9 lg:px-0', className)} onClick={() => setShowAuth(true)} aria-label={compact ? 'Sign in' : undefined}>
+          <LogIn aria-hidden /> <span className={cn(compact && 'lg:sr-only')}>Sign in</span>
         </Button>
         {showAuth && <AuthOverlay onClose={() => setShowAuth(false)} />}
       </>
@@ -51,15 +54,15 @@ export function AccountMenu({ className }: { className?: string }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="ghost" className={cn('h-11 w-full justify-start gap-2.5 px-2 text-left', className)} aria-label="Account menu">
+          <Button variant="ghost" className={cn('h-11 w-full justify-start gap-2.5 px-2 text-left', compact && 'lg:size-10 lg:justify-center lg:px-0', className)} aria-label="Account menu">
             <AccountAvatar imageUrl={user.imageUrl} initial={(user.name?.[0] ?? user.email?.[0] ?? '?').toUpperCase()} />
-            <span className="min-w-0 flex-1">
+            <span className={cn('min-w-0 flex-1', compact && 'lg:hidden')}>
               <span data-testid="nav-user-name" className="block truncate text-sm font-medium">
                 {user.name || user.email}
               </span>
               {user.name && user.email && <span className="block truncate text-xs font-normal text-muted-foreground">{user.email}</span>}
             </span>
-            <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden />
+            <ChevronsUpDown className={cn('size-4 text-muted-foreground', compact && 'lg:hidden')} aria-hidden />
           </Button>
         }
       />
@@ -79,6 +82,21 @@ export function AccountMenu({ className }: { className?: string }) {
         <DropdownMenuItem onClick={() => navigate('/settings/api-keys')}>
           <KeyRound aria-hidden /> Provider keys
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-xs text-muted-foreground">Appearance</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={choice} onValueChange={(value) => setThemeChoice(value as ThemeChoice)}>
+            <DropdownMenuRadioItem value="light">
+              <Sun aria-hidden /> Paper
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="dark">
+              <Moon aria-hidden /> Desk at night
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="system">
+              <Monitor aria-hidden /> Match the system
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut}>
           <LogOut aria-hidden /> Sign out

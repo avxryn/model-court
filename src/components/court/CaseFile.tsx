@@ -76,12 +76,12 @@ export function Caption({ title, parties, details, stamp }: { title: ReactNode; 
       {stamp && <div className="pointer-events-none mb-4 flex justify-end sm:absolute sm:top-6 sm:right-8 sm:mb-0">{stamp}</div>}
       <div className="text-center">
         <div className="font-heading text-sm font-bold tracking-[0.18em]">IN THE MODEL COURT</div>
-        <div className="mt-1 text-[0.6875rem] tracking-[0.14em] text-muted-foreground">BLIND REVIEW DIVISION</div>
+        <div className="mt-1 text-caption tracking-[0.14em] text-muted-foreground">BLIND REVIEW DIVISION</div>
       </div>
       <div className="mt-5 flex flex-wrap border-y border-foreground">
         <div className="min-w-0 flex-[3_1_18rem] border-foreground py-4 pr-5 sm:border-r">
           <div className="font-heading text-sm italic">In re:</div>
-          <h1 className="mt-0.5 font-heading text-2xl leading-tight font-bold break-words sm:text-[1.75rem]">{title}</h1>
+          <h1 className="mt-0.5 font-heading text-2xl leading-tight font-bold break-words sm:text-title">{title}</h1>
           {parties && parties.length > 0 && (
             <div className="mt-3 font-heading text-base">
               {parties.map((party, index) => (
@@ -140,7 +140,7 @@ export function Stamp({ kind, detail, animate = false, size = 'md', className }:
       className={cn('typewriter inline-flex flex-col items-center rounded-[4px] border-[3px] border-double bg-paper/60 text-center leading-tight font-bold', s.tone, size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-4 py-1.5 text-lg tracking-[0.16em]', animate && 'stamp-press', className)}
     >
       {s.text}
-      {detail && <span className={cn('font-bold tracking-[0.08em]', size === 'sm' ? 'text-[0.625rem]' : 'text-[0.6875rem]')}>{detail}</span>}
+      {detail && <span className={cn('font-bold tracking-[0.08em]', size === 'sm' ? 'text-[0.625rem]' : 'text-caption')}>{detail}</span>}
     </span>
   )
 }
@@ -156,7 +156,7 @@ export function Exhibit({ number, children, plain = true }: { number: number | s
       <span aria-hidden className="absolute -top-1.5 left-6 h-3 w-7 rounded-t-[3px] border-2 border-b-0 border-staple" />
       <ExhibitSticker className="absolute -top-3 right-4 rotate-3">EXHIBIT {number}</ExhibitSticker>
       {plain && <div className="mb-1.5 text-xs text-muted-foreground">{TERMS.exhibit.plain}</div>}
-      <div className="font-heading text-[0.9375rem] leading-relaxed break-words whitespace-pre-wrap">{children}</div>
+      <div className="font-heading text-reading leading-relaxed break-words whitespace-pre-wrap">{children}</div>
     </section>
   )
 }
@@ -177,7 +177,7 @@ export function ConversationSoFar({ messages }: { messages: ReadonlyArray<{ role
         {messages.map((message, index) => (
           <li key={index} className="grid gap-1 px-4 py-2.5 sm:grid-cols-[5.5rem_1fr] sm:gap-3">
             <span className={cn('typewriter pt-0.5 text-xs font-bold', message.role === 'user' ? 'text-stamp' : 'text-primary')}>{message.role === 'user' ? 'USER' : 'ASSISTANT'}</span>
-            <span className="min-w-0 font-heading text-[0.9375rem] leading-relaxed break-words whitespace-pre-wrap">{message.content}</span>
+            <span className="min-w-0 font-heading text-reading leading-relaxed break-words whitespace-pre-wrap">{message.content}</span>
           </li>
         ))}
       </ol>
@@ -192,7 +192,7 @@ export function JuryInstructions({ children }: { children: ReactNode }) {
       <h3 className="court-label">
         <Term name="instructions" />
       </h3>
-      <p className="mt-2 font-heading text-[0.9375rem] leading-relaxed whitespace-pre-wrap italic">{children}</p>
+      <p className="mt-2 font-heading text-reading leading-relaxed whitespace-pre-wrap italic">{children}</p>
     </section>
   )
 }
@@ -205,7 +205,7 @@ export function Testimony({ label, text, children }: { label: string; text: stri
   const lines = text.split('\n')
   let n = 0
   return (
-    <article className="min-w-0 exhibit-panel">
+    <article data-testimony className="min-w-0 exhibit-panel">
       <header className="flex items-center justify-between gap-3 border-b border-paper-rule px-4 py-3">
         <h3 className="typewriter shrink-0 rounded-[3px] bg-foreground px-3 py-1 text-sm font-bold whitespace-nowrap text-paper">TESTIMONY {label}</h3>
         <span className="text-right text-xs leading-snug text-muted-foreground">shuffled · unlabeled</span>
@@ -217,7 +217,7 @@ export function Testimony({ label, text, children }: { label: string; text: stri
             if (!blank) n += 1
             return (
               <li key={i} className={cn('flex gap-3 px-4 font-heading text-base leading-[1.7]', blank && 'h-3')}>
-                <span aria-hidden className="typewriter w-6 shrink-0 pt-[0.2rem] text-right text-[0.6875rem] text-stamp">
+                <span aria-hidden className="typewriter w-6 shrink-0 pt-[0.2rem] text-right text-caption text-stamp">
                   {blank ? '' : n}
                 </span>
                 <span className="min-w-0 break-words whitespace-pre-wrap">{line}</span>

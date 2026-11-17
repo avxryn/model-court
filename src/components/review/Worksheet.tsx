@@ -4,10 +4,11 @@
  * previous/next row with the page's own action on the right.
  */
 
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Term } from '@/components/court/CaseFile'
 import { Button } from '@/components/ui/button'
+import { Kbd } from '@/components/ui/kbd'
 import { cn } from '@/lib/utils'
 
 /** Q1…Qn, the current one inked in, finished ones ticked. */
@@ -62,5 +63,62 @@ export function QuestionStepper({ current, count, onGo, children }: { current: n
       </div>
       {children && <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">{children}</div>}
     </div>
+  )
+}
+
+function focusTestimony(article: Element | undefined) {
+  if (!article) return
+  const target = article.querySelector<HTMLElement>('[role=radio][data-checked]') ?? article.querySelector<HTMLElement>('[role=radio]')
+  target?.focus()
+  article.scrollIntoView({ block: 'nearest', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+}
+
+/**
+ * J and K move to the next and previous testimony, on to the next or previous
+ * question at either end; focus lands on the first line of its worksheet, so
+ * 0, 1 or 2 scores it straight away. Ignored while typing in a field.
+ */
+export function useWorksheetKeys({ onNextQuestion, onPreviousQuestion }: { onNextQuestion?: () => Promise<void> | void; onPreviousQuestion?: () => Promise<void> | void }) {
+  const handlers = useRef({ onNextQuestion, onPreviousQuestion })
+  handlers.current = { onNextQuestion, onPreviousQuestion }
+  useEffect(() => {
+    const onKey = async (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase()
+      if ((key !== 'j' && key !== 'k') || event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target && (target.isContentEditable || target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && target.type !== 'checkbox' && target.type !== 'radio'))) return
+      if (document.querySelector('[role=dialog], [role=alertdialog]')) return
+      event.preventDefault()
+      const articles = [...document.querySelectorAll('[data-testimony]')]
+      const current = articles.findIndex((article) => article.contains(document.activeElement))
+      const next = key === 'j' ? current + 1 : current === -1 ? articles.length - 1 : current - 1
+      if (next >= 0 && next < articles.length) return focusTestimony(articles[next])
+      const move = key === 'j' ? handlers.current.onNextQuestion : handlers.current.onPreviousQuestion
+      if (!move) return
+      await move()
+      requestAnimationFrame(() => {
+        const fresh = [...document.querySelectorAll('[data-testimony]')]
+        focusTestimony(key === 'j' ? fresh[0] : fresh.at(-1))
+      })
+    }
+    const listener = (event: KeyboardEvent) => void onKey(event)
+    window.addEventListener('keydown', listener)
+    return () => window.removeEventListener('keydown', listener)
+  }, [])
+}
+
+/** The worksheet's keys, as keycaps. Hidden on small screens, where there is rarely a keyboard. */
+export function WorksheetKeyLegend() {
+  return (
+    <p className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex" aria-label="Keyboard: 0, 1 or 2 scores the focused line; J and K move to the next and previous testimony">
+      <Kbd>0</Kbd>
+      <Kbd>1</Kbd>
+      <Kbd>2</Kbd>
+      <span aria-hidden>score the line</span>
+      <span aria-hidden className="mx-1 text-mark">·</span>
+      <Kbd>J</Kbd>
+      <Kbd>K</Kbd>
+      <span aria-hidden>next / previous testimony</span>
+    </p>
   )
 }

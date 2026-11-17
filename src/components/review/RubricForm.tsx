@@ -34,7 +34,17 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
         Juror’s worksheet <Plain>your ratings</Plain>
       </div>
       {DIMENSIONS.map((dimension) => (
-        <FieldSet key={dimension} className="space-y-1.5 border-b border-dotted border-paper-edge pb-4" disabled={disabled}>
+        <FieldSet
+          key={dimension}
+          className="space-y-1.5 border-b border-dotted border-paper-edge pb-4"
+          disabled={disabled}
+          // 0, 1 or 2 scores the line that has focus (the worksheet's keyboard flow, D-47).
+          onKeyDown={(event) => {
+            if (disabled || event.metaKey || event.ctrlKey || event.altKey || !['0', '1', '2'].includes(event.key) || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) return
+            event.preventDefault()
+            onChange({ ...rating, [dimension]: Number(event.key) as Score })
+          }}
+        >
           <FieldLegend id={`${id}-${dimension}-legend`} className="mb-0 font-heading text-base font-bold">
             {RUBRIC[dimension].label} <span className="sr-only">for testimony {label}</span>
           </FieldLegend>
@@ -53,7 +63,7 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
                   key={score}
                   htmlFor={itemId}
                   className={cn(
-                    'relative -mx-1.5 flex cursor-pointer items-center gap-3 rounded-md px-1.5 py-1 text-sm leading-snug font-normal transition-colors duration-150 focus-within:ring-2 focus-within:ring-ring/50',
+                    'relative -mx-1.5 flex cursor-pointer items-center gap-3 rounded-md px-1.5 py-1 text-sm leading-snug font-normal transition-colors focus-within:ring-3 focus-within:ring-ring/50',
                     checked ? 'bg-slip' : 'hover:bg-slip/60',
                     disabled && 'cursor-not-allowed opacity-70',
                   )}
@@ -62,7 +72,7 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
                   <span
                     aria-hidden
                     className={cn(
-                      'typewriter grid size-9 shrink-0 place-items-center rounded-full text-base tabular-nums transition-colors duration-150',
+                      'typewriter grid size-9 shrink-0 place-items-center rounded-full text-base tabular-nums transition-colors',
                       checked ? 'bg-foreground font-bold text-paper' : 'bg-paper text-foreground ring-[1.5px] ring-mark',
                     )}
                   >

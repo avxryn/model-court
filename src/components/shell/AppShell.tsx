@@ -8,6 +8,8 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { BrandMark } from '@/components/BrandMark'
 import { Sidebar } from '@/components/shell/Sidebar'
+import { useSidebarRail } from '@/components/shell/use-sidebar-rail'
+import { cn } from '@/lib/utils'
 
 export function AppShell({ variant = 'full', children }: { variant?: 'full' | 'focused'; children: ReactNode }) {
   return (
@@ -29,13 +31,21 @@ export function AppShell({ variant = 'full', children }: { variant?: 'full' | 'f
           </main>
         </div>
       ) : (
-        <div className="min-h-screen bg-background lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
-          <Sidebar />
-          <main id="main" className="min-w-0">
-            {children}
-          </main>
-        </div>
+        <SidebarFrame>{children}</SidebarFrame>
       )}
     </>
+  )
+}
+
+/** The drawer beside the page; on wide screens it folds to a 56 px rail (⌘B). */
+function SidebarFrame({ children }: { children: ReactNode }) {
+  const [rail, toggleRail] = useSidebarRail()
+  return (
+    <div className={cn('min-h-screen bg-background lg:grid motion-safe:transition-[grid-template-columns]', rail ? 'lg:grid-cols-[3.5rem_minmax(0,1fr)]' : 'lg:grid-cols-[16rem_minmax(0,1fr)]')}>
+      <Sidebar rail={rail} onToggleRail={toggleRail} />
+      <main id="main" className="min-w-0">
+        {children}
+      </main>
+    </div>
   )
 }

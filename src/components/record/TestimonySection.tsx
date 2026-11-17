@@ -55,7 +55,7 @@ function QuestionRecord({ testCase, labels, rubricVersion }: { testCase: Questio
               </span>
             </div>
             {response.text ? (
-              <div className="max-h-72 overflow-y-auto rounded-[2px] bg-paper px-4 py-3 font-heading text-[0.9375rem] leading-relaxed break-words whitespace-pre-wrap ring-1 ring-paper-rule outline-none ring-inset focus-visible:ring-3 focus-visible:ring-ring/50" tabIndex={0} role="region" aria-label={`${labels[response.configurationKey]} testimony`}>
+              <div className="max-h-72 overflow-y-auto rounded-[2px] bg-paper px-4 py-3 font-heading text-reading leading-relaxed break-words whitespace-pre-wrap ring-1 ring-paper-rule outline-none ring-inset focus-visible:ring-3 focus-visible:ring-ring/50" tabIndex={0} role="region" aria-label={`${labels[response.configurationKey]} testimony`}>
                 {response.text}
               </div>
             ) : (

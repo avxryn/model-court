@@ -16,7 +16,7 @@ import { Breadcrumbs, Page } from '@/components/layout/Page'
 import { FindingsTable } from '@/components/record/FindingsTable'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
-import { QuestionPager, QuestionStepper, WorksheetGrid } from '@/components/review/Worksheet'
+import { QuestionPager, QuestionStepper, useWorksheetKeys, WorksheetGrid, WorksheetKeyLegend } from '@/components/review/Worksheet'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -64,6 +64,10 @@ export default function SamplePage() {
     setCaseIndex(index)
     window.scrollTo({ top: 0 })
   }
+  useWorksheetKeys({
+    onNextQuestion: !revealed && caseIndex < SAMPLE_CASES.length - 1 ? () => goTo(caseIndex + 1) : undefined,
+    onPreviousQuestion: !revealed && caseIndex > 0 ? () => goTo(caseIndex - 1) : undefined,
+  })
 
   return (
     <Page width="wide">
@@ -107,6 +111,7 @@ export default function SamplePage() {
               <>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <QuestionPager count={SAMPLE_CASES.length} current={caseIndex} isDone={caseScored} onSelect={goTo} />
+                  <WorksheetKeyLegend />
                   <Button variant="ghost" size="sm" onClick={reset}>
                     <RotateCcw aria-hidden /> Reset sample
                   </Button>

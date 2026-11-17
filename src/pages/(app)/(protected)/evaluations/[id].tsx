@@ -34,7 +34,7 @@ import { useApi } from '@/lib/use-api'
 export default function EvaluationPage() {
   const { id = '' } = useParams()
   const evaluation = useApi<EvaluationView>(`/evaluations/${id}`)
-  if (evaluation.loading && !evaluation.data) return <Page width="wide"><PageSkeleton /></Page>
+  if (evaluation.loading && !evaluation.data) return <Page width="wide"><PageSkeleton variant="sheet" label="Loading the case" /></Page>
   if (evaluation.error && !evaluation.data) return <Page><ErrorPanel error={evaluation.error} onRetry={evaluation.reload} /></Page>
   if (!evaluation.data) return null
   if (evaluation.data.role === 'reviewer') return <JurorCaseView evaluation={evaluation.data} />

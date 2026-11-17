@@ -26,7 +26,7 @@ export function Slip({ title, icon, className, children, ...rest }: { title?: Re
   return (
     <section {...rest} className={cn('rounded-[2px] border border-dashed border-slip-edge bg-slip px-5 py-4', className)}>
       {title && (
-        <h3 className="court-label flex items-center gap-2">
+        <h3 className="flex items-center gap-2 font-heading text-sm font-bold">
           {icon}
           {title}
         </h3>

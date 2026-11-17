@@ -36,7 +36,7 @@ export default function RunPage() {
     if (status) setActive(isActive(status))
   }, [status])
 
-  if (run.loading && !run.data) return <Page width="wide"><PageSkeleton label="Loading run" /></Page>
+  if (run.loading && !run.data) return <Page width="wide"><PageSkeleton variant="sheet" label="Loading the hearing" /></Page>
   if (run.error && !run.data) return <Page><ErrorPanel error={run.error} onRetry={run.reload} /></Page>
   if (!run.data) return null
   return (

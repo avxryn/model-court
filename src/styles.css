@@ -1,5 +1,8 @@
 @import "tailwindcss" source(none);
 
+/* `dark:` follows the app theme (data-theme on <html>), not only the OS setting. */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
 /* Scan local source + SDK components for Tailwind class usage */
 @source "./**/*.{ts,tsx}";
 @source "../node_modules/deepspace/dist/**/*.js";
@@ -51,6 +54,13 @@
   --exhibit: #ffffff;
   --exhibit-edge: #dcd3be;
   --exhibit-shadow: 0 6px 14px -6px rgb(60 45 15 / 0.18);
+  /* Depth, all from one warm shadow colour: a sheet on the desk, the folder,
+     a divider under the sheet, and anything that floats (menus, dialogs). */
+  --paper-shadow: 0 1px 0 var(--paper-rule), 0 12px 28px -12px rgb(60 45 15 / 0.22);
+  --folder-shadow: 0 0 0 1px var(--paper-edge), 0 18px 36px -18px rgb(60 45 15 / 0.35);
+  --divider-shadow: inset 0 0 0 1px var(--paper-edge), inset 0 -5px 5px -4px rgb(60 45 15 / 0.2);
+  --overlay-shadow: 0 1px 0 var(--paper-rule), 0 14px 32px -12px rgb(60 45 15 / 0.32);
+  --scrim: rgb(40 30 10 / 0.18);
   --slip: #f6f1e4;
   --slip-edge: #b9a87e;
   --tab-idle: #e0d6bf;
@@ -63,7 +73,81 @@
   color-scheme: light;
 }
 
+/*
+ * Desk at night (D-47): the same roles, lit by a desk lamp. Dark walnut
+ * desk, warm dark paper, ink in cream, the stamp a brighter red so it still
+ * reads. Screen only: printing always uses the light paper above.
+ */
+@media screen {
+  :root[data-theme="dark"] {
+    --background: #171512;
+    --foreground: oklch(0.92 0.018 85);
+    --card: #24211c;
+    --card-foreground: oklch(0.92 0.018 85);
+    --popover: #24211c;
+    --popover-foreground: oklch(0.92 0.018 85);
+    --primary: oklch(0.8 0.07 262);
+    --primary-foreground: oklch(0.2 0.03 262);
+    --secondary: #2d2923;
+    --secondary-foreground: oklch(0.92 0.018 85);
+    --muted: #2d2923;
+    --muted-foreground: oklch(0.74 0.02 85);
+    --accent: #3a3226;
+    --accent-foreground: #ead9ad;
+    --destructive: oklch(0.7 0.17 27);
+    --border: #3a352d;
+    --input: #4a4338;
+    --ring: oklch(0.74 0.09 262);
+    --success: oklch(0.76 0.13 155);
+    --success-foreground: oklch(0.2 0.03 155);
+    --warning: oklch(0.8 0.13 75);
+    --warning-foreground: oklch(0.22 0.04 75);
+    --brass: oklch(0.74 0.11 75);
+    --desk: #171512;
+    --paper: #24211c;
+    --paper-rule: #38332b;
+    --paper-edge: #4f4739;
+    --margin-rule: #7d4a42;
+    --manila: #4d4130;
+    --manila-foreground: #ecd9a8;
+    --sticker: #d8b445;
+    --sticker-foreground: #2a2000;
+    --stamp: #ec7464;
+    --exhibit: #2b2722;
+    --exhibit-edge: #453e34;
+    --exhibit-shadow: 0 6px 14px -6px rgb(0 0 0 / 0.55);
+    --slip: #2f2a23;
+    --slip-edge: #74654a;
+    --tab-idle: #332d25;
+    --tab-idle-foreground: #c9bb9b;
+    --staple: #858b94;
+    --mark: #9a8f7a;
+    --drawer: #1e1b17;
+    --drawer-edge: #37312a;
+    --paper-shadow: 0 1px 0 #000, 0 14px 30px -12px rgb(0 0 0 / 0.6);
+    --folder-shadow: 0 0 0 1px var(--paper-edge), 0 18px 36px -18px rgb(0 0 0 / 0.7);
+    --divider-shadow: inset 0 0 0 1px var(--paper-edge), inset 0 -5px 5px -4px rgb(0 0 0 / 0.45);
+    --overlay-shadow: 0 0 0 1px #000, 0 16px 36px -12px rgb(0 0 0 / 0.7);
+    --scrim: rgb(0 0 0 / 0.5);
+    color-scheme: dark;
+  }
+}
+
 @theme inline {
+  /* One type scale (D-47): caption 11 px, small 13 px, reading 15 px (the
+     body size, for document text), title 28 px (the caption's "In re" title). */
+  --text-caption: 0.6875rem;
+  --text-caption--line-height: 1rem;
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.25rem;
+  --text-reading: 0.9375rem;
+  --text-reading--line-height: 1.6;
+  --text-title: 1.75rem;
+  --text-title--line-height: 1.2;
+  /* One easing curve and one short duration for every transition. */
+  --ease-paper: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --default-transition-duration: 140ms;
+  --default-transition-timing-function: var(--ease-paper);
   --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-heading: 'Libre Caslon Text', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif;
   --font-document: 'Libre Caslon Text', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif;
@@ -103,6 +187,7 @@
   --color-sticker-foreground: var(--sticker-foreground);
   --color-stamp: var(--stamp);
   --color-exhibit: var(--exhibit);
+  --color-scrim: var(--scrim);
   --shadow-exhibit: var(--exhibit-shadow);
   --color-exhibit-edge: var(--exhibit-edge);
   --color-slip: var(--slip);
@@ -169,17 +254,23 @@
 /* A sheet of paper on the desk: warm edge, a short contact shadow, a soft drop. */
 @utility paper {
   @apply bg-paper text-foreground ring-1 ring-paper-edge;
-  box-shadow: 0 1px 0 var(--paper-rule), 0 12px 28px -12px rgb(60 45 15 / 0.22);
+  box-shadow: var(--paper-shadow);
+}
+
+/* Anything that floats over the page (dialogs, menus, popovers, selects, toasts): a paper slip, 3 px corners. */
+@utility paper-overlay {
+  @apply rounded-[3px] bg-paper text-foreground ring-1 ring-paper-edge;
+  box-shadow: var(--overlay-shadow);
 }
 
 /* The opened case folder's back panel (D-45): manila card with a warm edge and a soft drop. */
 @utility folder-back {
-  box-shadow: 0 0 0 1px var(--paper-edge), 0 18px 36px -18px rgb(60 45 15 / 0.35);
+  box-shadow: var(--folder-shadow);
 }
 
 /* An index divider under the top sheet: card edge plus a faint shadow where the sheet overlaps it. */
 @utility divider-under {
-  box-shadow: inset 0 0 0 1px var(--paper-edge), inset 0 -5px 5px -4px rgb(60 45 15 / 0.2);
+  box-shadow: var(--divider-shadow);
 }
 
 /* A white exhibit-edged panel inside a sheet: lists, tables, transcripts. */
@@ -208,11 +299,6 @@
 
 @utility stamp-press {
   animation: stamp-press 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-/* Small uppercase label above a heading or a block of evidence. */
-@utility eyebrow {
-  @apply text-xs font-medium tracking-[0.12em] text-muted-foreground uppercase;
 }
 
 @utility fade-in-0 { --tw-enter-opacity: 0; }
@@ -246,6 +332,8 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    /* Figures line up everywhere: counts, scores, dates, token totals. */
+    font-variant-numeric: tabular-nums;
   }
   h1, h2, h3 {
     font-family: var(--font-heading);

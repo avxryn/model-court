@@ -1,24 +1,17 @@
 <!DOCTYPE html>
-<!--
-  Active theme is set on the <html> element below.
-  To switch themes, change `data-theme` to any id defined in src/themes.ts.
-  Color values per theme live in src/themes.css.
--->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <title>Model Court</title>
-    <!--
-      First-paint background, keyed to the data-theme attribute above.
-      Without this the browser paints white until the CSS bundle arrives —
-      a hard flash on the dark themes. Each value mirrors --color-background
-      in src/styles.css (slate) / src/themes.css; keep them in sync when
-      adding or editing themes.
-    -->
+    <!-- Applies the saved light or dark theme (D-47) before the first paint; same-origin, so the CSP allows it. -->
+    <script src="/theme.js"></script>
+    <!-- First-paint background for each theme, before the CSS bundle arrives. Mirrors --background in src/styles.css. -->
     <style>
-      html { background-color: #fbfaf7; color-scheme: light; }
+      html { background-color: #e9e2d3; color-scheme: light; }
+      html[data-theme="dark"] { background-color: #171512; color-scheme: dark; }
     </style>
   </head>
   <body>

@@ -58,7 +58,7 @@ export function JuryPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean
               {p.label}
               {p.guest && (
                 <span className="ml-2 text-muted-foreground">
-                  · {p.guest.name} <ExhibitSticker className="px-1.5 py-0 text-[0.6875rem]">GUEST</ExhibitSticker> · {plural(p.guest.devices, 'device')}
+                  · {p.guest.name} <ExhibitSticker className="px-1.5 py-0 text-caption">GUEST</ExhibitSticker> · {plural(p.guest.devices, 'device')}
                 </span>
               )}
             </span>
