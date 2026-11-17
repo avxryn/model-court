@@ -33,10 +33,23 @@ import { getResults, recordVerdict } from './services/results'
 import { createInvite, getReview, redeemInvite, reveal, revokeInvite, revokeSession, saveReview, submitReview } from './services/reviews'
 import { cancelRun, getRun, openReview, retryGenerations, startRun } from './services/runs'
 import { cancelSpecialMaster, getSpecialMaster, startSpecialMaster } from './services/special-master'
+import {
+  GUEST_COOKIE_PREFIX,
+  guestCookieHeader,
+  guestRedeemSchema,
+  guestResumeSchema,
+  guestRoute,
+  isGuestId,
+  readCookie,
+  redeemInviteAsGuest,
+  resumeGuest,
+  verifyGuestCookie,
+  type GuestGrant,
+} from './services/guest-jurors'
 
 const UTF8_BOM = String.fromCharCode(0xfeff)
 
-type Vars = { deps: Deps; caller: VerifiedCaller; requestId: string }
+type Vars = { deps: Deps; caller: VerifiedCaller; requestId: string; guest: boolean }
 type ApiContext = Context<{ Variables: Vars }>
 
 function optionalIfMatch(c: ApiContext): number | null {
@@ -63,19 +76,69 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     c.header('X-Request-Id', requestIdOf(c))
   })
 
-  // Identity: only a verified platform JWT; caller-supplied user IDs are never read.
+  /**
+   * Cookie-setting guest endpoints (D-41) need a strict same-origin request: Origin present and ours,
+   * or the browser's Sec-Fetch-Site saying so. A cross-site form or script cannot pass this.
+   */
+  const requireSameOrigin = (c: ApiContext) => {
+    const origin = c.req.header('Origin')
+    const expected = c.get('deps').config.publicOrigin ?? new URL(c.req.url).origin
+    const sameOrigin = (origin && (origin === expected || origin === new URL(c.req.url).origin)) || (!origin && c.req.header('Sec-Fetch-Site') === 'same-origin')
+    if (!sameOrigin) throw new ApiError(403, 'FORBIDDEN', 'Cross-origin requests are not allowed.')
+  }
+  const clientIp = (c: ApiContext) => c.req.header('CF-Connecting-IP') ?? null
+  const guestReply = (c: ApiContext, grant: GuestGrant) => {
+    c.header('Set-Cookie', guestCookieHeader(grant.runId, grant.cookieValue))
+    // The resume secret is returned once, in the body only; the cookie value never is.
+    return ok(c, { runId: grant.runId, ...(grant.resumeSecret ? { resumeSecret: grant.resumeSecret } : {}) }, 201)
+  }
+
+  // Accountless jurors (D-41): the only routes reachable without any credential.
+  api.post('/invites/redeem-as-guest', async (c) => {
+    requireSameOrigin(c)
+    const input = await readBody(c, guestRedeemSchema)
+    return guestReply(c, await redeemInviteAsGuest(c.get('deps'), input, clientIp(c), requestIdOf(c)))
+  })
+  api.post('/juror/resume', async (c) => {
+    requireSameOrigin(c)
+    const input = await readBody(c, guestResumeSchema)
+    return guestReply(c, await resumeGuest(c.get('deps'), input, clientIp(c), requestIdOf(c)))
+  })
+
+  // Identity: a verified platform JWT, or (D-41) a guest-juror cookie on the few review routes of its own hearing.
   api.use('*', async (c, next) => {
     const header = c.req.header('Authorization')
     const token = header?.startsWith('Bearer ') ? header.slice(7) : null
-    const caller = token ? await c.get('deps').verifyToken(token) : null
+    if (token) {
+      const caller = await c.get('deps').verifyToken(token)
+      // The guest namespace can never be claimed by a token.
+      if (!caller || isGuestId(caller.userId)) throw new ApiError(401, 'UNAUTHENTICATED', 'Sign in to continue.')
+      c.set('caller', caller)
+      c.set('guest', false)
+      return next()
+    }
+    const runId = guestRoute(c.req.method, new URL(c.req.url).pathname)
+    const caller = runId ? await verifyGuestCookie(c.get('deps'), runId, readCookie(c.req.header('Cookie'), `${GUEST_COOKIE_PREFIX}${runId}`)) : null
     if (!caller) throw new ApiError(401, 'UNAUTHENTICATED', 'Sign in to continue.')
     c.set('caller', caller)
+    c.set('guest', true)
+    await next()
+  })
+
+  // Reads (D-13): per-caller limit, guests included.
+  api.use('*', async (c, next) => {
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') return next()
+    const deps = c.get('deps')
+    const reads = await hitRateLimit(deps.db, `read:${c.get('caller').userId}`, LIMITS.readsPerMinute, deps.now())
+    if (!reads.allowed) throw new ApiError(429, 'RATE_LIMITED', 'Too many requests in a minute. Try again shortly.', { retryAfterSeconds: reads.retryAfterSeconds })
     await next()
   })
 
   // Mutations: same-origin check plus per-user rate limits (spec §6.5, §9.1).
   api.use('*', async (c, next) => {
     if (c.req.method === 'GET' || c.req.method === 'HEAD') return next()
+    // Cookie-authenticated guests must prove same origin; Bearer requests keep the earlier rule.
+    if (c.get('guest')) requireSameOrigin(c)
     const origin = c.req.header('Origin')
     const deps = c.get('deps')
     const expected = deps.config.publicOrigin ?? new URL(c.req.url).origin

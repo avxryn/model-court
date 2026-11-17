@@ -327,7 +327,14 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
       <ul className="divide-y divide-paper-rule rounded-[2px] bg-white ring-1 ring-exhibit-edge">
         {run.review.participants.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-            <span>{p.label}</span>
+            <span>
+              {p.label}
+              {p.guest && (
+                <span className="ml-2 text-muted-foreground">
+                  · {p.guest.name} <span className="typewriter rounded-[3px] bg-sticker px-1 text-[0.625rem] font-bold text-sticker-foreground">GUEST</span> · {p.guest.devices} device{p.guest.devices === 1 ? '' : 's'}
+                </span>
+              )}
+            </span>
             <span className="flex items-center gap-2">
               <StatusBadge status={p.status} />
               {reviewing && p.contextType === 'invited' && p.status === 'draft' && (

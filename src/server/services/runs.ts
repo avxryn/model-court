@@ -16,6 +16,7 @@ import { ApiError, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
 import { configurationCapError, parseStoredDraft } from './evaluations'
 import { dispatchOutbox, notifyRun, reconcileLeases } from './generation'
+import { guestNames } from './guest-jurors'
 
 export interface GenerationRow {
   id: string
@@ -315,6 +316,7 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
       .bind(run.id)
       .all<{ id: string; reviewer_user_id: string; context_type: 'invited' | 'owner'; status: string; submitted_at: number | null; joined_at: number }>()
   ).results
+  const guests = await guestNames(db, run.id)
   const invites = (
     await db.prepare(`SELECT id, expires_at, redeemed_at, revoked_at FROM invites WHERE run_id = ? ORDER BY created_at`).bind(run.id).all<{ id: string; expires_at: number; redeemed_at: number | null; revoked_at: number | null }>()
   ).results
@@ -367,6 +369,8 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
       participants: sessions.map((session) => ({
         id: session.id,
         label: session.context_type === 'owner' ? 'You (judge, context-aware)' : `Juror ${++invitedIndex}`,
+        // Owner-only (D-41): a guest's chosen name and live device count. Never shown to other jurors.
+        guest: guests.has(session.reviewer_user_id) ? guests.get(session.reviewer_user_id)! : null,
         contextType: session.context_type,
         status: session.status,
         submittedAt: session.submitted_at,

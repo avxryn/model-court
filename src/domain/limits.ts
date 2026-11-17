@@ -34,6 +34,7 @@ export const LIMITS = {
   verdictRationale: { min: 20, max: 2_000 },
   verdictLimitations: { min: 0, max: 1_000 },
   maxAttemptsPerGeneration: 2,
+  readsPerMinute: 120,
   invitedReviewersPerRun: 3,
   inviteTtlMs: 24 * 60 * 60 * 1000,
   ownEvaluationsPerUser: 10,

@@ -39,7 +39,9 @@ export async function noticeRecipients(db: D1Database, runId: string): Promise<{
     .prepare(`SELECT reviewer_user_id FROM review_sessions WHERE run_id = ? AND status <> 'revoked'`)
     .bind(runId)
     .all<{ reviewer_user_id: string }>()
-  return { evaluationId: run.evaluation_id, recipients: [...new Set([run.owner_user_id, ...reviewers.results.map((row) => row.reviewer_user_id)])] }
+  // Guest jurors (D-41) have no socket identity; they poll instead, so no notice rows are written for them.
+  const signedIn = reviewers.results.map((row) => row.reviewer_user_id).filter((id) => !id.startsWith('mcj_'))
+  return { evaluationId: run.evaluation_id, recipients: [...new Set([run.owner_user_id, ...signedIn])] }
 }
 
 /** Publish safe invalidations for a run; never throws. */

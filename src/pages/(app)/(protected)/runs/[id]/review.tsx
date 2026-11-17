@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { CheckCircle2, ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { ErrorPanel, Page, PageSkeleton, SaveIndicator, type SaveState } from '@/components/common'
@@ -25,7 +25,9 @@ function isComplete(rating: DraftRating | undefined): boolean {
 
 export default function ReviewPage() {
   const { id = '' } = useParams()
-  const resource = useApi<AnonymousReview>(`/runs/${id}/review`)
+  const guest = useLocation().pathname.startsWith('/juror/')
+  // Guests (D-41) have no live socket: refresh every 20 seconds instead.
+  const resource = useApi<AnonymousReview>(`/runs/${id}/review`, { pollMs: guest ? 20_000 : undefined })
   const { data, error, loading, reload } = resource
 
   if (loading && !data) return <Page width="wide"><PageSkeleton label="Loading review" /></Page>
@@ -36,6 +38,7 @@ export default function ReviewPage() {
 
 function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: () => Promise<void> }) {
   const editable = review.sessionStatus === 'draft' && review.runStatus === 'reviewing'
+  const recordBase = useLocation().pathname.startsWith('/juror/') ? `/juror/${review.runId}` : `/runs/${review.runId}`
   const [ratings, setRatings] = useState<Record<string, DraftRating>>(() => Object.fromEntries(review.ratings.map((r) => [r.responseId, r])))
   // The session revision is a ref: submit must use the value returned by the latest save.
   const revision = useRef(review.sessionRevision)
@@ -153,7 +156,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
               <AlertTitle>The jury is closed</AlertTitle>
               <AlertDescription>{review.closedNotice}</AlertDescription>
               <AlertAction>
-                <Button size="sm" variant="outline" render={<Link to={`/runs/${review.runId}/results`} />} nativeButton={false}>
+                <Button size="sm" variant="outline" render={<Link to={`${recordBase}/results`} />} nativeButton={false}>
                   View the record
                 </Button>
               </AlertAction>

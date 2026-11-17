@@ -7,7 +7,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthOverlay, useAuth } from 'deepspace'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, describeError } from '@/lib/api-client'
 import { pendingInviteToken } from '@/lib/invite-token'
@@ -19,6 +22,39 @@ export default function JoinPage() {
   const [status, setStatus] = useState<'idle' | 'redeeming' | 'error' | 'missing'>('idle')
   const [message, setMessage] = useState('')
   const started = useRef(false)
+  const [guestName, setGuestName] = useState('')
+  const [guest, setGuest] = useState<{ runId: string; resumeLink: string | null } | null>(null)
+  const [guestBusy, setGuestBusy] = useState(false)
+
+  // A resume link (D-41) adds this browser as another device for a guest juror.
+  useEffect(() => {
+    const match = /(?:^#|&)resume=([A-Za-z0-9_-]{43})/.exec(window.location.hash)
+    if (!match) return
+    window.history.replaceState(null, '', window.location.pathname)
+    setStatus('redeeming')
+    api<{ runId: string }>('POST', '/juror/resume', { body: { resume: match[1] } })
+      .then((result) => navigate(`/juror/${result.runId}`, { replace: true }))
+      .catch((error: unknown) => {
+        setStatus('error')
+        setMessage(describeError(error))
+      })
+  }, [navigate])
+
+  const joinAsGuest = async () => {
+    const token = pendingInviteToken.peek()
+    if (!token) return
+    setGuestBusy(true)
+    try {
+      const result = await api<{ runId: string; resumeSecret?: string }>('POST', '/invites/redeem-as-guest', { body: { token, displayName: guestName.trim() } })
+      pendingInviteToken.clear()
+      setGuest({ runId: result.runId, resumeLink: result.resumeSecret ? `${window.location.origin}/join#resume=${result.resumeSecret}` : null })
+    } catch (error) {
+      setStatus('error')
+      setMessage(describeError(error))
+    } finally {
+      setGuestBusy(false)
+    }
+  }
 
   // Read the secret from the fragment once and remove it from the address bar.
   useEffect(() => {
@@ -26,7 +62,7 @@ export default function JoinPage() {
     if (match) {
       pendingInviteToken.save(match[1])
       window.history.replaceState(null, '', window.location.pathname)
-    } else if (!pendingInviteToken.peek()) {
+    } else if (!pendingInviteToken.peek() && !/resume=/.test(window.location.hash)) {
       setStatus('missing')
     }
   }, [])
@@ -71,11 +107,44 @@ export default function JoinPage() {
               Joining…
             </p>
           )}
-          {isLoaded && !isSignedIn && status !== 'missing' && (
+          {guest && (
+            <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
+              <p className="font-medium">You are seated as a juror.</p>
+              {guest.resumeLink && (
+                <div className="space-y-1.5">
+                  <p>Save this link to continue on another device. It is shown only once, and anyone with it can act as you.</p>
+                  <div className="flex gap-2">
+                    <Input readOnly value={guest.resumeLink} aria-label="Resume link" className="typewriter bg-white" onFocus={(e) => e.currentTarget.select()} />
+                    <Button variant="outline" onClick={() => void navigator.clipboard.writeText(guest.resumeLink ?? '').then(() => toast.success('Link copied'), () => toast.error('Copy failed — select the link and copy it manually.'))}>
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <Button className="w-full" onClick={() => navigate(`/juror/${guest.runId}`)}>
+                Open your worksheet
+              </Button>
+            </div>
+          )}
+          {isLoaded && !isSignedIn && status !== 'missing' && status !== 'redeeming' && !guest && (
             <>
               <Button className="w-full" onClick={() => setShowAuth(true)}>
                 Sign in to accept the summons
               </Button>
+              <form
+                className="space-y-2 border-t border-paper-rule pt-4"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void joinAsGuest()
+                }}
+              >
+                <Label htmlFor="guest-name">Or join with just a name</Label>
+                <Input id="guest-name" value={guestName} maxLength={40} onChange={(e) => setGuestName(e.target.value)} placeholder="The name the judge will see" />
+                <p className="text-xs text-muted-foreground">No account needed. Only the judge sees this name. This browser keeps you signed in to this one hearing for up to 14 days.</p>
+                <Button type="submit" variant="outline" className="w-full" disabled={guestBusy || guestName.trim().length === 0}>
+                  {guestBusy ? 'Joining…' : 'Join without an account'}
+                </Button>
+              </form>
               <Button
                 variant="ghost"
                 className="w-full"

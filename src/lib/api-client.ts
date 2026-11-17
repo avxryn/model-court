@@ -42,9 +42,9 @@ export function newIntentKey(): string {
 }
 
 export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, options: RequestOptions = {}): Promise<T> {
-  const token = await getAuthToken()
-  if (!token) throw new ApiClientError(401, 'UNAUTHENTICATED', 'Sign in to continue.')
-  const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
+  // No token is not an error here: a guest juror's HttpOnly cookie (D-41) may authorize the request; the server decides.
+  const token = await getAuthToken().catch(() => null)
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
   if (options.body !== undefined) headers['Content-Type'] = 'application/json'
   if (options.revision !== undefined) headers['If-Match'] = `"${options.revision}"`
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey
@@ -79,11 +79,10 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: st
 
 /** GET a non-JSON body (e.g. a CSV export) with the bearer token; errors use the normal JSON envelope. */
 export async function apiDownload(path: string): Promise<{ blob: Blob; filename: string | null }> {
-  const token = await getAuthToken()
-  if (!token) throw new ApiClientError(401, 'UNAUTHENTICATED', 'Sign in to continue.')
+  const token = await getAuthToken().catch(() => null)
   let response: Response
   try {
-    response = await fetch(`/api/v1${path}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
+    response = await fetch(`/api/v1${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: 'no-store' })
   } catch {
     throw new ApiClientError(0, 'NETWORK', 'Could not reach Model Court. Check your connection and try again.')
   }

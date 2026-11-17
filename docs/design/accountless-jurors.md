@@ -1,6 +1,6 @@
 # Design note: accountless jurors (phase 7, optional)
 
-Status: proposal, Nov 17, 2026. Research in [README.md](README.md) found that DeepSpace 0.44.2 has no
+Status: **built on `next`, Nov 17, 2026 (D-41)**, with the departures D-41 lists. Research in [README.md](README.md) found that DeepSpace 0.44.2 has no
 email-link or open email signup, so this is the only way a juror without GitHub or Google could take part.
 
 ## Today's identity model (what must keep holding)

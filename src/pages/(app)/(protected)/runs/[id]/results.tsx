@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { AlertTriangle, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, StatusBadge } from '@/components/common'
@@ -50,6 +50,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
   const labels = Object.fromEntries(data.configurations.map((c) => [c.key, c.label]))
   const unblinded = data.cohorts.invited.potentiallyUnblindedCount + data.cohorts.owner.potentiallyUnblindedCount
   const decided = data.status === 'decided'
+  const guest = useLocation().pathname.startsWith('/juror/')
   const RUBRIC = rubricLines(data.rubricVersion)
   const rubricName = (RUBRICS as Record<string, { name: string }>)[data.rubricVersion]?.name ?? data.rubricVersion
   return (
@@ -57,7 +58,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
       <CaseProgress step="judgment" complete={decided} />
       <Sheet className="rounded-t-none">
       <Caption
-        backTo={{ to: `/runs/${data.runId}`, label: 'Back to the hearing' }}
+        backTo={guest ? { to: `/juror/${data.runId}`, label: 'Back to your worksheet' } : { to: `/runs/${data.runId}`, label: 'Back to the hearing' }}
         title={data.evaluationTitle}
         parties={data.configurations.map((c) => c.label)}
         details={

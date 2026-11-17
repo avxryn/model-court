@@ -58,8 +58,11 @@ export const BACKUP_TABLES = [
   'audit_events',
 ] as const
 
-/** Tables that are never exported: the transient guard sentinel and the migration ledger (sent separately). */
-const NOT_EXPORTED = new Set(['command_guards', 'mc_schema_migrations'])
+/**
+ * Tables that are never exported: the transient guard sentinel, the migration ledger (sent separately), and
+ * guest-juror access (D-41): a restore must never bring back a working guest cookie or resume link.
+ */
+const NOT_EXPORTED = new Set(['command_guards', 'mc_schema_migrations', 'juror_principals', 'juror_devices'])
 /** Platform/engine tables that are not Model Court data (SQLite, Cloudflare `_cf_*`, D1, Miniflare `__miniflare_*`). */
 const PLATFORM_TABLE = /^(sqlite_|_cf_|d1_|__)/
 

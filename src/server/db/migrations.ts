@@ -386,6 +386,30 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    // D-41: accountless jurors. Secrets are stored only as SHA-256 hashes.
+    id: '0005_accountless_jurors',
+    statements: [
+      `CREATE TABLE juror_principals (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        invite_id TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        resume_hash TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL,
+        revoked_at INTEGER
+      )`,
+      `CREATE TABLE juror_devices (
+        id TEXT PRIMARY KEY,
+        principal_id TEXT NOT NULL REFERENCES juror_principals(id) ON DELETE CASCADE,
+        secret_hash TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL,
+        revoked_at INTEGER
+      )`,
+      `CREATE INDEX juror_devices_by_principal ON juror_devices(principal_id)`,
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`

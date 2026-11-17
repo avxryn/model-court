@@ -178,7 +178,12 @@ export function auditStatement(db: D1Database, event: AuditEvent, now: number): 
 // ---------------------------------------------------------------------------
 
 export async function hitRateLimit(db: D1Database, subject: string, limitPerMinute: number, now: number): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
-  const windowStart = Math.floor(now / 60_000) * 60_000
+  return hitRateLimitWindow(db, subject, limitPerMinute, 60_000, now)
+}
+
+/** Fixed-window counter; `windowMs` up to one hour (the cron prunes older buckets). */
+export async function hitRateLimitWindow(db: D1Database, subject: string, limit: number, windowMs: number, now: number): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
+  const windowStart = Math.floor(now / windowMs) * windowMs
   const row = await db
     .prepare(
       `INSERT INTO rate_buckets (subject, window_start, count) VALUES (?, ?, 1)
@@ -187,5 +192,5 @@ export async function hitRateLimit(db: D1Database, subject: string, limitPerMinu
     .bind(subject, windowStart)
     .first<{ count: number }>()
   const count = row?.count ?? 1
-  return { allowed: count <= limitPerMinute, retryAfterSeconds: Math.ceil((windowStart + 60_000 - now) / 1000) }
+  return { allowed: count <= limit, retryAfterSeconds: Math.ceil((windowStart + windowMs - now) / 1000) }
 }

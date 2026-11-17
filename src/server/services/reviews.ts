@@ -18,6 +18,7 @@ import type { Deps } from '../deps'
 import { ApiError, notFound, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
 import { notifyRun } from './generation'
+import { revokeGuestStatements } from './guest-jurors'
 import { buildAssignment, insertSessionStatement, parseSnapshot, pendingReviewCount, type AssignmentCase, type EligibleManifest } from './runs'
 
 function base64Url(bytes: Uint8Array): string {
@@ -315,7 +316,12 @@ export async function revokeSession(deps: Deps, userId: string, runId: string, s
     // Removing submitted evidence would allow excluding unfavorable reviews (spec §9.3).
     throw stateConflict('Only an unsubmitted invited session can be removed while review is open.')
   }
-  await deps.db.batch([auditStatement(deps.db, { eventType: 'review.revoke_session', requestId, outcome: 'ok', actorUserId: userId, runId }, now)])
+  const removed = await deps.db.prepare('SELECT reviewer_user_id FROM review_sessions WHERE id = ?').bind(sessionId).first<{ reviewer_user_id: string }>()
+  await deps.db.batch([
+    // A removed guest juror (D-41) loses every device and the resume link.
+    ...revokeGuestStatements(deps.db, removed?.reviewer_user_id ?? '', now),
+    auditStatement(deps.db, { eventType: 'review.revoke_session', requestId, outcome: 'ok', actorUserId: userId, runId }, now),
+  ])
   await notifyRun(deps, runId)
 }
 

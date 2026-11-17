@@ -3,6 +3,8 @@
 All routes require `Authorization: Bearer <platform JWT>`. Requests and responses are JSON. Every
 response carries `requestId` and `Cache-Control: private, no-store`. Unknown fields are rejected (422).
 
+Guest jurors (D-41), no account: `POST /invites/redeem-as-guest` `{token, displayName}` and `POST /juror/resume` `{resume}` (same-origin only; rate-limited per IP) set the `__Host-mcj-<runId>` cookie and return `{runId}` (plus `resumeSecret` once, on join). The cookie authorizes only `GET /runs/:id`, `GET/PUT /runs/:id/review`, `POST /runs/:id/review/submit`, and `GET /runs/:id/results` for its own hearing. The owner run view adds `participants[].guest` (`{name, devices}`, owner only). All GETs are limited to 120 per minute per caller (D-42).
+
 Special master (D-40), judge only, after unsealing: `GET /runs/:id/special-master` (jurors get 404); `POST /runs/:id/special-master` (Idempotency-Key; body `{modelKey, credentialIdsByProvider, consentToProviderProcessing: true, acknowledgeProviderCharges: true}`; 202 with `plannedCalls`; counts toward the generation rate limit); `POST /runs/:id/special-master/:graderRunId/cancel`.
 
 Conversations (D-39): a case may carry `messages: [{role: "user"|"assistant", content}]`, the conversation so far. Review cases and results cases add `messages` (empty when none); the catalog adds `multiTurnVerifiedAt` per model.
