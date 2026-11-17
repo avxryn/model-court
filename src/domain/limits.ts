@@ -15,6 +15,8 @@ export const LIMITS = {
   taskDescription: { min: 0, max: 2_000 },
   maxOutputTokens: 512,
   draftJsonBytes: 96 * 1024,
+  /** CSV case import (browser-side parse). */
+  caseImportCsvBytes: 128 * 1024,
   snapshotJsonBytes: 96 * 1024,
   requestBodyBytes: 128 * 1024,
   credentialRequestBytes: 16 * 1024,

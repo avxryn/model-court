@@ -54,14 +54,16 @@ function uniqueKeys(items: { key: string }[]): boolean {
   return new Set(items.map((item) => item.key)).size === items.length
 }
 
+export const casesSchema = z
+  .array(caseInputSchema)
+  .min(LIMITS.minCases, `Add at least ${LIMITS.minCases} case`)
+  .max(LIMITS.maxCases, `At most ${LIMITS.maxCases} cases`)
+  .refine(uniqueKeys, 'Case keys must be unique')
+
 export const draftInputSchema = z
   .strictObject({
     comparisonMode: comparisonModeSchema,
-    cases: z
-      .array(caseInputSchema)
-      .min(LIMITS.minCases, `Add at least ${LIMITS.minCases} case`)
-      .max(LIMITS.maxCases, `At most ${LIMITS.maxCases} cases`)
-      .refine(uniqueKeys, 'Case keys must be unique'),
+    cases: casesSchema,
     configurations: z
       .array(configurationSchema)
       .min(LIMITS.minConfigurationsPerRun, `Add at least ${LIMITS.minConfigurationsPerRun} configurations`)
