@@ -14,14 +14,15 @@ anonymously (you as the judge, plus up to three invited jurors) → reveal → r
 
 Live URL: https://model-court.app.space (live generation on since Nov 17, 2026) · Built from specification v1.2 (Nov 15, 2026).
 
-## Status (Nov 17, 2026)
+## Status (Nov 17, 2026): v2 deployed
 
 | Area | State |
 |---|---|
-| Domain rules, schema, API, generation pipeline, review, reveal, results, verdict, credentials | Implemented; 35 unit tests and 57 integration tests, run against both local D1 and the real `ModelCourtStore` Durable Object (provider HTTP stubbed) |
-| UI (shadcn/ui on Base UI) | All screens implemented. Landing, sample, signed-out gate, and signed-in page loading checked on the live app; a full signed-in run not yet exercised |
-| Deployment | Live: app `app_01M7M0ATC59NFTPZSJJS47J0BX`, generation on. Release history and evidence in `docs/verification.md` |
-| Real provider calls | One smoke call per provider succeeded on Nov 17 (OpenAI `gpt-6-luna`, Anthropic `claude-haiku-5-5`); both routes verified. No run in the deployed app yet |
+| P0 (the spec's submission scope) | Implemented and deployed first (tag `submission-candidate-1`); evidence in `docs/verification.md` |
+| v2 (post-P0, `docs/v2-plan.md`) | Deployed to the live app: courtroom case-file design, a third party, CSV import, certified-record export, charts, rubric templates, per-language findings, a printable judgment, imported evidence (human baselines and transcripts), next-turn conversations, the special master (advisory AI grader), and accountless guest jurors. Security-reviewed (`docs/security-review-v2.md`) |
+| Tests | 94 unit tests and 132 integration tests, run against both local D1 and the real `ModelCourtStore` Durable Object (provider HTTP stubbed) |
+| Real provider calls | One single-message smoke call per provider succeeded on Nov 17. Multi-message (conversation) calls are not yet verified, so questions with history are blocked until they are |
+| Not yet exercised live | A full signed-in hearing, guest jurors on the live edge, the special master, and imported evidence |
 
 See `docs/implementation-plan.md` for the checklist, `docs/verification.md` for evidence, and
 `docs/decisions.md` for deviations.
@@ -106,9 +107,8 @@ Text only · 1–5 cases · exactly 2 configurations · 512 output tokens · fix
 
 ## Known unfinished edges
 
-- No live run in the deployed app yet (V12, T34): the first one also proves JobRoom execution and the deployed encryption round trip.
-- Two-account flow (judge plus juror, blinding before reveal) not yet run live.
-- Read-request rate limiting (120 per minute) not implemented (D-13); writes are limited.
-- Root-key re-encryption tool for rotation not implemented (runbook).
-- Backup/restore for the Durable Object store not designed or verified (V9).
+- No live hearing in the deployed app yet (V12, T34): the first one also proves JobRoom execution and the deployed encryption round trip.
+- Two-account flow (judge plus juror, blinding before reveal) and guest jurors not yet run live; guest cookies through the DeepSpace edge are unverified.
+- Multi-message provider calls unverified (`npm run smoke:providers`, `multi`); whole-conversation evaluation (phase 5b) not started.
+- Backup/restore: a procedure and tooling exist (D-32), but the live export channel is unverified (V9).
 - Accessibility checks beyond radio naming and 390px layout (keyboard-only review, 200% zoom, contrast audit) are pending.

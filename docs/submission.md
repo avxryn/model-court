@@ -6,6 +6,8 @@
 >
 > Live generation is strictly BYOK: the evaluation owner (shown in the app as the judge) supplies OpenAI and/or Anthropic API keys and pays those providers. Keys are encrypted with AES-256-GCM before storage, pinned to each run, expire after 7 days unless renewed, and are removable at any time; removal or expiry stops queued work and rejects late outputs. Admin keys are refused. [Confirm against your live run before submitting.] The public sample and jurors need no keys. DeepSpace supplies the platform primitives above; the direct OpenAI Responses and Anthropic Messages calls are separate integrations. This adds setup friction but keeps live model charges on the user's own provider account.
 >
+> Scope: I finished and deployed the spec's P0 first (tagged `submission-candidate-1`), then built and deployed the deferred P1 features and a set of stretch goals on top, each with tests and a recorded decision: a courtroom case-file design, a third party, CSV import, a certified-record export, rubric templates, per-language findings, imported human or transcript answers, next-turn conversations, an advisory AI grader shown only after its agreement with the jury, and guest jurors who need no account. [Confirm which of these you exercised live.]
+>
 > The coding agent implemented [specific work — see docs/verification.md part A]. I personally verified [only what you checked — docs/verification.md part B] and changed [your actual corrections/decisions]. [Known limitation and next step.]
 >
 > Live URL: https://model-court.app.space. Repository: [URL — the only remote today is the DeepSpace deploy repo; push to a repository reviewers can open].
