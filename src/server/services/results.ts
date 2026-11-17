@@ -69,7 +69,10 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
   // Stable, identity-free reviewer labels in cohort order.
   const ordered = cohortIds.map((id) => sessionRows.find((row) => row.id === id)).filter((row): row is SessionRow => !!row && row.status === 'submitted')
   let invitedNumber = 0
-  const labelled = ordered.map((row) => ({ row, label: row.context_type === 'owner' ? 'Judge (context-aware)' : `Juror ${++invitedNumber}` }))
+  const labelled = ordered.map((row) => ({
+    row,
+    label: row.context_type === 'owner' ? 'Judge (context-aware)' : `Juror ${++invitedNumber}${row.reviewer_user_id.startsWith('mcj_') ? ' (guest, no account)' : ''}`,
+  }))
 
   const scored: ScoredSession[] = labelled.map(({ row }) => {
     const assignment = JSON.parse(row.assignment_json) as AssignmentCase[]

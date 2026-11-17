@@ -178,3 +178,31 @@ describe('limits', () => {
     expect(fourth.json.error.message).toMatch(/at most 3/)
   })
 })
+
+describe('security review fixes', () => {
+  it('deleting the case stops a special-master run and refunds its queued units', async () => {
+    const { setup, runId } = await unsealedHearing()
+    const before = await bucket(`user:${OWNER}`)
+    expect((await startGrader(setup, runId)).status).toBe(202)
+    expect(await bucket(`user:${OWNER}`)).toBe(before + 10)
+    const evaluation = (await h.request('GET', `/evaluations/${setup.evaluationId}`, { as: OWNER })).json.data
+    expect((await h.request('DELETE', `/evaluations/${setup.evaluationId}`, { as: OWNER, ifMatch: evaluation.revision, body: { confirmTitle: evaluation.title } })).status).toBe(202)
+    expect(await bucket(`user:${OWNER}`)).toBe(before)
+    const callsBefore = h.providerCalls.length
+    await h.drainJobs()
+    expect(h.providerCalls.length).toBe(callsBefore)
+    const graderRun = await h.db.prepare('SELECT status FROM grader_runs').first<any>()
+    expect(graderRun.status).toBe('canceled')
+  })
+
+  it('a juror learns nothing about the draft from starting a hearing, even with generation off', async () => {
+    const { setup, runId } = await unsealedHearing()
+    h.env.GENERATION_ENABLED = 'false'
+    const res = await h.request('POST', `/evaluations/${setup.evaluationId}/runs`, {
+      as: REVIEWER,
+      body: { draftRevision: 1, credentialIdsByProvider: {}, consentToProviderProcessing: true, acknowledgeProviderCharges: true },
+    })
+    expect(res.status).toBe(403)
+    expect(runId).toBeTruthy()
+  })
+})

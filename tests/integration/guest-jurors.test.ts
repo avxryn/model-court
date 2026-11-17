@@ -167,15 +167,82 @@ describe('reviewing as a guest', () => {
     expect((await h.request('POST', '/juror/resume', { headers: { Origin: ORIGIN }, body: { resume: resumeSecret } })).status).toBe(409)
   })
 
-  it('caps devices at three and rate-limits resume attempts', async () => {
+  it('uses each resume link once and hands the new device the next one', async () => {
     const { runId } = await reviewingHearing()
     const { resumeSecret } = await joinAsGuest(runId)
-    const resume = () => h.request('POST', '/juror/resume', { headers: { Origin: ORIGIN }, body: { resume: resumeSecret } })
-    expect((await resume()).status).toBe(201)
-    expect((await resume()).status).toBe(201)
-    expect((await resume()).status).toBe(409) // a fourth device
-    for (let i = 0; i < 2; i++) await resume()
-    expect((await resume()).status).toBe(429)
+    const resume = (secret: string, headers: Record<string, string> = {}) => h.request('POST', '/juror/resume', { headers: { Origin: ORIGIN, ...headers }, body: { resume: secret } })
+    const first = await resume(resumeSecret)
+    expect(first.status).toBe(201)
+    expect(first.json.data.resumeSecret).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect((await resume(resumeSecret)).status).toBe(409) // the old link is used up
+    const second = await resume(first.json.data.resumeSecret)
+    expect(second.status).toBe(201)
+    expect((await resume(second.json.data.resumeSecret)).status).toBe(409) // a fourth device
+  })
+
+  it('rate-limits resume attempts per client address', async () => {
+    const { runId } = await reviewingHearing()
+    await joinAsGuest(runId)
+    const junk = () => h.request('POST', '/juror/resume', { headers: { Origin: ORIGIN, 'CF-Connecting-IP': '203.0.113.7' }, body: { resume: 'x'.repeat(43) } })
+    for (let i = 0; i < 5; i++) expect((await junk()).status).toBe(409)
+    expect((await junk()).status).toBe(429)
+    // Another address is unaffected: there is no shared global bucket.
+    expect((await h.request('POST', '/juror/resume', { headers: { Origin: ORIGIN, 'CF-Connecting-IP': '203.0.113.8' }, body: { resume: 'x'.repeat(43) } })).status).toBe(409)
+  })
+
+  it('refuses a resume link that would move this browser into another juror’s seat', async () => {
+    const { runId } = await reviewingHearing()
+    const victim = await joinAsGuest(runId, 'Victor')
+    const mallory = await joinAsGuest(runId, 'Mallory')
+    const planted = await h.request('POST', '/juror/resume', { headers: { Origin: ORIGIN, Cookie: victim.cookie }, body: { resume: mallory.resumeSecret } })
+    expect(planted.status).toBe(409)
+    expect(planted.headers.get('Set-Cookie')).toBeNull()
+    // Victor's own link still works for Victor.
+    expect((await h.request('POST', '/juror/resume', { headers: { Origin: ORIGIN, Cookie: victim.cookie }, body: { resume: victim.resumeSecret } })).status).toBe(201)
+  })
+
+  it('expires a device after 14 days on the server, whatever the browser keeps', async () => {
+    const { runId } = await reviewingHearing()
+    const { cookie } = await joinAsGuest(runId)
+    h.advance(14 * 24 * 60 * 60 * 1000 + 1)
+    expect((await h.request('GET', `/runs/${runId}`, asGuest(cookie))).status).toBe(401)
+  })
+})
+
+describe('seat integrity', () => {
+  it('stops the judge or a seated juror from also taking a guest seat while signed in, and labels guests in the record', async () => {
+    const { runId } = await reviewingHearing()
+    await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token: await invite(runId) } })
+    for (const user of [OWNER, REVIEWER]) {
+      const res = await h.request('POST', '/invites/redeem-as-guest', { as: user, headers: { Origin: ORIGIN }, body: { token: await invite(runId), displayName: 'Sock puppet' } })
+      expect(res.status).toBe(409)
+      await h.request('DELETE', `/runs/${runId}/invites/${(await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data.review.invites.find((i: any) => i.state === 'unused').id}`, { as: OWNER })
+    }
+    const { cookie } = await joinAsGuest(runId, 'Dana')
+    const review = (await h.request('GET', `/runs/${runId}/review`, asGuest(cookie))).json.data
+    const ratings = review.cases.flatMap((c: any) => c.responses.map((r: any) => ({ responseId: r.responseId, correctness: 2, completeness: 2, grounding: 2, note: '', suspectedIdentityClue: false })))
+    const saved = await h.request('PUT', `/runs/${runId}/review`, { ...asGuest(cookie, { Origin: ORIGIN }), ifMatch: review.sessionRevision, body: { ratings } })
+    await h.request('POST', `/runs/${runId}/review/submit`, { ...asGuest(cookie, { Origin: ORIGIN }), ifMatch: saved.json.data.sessionRevision, body: {} })
+    const view = (await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data
+    await h.request('POST', `/runs/${runId}/reveal`, { as: OWNER, ifMatch: view.revision, body: { acknowledgePendingCount: 2 } })
+    const results = (await h.request('GET', `/runs/${runId}/results`, { as: OWNER })).json.data
+    const reviewers = results.cases.flatMap((c: any) => c.judgments.map((j: any) => j.reviewer))
+    expect(reviewers.some((label: string) => label.endsWith('(guest, no account)'))).toBe(true)
+  })
+
+  it('lets the judge sign out a filed guest’s devices; the worksheet stays', async () => {
+    const { runId } = await reviewingHearing()
+    const { cookie } = await joinAsGuest(runId, 'Dana')
+    const review = (await h.request('GET', `/runs/${runId}/review`, asGuest(cookie))).json.data
+    const ratings = review.cases.flatMap((c: any) => c.responses.map((r: any) => ({ responseId: r.responseId, correctness: 2, completeness: 2, grounding: 2, note: '', suspectedIdentityClue: false })))
+    const saved = await h.request('PUT', `/runs/${runId}/review`, { ...asGuest(cookie, { Origin: ORIGIN }), ifMatch: review.sessionRevision, body: { ratings } })
+    await h.request('POST', `/runs/${runId}/review/submit`, { ...asGuest(cookie, { Origin: ORIGIN }), ifMatch: saved.json.data.sessionRevision, body: {} })
+    const guestRow = (await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data.review.participants.find((p: any) => p.guest)
+    expect((await h.request('POST', `/runs/${runId}/reviewers/${guestRow.id}/sign-out-devices`, { as: REVIEWER, body: {} })).status).toBe(404)
+    expect((await h.request('POST', `/runs/${runId}/reviewers/${guestRow.id}/sign-out-devices`, { as: OWNER, body: {} })).status).toBe(204)
+    expect((await h.request('GET', `/runs/${runId}`, asGuest(cookie))).status).toBe(401)
+    const after = (await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data.review.participants.find((p: any) => p.id === guestRow.id)
+    expect(after.status).toBe('submitted')
   })
 })
 

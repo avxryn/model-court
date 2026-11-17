@@ -201,6 +201,16 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
   } catch (error) {
     if (error instanceof AttemptFenced) {
       deps.log({ event: 'attempt.fenced_before_send', generationId: job.generationId, attemptNo: job.attemptNo })
+      // Provably unsent: release the unit and close the attempt instead of leaving it to expire as uncertain.
+      try {
+        const now = deps.now()
+        await runGuarded(deps.db, 'attempt.fenced', cond(`EXISTS (SELECT 1 FROM generation_attempts WHERE id = ? AND fence_token = ? AND status = 'running')`, attemptId, fence), [
+          ...releaseReservations(deps.db, cond('r.generation_id = ? AND r.attempt_no = ?', job.generationId, job.attemptNo), 'consumed', now),
+          deps.db.prepare(`UPDATE generation_attempts SET status = 'failed', error_code = 'CANCELED', finished_at = ? WHERE id = ?`).bind(now, attemptId),
+        ])
+      } catch (fenceError) {
+        if (!(fenceError instanceof GuardFailed)) throw fenceError
+      }
       return 'stale'
     }
     if (error instanceof CredentialUnusable) {

@@ -23,7 +23,8 @@ async function purgeEvaluation(deps: Deps, evaluationId: string): Promise<void> 
   const childIds = `SELECT id FROM runs WHERE evaluation_id = ?1
     UNION SELECT i.id FROM invites i JOIN runs r ON r.id = i.run_id WHERE r.evaluation_id = ?1
     UNION SELECT s.id FROM review_sessions s JOIN runs r ON r.id = s.run_id WHERE r.evaluation_id = ?1
-    UNION SELECT v.id FROM verdict_revisions v JOIN runs r ON r.id = v.run_id WHERE r.evaluation_id = ?1`
+    UNION SELECT v.id FROM verdict_revisions v JOIN runs r ON r.id = v.run_id WHERE r.evaluation_id = ?1
+    UNION SELECT g.id FROM grader_runs g JOIN runs r ON r.id = g.run_id WHERE r.evaluation_id = ?1`
   await db.batch([
     db.prepare(`DELETE FROM command_receipts WHERE entity_id IN (${childIds}) OR operation = 'run.start:' || ?1`).bind(evaluationId),
     db.prepare(`DELETE FROM audit_events WHERE evaluation_id = ? OR run_id IN (${runIds})`).bind(evaluationId, evaluationId),

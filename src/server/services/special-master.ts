@@ -273,7 +273,11 @@ export async function handleGradingJob(deps: Deps, job: GradingJob, jobSignal: A
       return adapter(deps.providerFetch, { modelId: context.config.modelId, system: request.system, messages: request.messages, maxOutputTokens: LIMITS.maxOutputTokens, apiKey, signal }, timeout)
     })
   } catch (error) {
-    if (error instanceof GraderFenced) return 'stale'
+    if (error instanceof GraderFenced) {
+      // Canceled or deleted before the send: provably unsent, so the unit goes back.
+      await releaseFenced(deps, attemptId, fence, job)
+      return 'stale'
+    }
     if (error instanceof CredentialUnusable) {
       unsent = true
       outcome = unsentFailure(error.code)
@@ -286,9 +290,24 @@ export async function handleGradingJob(deps: Deps, job: GradingJob, jobSignal: A
 
 class GraderFenced extends Error {}
 
+async function releaseFenced(deps: Deps, attemptId: string, fence: string, job: GradingJob): Promise<void> {
+  const now = deps.now()
+  try {
+    await runGuarded(deps.db, 'grader.fenced', cond(`EXISTS (SELECT 1 FROM grader_attempts WHERE id = ? AND fence_token = ? AND status = 'running')`, attemptId, fence), [
+      ...releaseReservations(deps.db, cond('r.grader_item_id = ? AND r.attempt_no = ?', job.graderItemId, job.attemptNo), 'consumed', now, 'grader_reservations'),
+      deps.db.prepare(`UPDATE grader_attempts SET status = 'failed', error_code = 'CANCELED', finished_at = ? WHERE id = ?`).bind(now, attemptId),
+    ])
+  } catch (error) {
+    if (!(error instanceof GuardFailed)) throw error
+  }
+}
+
 async function graderAttemptCurrent(db: D1Database, attemptId: string, fence: string, graderRunId: string): Promise<boolean> {
   const row = await db
-    .prepare(`SELECT 1 AS ok FROM grader_attempts a JOIN grader_runs g ON g.id = ? WHERE a.id = ? AND a.fence_token = ? AND a.status = 'running' AND g.status = 'generating'`)
+    .prepare(
+      `SELECT 1 AS ok FROM grader_attempts a JOIN grader_runs g ON g.id = ? JOIN runs r ON r.id = g.run_id JOIN evaluations e ON e.id = r.evaluation_id
+       WHERE a.id = ? AND a.fence_token = ? AND a.status = 'running' AND g.status = 'generating' AND e.deleted_at IS NULL`,
+    )
     .bind(graderRunId, attemptId, fence)
     .first()
   return !!row
@@ -321,6 +340,10 @@ async function finishGrading(deps: Deps, ref: GradingRef, outcome: ProviderOutco
   const current = all(
     cond(`EXISTS (SELECT 1 FROM grader_attempts WHERE id = ? AND fence_token = ? AND status = 'running')`, ref.attemptId, ref.fence),
     cond(`EXISTS (SELECT 1 FROM grader_runs WHERE id = ? AND status = 'generating')`, context.graderRunId),
+    // Like hearings: output that arrives after the judge removed the key is not accepted.
+    ...(outcome.kind === 'success'
+      ? [cond(`EXISTS (SELECT 1 FROM grader_credentials gc JOIN provider_credentials c ON c.id = gc.credential_id WHERE gc.grader_run_id = ? AND c.status = 'active')`, context.graderRunId)]
+      : []),
   )
   const terminalOutbox = db.prepare(`UPDATE grader_outbox SET status = 'terminal', updated_at = ? WHERE id = ?`).bind(now, job.outboxId)
   // Malformed grader output was sent and possibly billed: a definite failure, never retried automatically.

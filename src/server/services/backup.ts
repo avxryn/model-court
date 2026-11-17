@@ -166,7 +166,8 @@ export async function restoreSnapshot(deps: Deps, snapshot: StoreSnapshot, optio
   const missing = snapshot.migrations.filter((id) => !applied.has(id))
   if (missing.length > 0) throw new BackupError(`The target store lacks migrations: ${missing.join(', ')}.`)
 
-  const counts = await db.batch<{ n: number }>(BACKUP_TABLES.map((table) => db.prepare(`SELECT COUNT(*) AS n FROM ${table}`)))
+  // Guest-juror tables (D-41) are never restored, so they must be empty too, or old cookies could match restored sessions.
+  const counts = await db.batch<{ n: number }>([...BACKUP_TABLES, 'juror_principals', 'juror_devices'].map((table) => db.prepare(`SELECT COUNT(*) AS n FROM ${table}`)))
   if (counts.some((result) => Number(result.results[0]?.n ?? 0) > 0)) throw new BackupError('The target store is not empty. Restore only into a fresh store.')
 
   const now = deps.now()

@@ -26,19 +26,30 @@ export default function JoinPage() {
   const [guest, setGuest] = useState<{ runId: string; resumeLink: string | null } | null>(null)
   const [guestBusy, setGuestBusy] = useState(false)
 
-  // A resume link (D-41) adds this browser as another device for a guest juror.
+  // A resume link (D-41) adds this browser as another device for a guest juror, but only after a click,
+  // so a link someone else sent can never silently switch this browser into their seat.
+  const [pendingResume, setPendingResume] = useState<string | null>(null)
   useEffect(() => {
     const match = /(?:^#|&)resume=([A-Za-z0-9_-]{43})/.exec(window.location.hash)
     if (!match) return
     window.history.replaceState(null, '', window.location.pathname)
-    setStatus('redeeming')
-    api<{ runId: string }>('POST', '/juror/resume', { body: { resume: match[1] } })
-      .then((result) => navigate(`/juror/${result.runId}`, { replace: true }))
-      .catch((error: unknown) => {
-        setStatus('error')
-        setMessage(describeError(error))
-      })
-  }, [navigate])
+    setPendingResume(match[1])
+  }, [])
+  const resume = async () => {
+    if (!pendingResume) return
+    setGuestBusy(true)
+    try {
+      const result = await api<{ runId: string; resumeSecret?: string }>('POST', '/juror/resume', { body: { resume: pendingResume } })
+      setPendingResume(null)
+      // Each link works once; this device gets the next one.
+      setGuest({ runId: result.runId, resumeLink: result.resumeSecret ? `${window.location.origin}/join#resume=${result.resumeSecret}` : null })
+    } catch (error) {
+      setStatus('error')
+      setMessage(describeError(error))
+    } finally {
+      setGuestBusy(false)
+    }
+  }
 
   const joinAsGuest = async () => {
     const token = pendingInviteToken.peek()
@@ -107,12 +118,21 @@ export default function JoinPage() {
               Joining…
             </p>
           )}
+          {pendingResume && !guest && (
+            <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
+              <p className="font-medium">Continue your review on this device?</p>
+              <p>Use this only with a resume link you saved yourself. Anyone else’s link would put you in their seat.</p>
+              <Button className="w-full" disabled={guestBusy} onClick={() => void resume()}>
+                {guestBusy ? 'Continuing…' : 'Continue on this device'}
+              </Button>
+            </div>
+          )}
           {guest && (
             <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
               <p className="font-medium">You are seated as a juror.</p>
               {guest.resumeLink && (
                 <div className="space-y-1.5">
-                  <p>Save this link to continue on another device. It is shown only once, and anyone with it can act as you.</p>
+                  <p>Save this link to continue on another device. It works once and is shown only once; anyone with it can act as you.</p>
                   <div className="flex gap-2">
                     <Input readOnly value={guest.resumeLink} aria-label="Resume link" className="typewriter bg-white" onFocus={(e) => e.currentTarget.select()} />
                     <Button variant="outline" onClick={() => void navigator.clipboard.writeText(guest.resumeLink ?? '').then(() => toast.success('Link copied'), () => toast.error('Copy failed — select the link and copy it manually.'))}>
@@ -126,7 +146,7 @@ export default function JoinPage() {
               </Button>
             </div>
           )}
-          {isLoaded && !isSignedIn && status !== 'missing' && status !== 'redeeming' && !guest && (
+          {isLoaded && !isSignedIn && status !== 'missing' && status !== 'redeeming' && !guest && !pendingResume && (
             <>
               <Button className="w-full" onClick={() => setShowAuth(true)}>
                 Sign in to accept the summons

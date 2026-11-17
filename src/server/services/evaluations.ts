@@ -273,6 +273,11 @@ export async function deleteEvaluation(deps: Deps, userId: string, evaluationId:
         db.prepare(`UPDATE outbox SET status = 'terminal', last_error_code = 'DELETED', updated_at = ? WHERE status IN ('pending','dispatched') AND generation_id IN (SELECT id FROM generations WHERE run_id IN (${runIds}))`).bind(now, evaluationId),
         db.prepare(`UPDATE generations SET status = 'canceled', last_error_code = 'DELETED', updated_at = ? WHERE status = 'pending' AND run_id IN (${runIds})`).bind(now, evaluationId),
         db.prepare(`UPDATE runs SET status = 'canceled', canceled_at = ?, updated_at = ?, revision = revision + 1 WHERE evaluation_id = ? AND status IN ('generating','ready')`).bind(now, now, evaluationId),
+        // Special master (D-40): queued grader calls were never sent, so their units are released; in-flight ones are fenced out.
+        ...releaseReservations(db, cond(`r.grader_item_id IN (SELECT i.id FROM grader_items i JOIN grader_runs g ON g.id = i.grader_run_id WHERE i.status = 'pending' AND g.run_id IN (${runIds}))`, evaluationId), 'reserved', now, 'grader_reservations'),
+        db.prepare(`UPDATE grader_outbox SET status = 'terminal', last_error_code = 'DELETED', updated_at = ? WHERE status IN ('pending','dispatched') AND grader_item_id IN (SELECT i.id FROM grader_items i JOIN grader_runs g ON g.id = i.grader_run_id WHERE g.run_id IN (${runIds}))`).bind(now, evaluationId),
+        db.prepare(`UPDATE grader_items SET status = 'canceled', last_error_code = 'DELETED', updated_at = ? WHERE status = 'pending' AND grader_run_id IN (SELECT id FROM grader_runs WHERE run_id IN (${runIds}))`).bind(now, evaluationId),
+        db.prepare(`UPDATE grader_runs SET status = 'canceled', revision = revision + 1, updated_at = ? WHERE status = 'generating' AND run_id IN (${runIds})`).bind(now, evaluationId),
         db.prepare('UPDATE evaluations SET deleted_at = ?, revision = revision + 1, updated_at = ? WHERE id = ?').bind(now, now, evaluationId),
         auditStatement(db, { eventType: 'evaluation.delete', requestId, outcome: 'tombstoned', actorUserId: userId, evaluationId }, now),
       ],

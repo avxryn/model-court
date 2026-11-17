@@ -22,6 +22,8 @@ export const GUEST_PREFIX = 'mcj_'
 export const GUEST_COOKIE_PREFIX = '__Host-mcj-'
 export const GUEST_COOKIE_MAX_AGE_S = 14 * 24 * 60 * 60
 const MAX_DEVICES = 3
+/** A device stops working this long after it was added, whatever the browser keeps. */
+const DEVICE_LIFETIME_MS = GUEST_COOKIE_MAX_AGE_S * 1000
 const HOUR = 60 * 60 * 1000
 
 export const guestRedeemSchema = z.strictObject({
@@ -50,8 +52,9 @@ function newSecret(): string {
 const sha256 = (value: string) => hashInviteToken(value)
 
 /** Rate-limit subject for a client IP. The raw IP is never stored: an HMAC with the app's request key, or a salted hash. */
-async function ipSubject(deps: Deps, ip: string | null, scope: string): Promise<string> {
-  const value = ip ?? 'unknown'
+async function ipSubject(deps: Deps, ip: string | null, scope: string): Promise<string | null> {
+  if (!ip) return null
+  const value = ip
   const key = deps.config.hmacKey
   if (key) {
     const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
@@ -61,7 +64,8 @@ async function ipSubject(deps: Deps, ip: string | null, scope: string): Promise<
   return `${scope}:ip:${(await sha256(`${deps.config.appId}:${value}`)).slice(0, 32)}`
 }
 
-async function limit(deps: Deps, subject: string, max: number, windowMs: number, message: string) {
+async function limit(deps: Deps, subject: string | null, max: number, windowMs: number, message: string) {
+  if (!subject) return
   const result = await hitRateLimitWindow(deps.db, subject, max, windowMs, deps.now())
   if (!result.allowed) throw new ApiError(429, 'RATE_LIMITED', message, { retryAfterSeconds: result.retryAfterSeconds })
 }
@@ -76,7 +80,7 @@ export interface GuestGrant {
   resumeSecret?: string
 }
 
-export async function redeemInviteAsGuest(deps: Deps, input: z.output<typeof guestRedeemSchema>, ip: string | null, requestId: string): Promise<GuestGrant> {
+export async function redeemInviteAsGuest(deps: Deps, input: z.output<typeof guestRedeemSchema>, ip: string | null, requestId: string, signedInUserId: string | null = null): Promise<GuestGrant> {
   await limit(deps, await ipSubject(deps, ip, 'guest-redeem'), 10, HOUR, 'Too many attempts to join. Try again later.')
   const db = deps.db
   const invite = await db
@@ -89,6 +93,13 @@ export async function redeemInviteAsGuest(deps: Deps, input: z.output<typeof gue
     .first<{ id: string; run_id: string; expires_at: number; redeemed_at: number | null; revoked_at: number | null; status: RunStatus; eligible_manifest_json: string | null; evaluation_id: string }>()
   const now = deps.now()
   if (!invite || invite.redeemed_at || invite.revoked_at || invite.expires_at <= now || invite.status !== 'reviewing' || !invite.eligible_manifest_json) throw inviteUnavailable()
+  if (signedInUserId) {
+    const seated = await db
+      .prepare(`SELECT 1 AS ok FROM runs WHERE id = ? AND owner_user_id = ? UNION SELECT 1 FROM review_sessions WHERE run_id = ? AND reviewer_user_id = ? AND status <> 'revoked'`)
+      .bind(invite.run_id, signedInUserId, invite.run_id, signedInUserId)
+      .first()
+    if (seated) throw new ApiError(409, 'INVITE_UNAVAILABLE', 'You already take part in this hearing with your account, so you cannot also join as a guest.')
+  }
 
   const manifest = JSON.parse(invite.eligible_manifest_json) as EligibleManifest
   const principalId = deps.newId()
@@ -127,7 +138,7 @@ export async function redeemInviteAsGuest(deps: Deps, input: z.output<typeof gue
 }
 
 /** Add a device from a resume link. Works only while review is open and the juror is still seated. */
-export async function resumeGuest(deps: Deps, input: z.output<typeof guestResumeSchema>, ip: string | null, requestId: string): Promise<GuestGrant> {
+export async function resumeGuest(deps: Deps, input: z.output<typeof guestResumeSchema>, ip: string | null, requestId: string, cookieHeader: string | undefined = undefined): Promise<GuestGrant> {
   await limit(deps, await ipSubject(deps, ip, 'guest-resume'), 5, HOUR, 'Too many attempts to resume. Try again later.')
   const db = deps.db
   const principal = await db
@@ -141,19 +152,28 @@ export async function resumeGuest(deps: Deps, input: z.output<typeof guestResume
   const unavailable = new ApiError(409, 'INVITE_UNAVAILABLE', 'This resume link no longer works. Ask the judge if you still need access.')
   if (!principal || principal.revoked_at || principal.status !== 'reviewing' || !principal.session_status || principal.session_status === 'revoked') throw unavailable
   await limit(deps, `guest-resume:p:${principal.id}`, 5, HOUR, 'Too many attempts to resume. Try again later.')
+  // A link received from someone else must not silently move this browser into their seat.
+  const existing = await verifyGuestCookie(deps, principal.run_id, readCookie(cookieHeader, `${GUEST_COOKIE_PREFIX}${principal.run_id}`))
+  if (existing && existing.userId !== `${GUEST_PREFIX}${principal.id}`) {
+    throw new ApiError(409, 'INVITE_UNAVAILABLE', 'This browser is already seated as a different juror in this hearing. This resume link belongs to someone else.')
+  }
   const now = deps.now()
   const deviceId = deps.newId()
   const deviceSecret = newSecret()
+  const nextResume = newSecret()
+  const oldHash = await sha256(input.resume)
   try {
     await runGuarded(
       db,
       'guest.resume',
       all(
-        cond(`EXISTS (SELECT 1 FROM juror_principals WHERE id = ? AND revoked_at IS NULL)`, principal.id),
+        // The link is used up here; a fresh one is returned to this device only.
+        cond(`EXISTS (SELECT 1 FROM juror_principals WHERE id = ? AND revoked_at IS NULL AND resume_hash = ?)`, principal.id, oldHash),
         cond(`(SELECT COUNT(*) FROM juror_devices WHERE principal_id = ? AND revoked_at IS NULL) < ${MAX_DEVICES}`, principal.id),
       ),
       [
         db.prepare(`INSERT INTO juror_devices (id, principal_id, secret_hash, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)`).bind(deviceId, principal.id, await sha256(deviceSecret), now, now),
+        db.prepare('UPDATE juror_principals SET resume_hash = ? WHERE id = ?').bind(await sha256(nextResume), principal.id),
         auditStatement(db, { eventType: 'guest.resume', requestId, outcome: 'ok', actorUserId: `${GUEST_PREFIX}${principal.id}`, runId: principal.run_id }, now),
       ],
     )
@@ -161,7 +181,7 @@ export async function resumeGuest(deps: Deps, input: z.output<typeof guestResume
     if (error instanceof GuardFailed) throw new ApiError(409, 'INVITE_UNAVAILABLE', `This juror already uses ${MAX_DEVICES} devices. Ask the judge to sign the others out.`)
     throw error
   }
-  return { runId: principal.run_id, cookieValue: `${deviceId}.${deviceSecret}` }
+  return { runId: principal.run_id, cookieValue: `${deviceId}.${deviceSecret}`, resumeSecret: nextResume }
 }
 
 /** Routes a guest cookie may reach, with the hearing ID they name. Everything else needs a signed-in account. */
@@ -189,12 +209,13 @@ export async function verifyGuestCookie(deps: Deps, runId: string, value: string
   if (!deviceId || !secret || rest.length > 0 || !/^[0-9a-f-]{36}$/.test(deviceId)) return null
   const row = await deps.db
     .prepare(
-      `SELECT d.secret_hash, d.revoked_at AS device_revoked, p.id AS principal_id, p.run_id, p.revoked_at AS principal_revoked, d.last_seen_at
+      `SELECT d.secret_hash, d.revoked_at AS device_revoked, p.id AS principal_id, p.run_id, p.revoked_at AS principal_revoked, d.last_seen_at, d.created_at
        FROM juror_devices d JOIN juror_principals p ON p.id = d.principal_id WHERE d.id = ?`,
     )
     .bind(deviceId)
-    .first<{ secret_hash: string; device_revoked: number | null; principal_id: string; run_id: string; principal_revoked: number | null; last_seen_at: number }>()
+    .first<{ secret_hash: string; device_revoked: number | null; principal_id: string; run_id: string; principal_revoked: number | null; last_seen_at: number; created_at: number }>()
   if (!row || row.device_revoked || row.principal_revoked || row.run_id !== runId) return null
+  if (deps.now() - row.created_at > DEVICE_LIFETIME_MS) return null
   if ((await sha256(secret)) !== row.secret_hash) return null
   const now = deps.now()
   if (now - row.last_seen_at > 60_000) await deps.db.prepare('UPDATE juror_devices SET last_seen_at = ? WHERE id = ?').bind(now, deviceId).run()
@@ -213,6 +234,20 @@ export function revokeGuestStatements(db: D1Database, reviewerUserId: string, no
     db.prepare('UPDATE juror_principals SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').bind(now, principalId),
     db.prepare('UPDATE juror_devices SET revoked_at = ? WHERE principal_id = ? AND revoked_at IS NULL').bind(now, principalId),
   ]
+}
+
+/** Judge-only: sign out every device of one guest juror on this hearing; the filed or draft worksheet stays. */
+export async function signOutGuestDevices(deps: Deps, ownerUserId: string, runId: string, sessionId: string, requestId: string): Promise<void> {
+  const session = await deps.db
+    .prepare(`SELECT s.reviewer_user_id FROM review_sessions s JOIN runs r ON r.id = s.run_id WHERE s.id = ? AND s.run_id = ? AND r.owner_user_id = ?`)
+    .bind(sessionId, runId, ownerUserId)
+    .first<{ reviewer_user_id: string }>()
+  if (!session || !isGuestId(session.reviewer_user_id)) throw new ApiError(404, 'NOT_FOUND', 'Not found.')
+  const now = deps.now()
+  await deps.db.batch([
+    deps.db.prepare('UPDATE juror_devices SET revoked_at = ? WHERE principal_id = ? AND revoked_at IS NULL').bind(now, session.reviewer_user_id.slice(GUEST_PREFIX.length)),
+    auditStatement(deps.db, { eventType: 'guest.sign_out_devices', requestId, outcome: 'ok', actorUserId: ownerUserId, runId }, now),
+  ])
 }
 
 /** Owner-only display names for guest jurors on one hearing, keyed by reviewer ID. */

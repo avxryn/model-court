@@ -337,6 +337,11 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
             </span>
             <span className="flex items-center gap-2">
               <StatusBadge status={p.status} />
+              {p.guest && p.guest.devices > 0 && (
+                <Button size="xs" variant="ghost" onClick={() => void act(() => api('POST', `/runs/${run.runId}/reviewers/${p.id}/sign-out-devices`, { body: {} }), 'Devices signed out')}>
+                  Sign out devices
+                </Button>
+              )}
               {reviewing && p.contextType === 'invited' && p.status === 'draft' && (
                 <Button size="xs" variant="ghost" onClick={() => void act(() => api('DELETE', `/runs/${run.runId}/reviewers/${p.id}`), 'Juror removed')}>
                   Remove

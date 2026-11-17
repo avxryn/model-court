@@ -75,9 +75,10 @@ function quotaError(): ApiError {
 
 export async function startRun(deps: Deps, userId: string, evaluationId: string, input: z.output<typeof startRunSchema>, key: string, requestId: string) {
   const access = await loadEvaluationAccess(deps.db, evaluationId, userId)
+  // Owner first: a juror must not learn anything about the draft from which error comes back.
+  requireOwner(access)
   // A hearing with only imported parties makes no provider calls, so the generation switch does not apply to it.
   if (generatedParties(parseStoredDraft(access.evaluation).configurations).length > 0) requireGenerationEnabled(deps)
-  requireOwner(access)
   const db = deps.db
   const operation = `run.start:${evaluationId}`
   const hash = await requestHash(operation, input)

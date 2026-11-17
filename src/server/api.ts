@@ -43,6 +43,7 @@ import {
   readCookie,
   redeemInviteAsGuest,
   resumeGuest,
+  signOutGuestDevices,
   verifyGuestCookie,
   type GuestGrant,
 } from './services/guest-jurors'
@@ -97,12 +98,15 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
   api.post('/invites/redeem-as-guest', async (c) => {
     requireSameOrigin(c)
     const input = await readBody(c, guestRedeemSchema)
-    return guestReply(c, await redeemInviteAsGuest(c.get('deps'), input, clientIp(c), requestIdOf(c)))
+    // If a signed-in user sends this, they cannot use it to take a second seat (or the judge a juror seat).
+    const header = c.req.header('Authorization')
+    const signedIn = header?.startsWith('Bearer ') ? await c.get('deps').verifyToken(header.slice(7)) : null
+    return guestReply(c, await redeemInviteAsGuest(c.get('deps'), input, clientIp(c), requestIdOf(c), signedIn?.userId ?? null))
   })
   api.post('/juror/resume', async (c) => {
     requireSameOrigin(c)
     const input = await readBody(c, guestResumeSchema)
-    return guestReply(c, await resumeGuest(c.get('deps'), input, clientIp(c), requestIdOf(c)))
+    return guestReply(c, await resumeGuest(c.get('deps'), input, clientIp(c), requestIdOf(c), c.req.header('Cookie')))
   })
 
   // Identity: a verified platform JWT, or (D-41) a guest-juror cookie on the few review routes of its own hearing.
@@ -269,6 +273,11 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     await readBody(c, emptySchema)
     const result = await submitReview(deps(c), user(c), pathId(c, 'runId'), ifMatch, idempotencyKey(c), rid(c))
     return ok(c, result.data, result.status)
+  })
+  api.post('/runs/:runId/reviewers/:sessionId/sign-out-devices', async (c) => {
+    await readBody(c, emptySchema)
+    await signOutGuestDevices(deps(c), user(c), pathId(c, 'runId'), pathId(c, 'sessionId'), rid(c))
+    return noContent(c)
   })
   api.delete('/runs/:runId/reviewers/:sessionId', async (c) => {
     await revokeSession(deps(c), user(c), pathId(c, 'runId'), pathId(c, 'sessionId'), rid(c))
