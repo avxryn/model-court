@@ -5,6 +5,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { parseCsv } from '../../src/domain/csv'
 import { anthropicOk, createHarness, openAiOk, OWNER, REVIEWER, setupOwner, type Harness, type HarnessOptions, type ProviderStub } from './harness'
 
 let h: Harness
@@ -267,6 +268,15 @@ describe('T24 anonymization and scoring with three configurations', () => {
 
     const verdict = await h.request('POST', `/runs/${runId}/verdicts`, { as: OWNER, ifMatch: results.revision, body: { outcome: 'selected', selectedConfigurationKey: k3, rationale: 'The third configuration grounded every answer.', limitations: 'Five cases only.' } })
     expect(verdict.status).toBe(201)
+
+    // The certified record covers all three configurations.
+    const record = (await h.request('GET', `/runs/${runId}/export`, { as: OWNER })).json.data
+    expect(record.configurations).toHaveLength(3)
+    expect(record.responses).toHaveLength(15)
+    expect(record.ratings).toHaveLength(30)
+    const csv = await h.request('GET', `/runs/${runId}/export?format=csv`, { as: OWNER })
+    const parsed = parseCsv(csv.text)
+    expect(parsed.ok && parsed.rows.length).toBe(31) // header + 5 cases × 3 configurations × 2 reviewers
   })
 
   it('stores one response per configuration per case, labeled A/B/C', async () => {

@@ -32,6 +32,7 @@ Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **ju
 | DELETE `/runs/:id/reviewers/:sessionId` | owner | Unsubmitted invited sessions only |
 | POST `/runs/:id/reveal` | owner | `{acknowledgePendingCount}` must equal current pending count |
 | GET `/runs/:id/results` | participant, after reveal | Mapping, cohorts, coverage, evidence, verdicts |
+| GET `/runs/:id/export?format=json\|csv` | owner, after reveal | Certified record (cases, responses, ratings by juror label, findings, verdicts, versions, `certification.contentSha256`); CSV is one row per rating with formula-neutralized cells. No keys, credential/session/response IDs, invite tokens, or user IDs |
 | POST `/runs/:id/verdicts` | owner, after reveal | `{outcome,selectedConfigurationKey?,rationale,limitations}` → appended revision |
 
 Error codes: `UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, REVISION_CONFLICT, STATE_CONFLICT,

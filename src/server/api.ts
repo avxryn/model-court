@@ -26,9 +26,12 @@ import type { Deps, VerifiedCaller } from './deps'
 import { ApiError, errorResponse, idempotencyKey, ifMatchRevision, noContent, ok, pathId, readBody, requestIdOf } from './http'
 import { listCredentials, removeCredential, renewCredential, saveCredential } from './services/credentials'
 import { createEvaluation, deleteEvaluation, getEvaluation, listEvaluations, saveDraft } from './services/evaluations'
+import { exportRun, parseExportFormat } from './services/export'
 import { getResults, recordVerdict } from './services/results'
 import { createInvite, getReview, redeemInvite, reveal, revokeInvite, revokeSession, saveReview, submitReview } from './services/reviews'
 import { cancelRun, getRun, openReview, retryGenerations, startRun } from './services/runs'
+
+const UTF8_BOM = String.fromCharCode(0xfeff)
 
 type Vars = { deps: Deps; caller: VerifiedCaller; requestId: string }
 type ApiContext = Context<{ Variables: Vars }>
@@ -203,6 +206,21 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     return ok(c, result.data, result.status)
   })
   api.get('/runs/:runId/results', async (c) => ok(c, await getResults(deps(c), user(c), pathId(c, 'runId'))))
+  // Certified record: owner-only, after reveal. JSON in the usual envelope, or CSV as a file.
+  api.get('/runs/:runId/export', async (c) => {
+    const format = parseExportFormat(c.req.query('format'))
+    const result = await exportRun(deps(c), user(c), pathId(c, 'runId'), format, rid(c))
+    const disposition = { 'Content-Disposition': `attachment; filename="${result.filename}"` }
+    if (result.format === 'json') return ok(c, result.record, 200, disposition)
+    // UTF-8 BOM so spreadsheet apps detect the encoding; cells are formula-neutralized.
+    return c.body(UTF8_BOM + result.csv, 200, {
+      ...disposition,
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Request-Id': rid(c),
+    })
+  })
   api.post('/runs/:runId/verdicts', async (c) => {
     const ifMatch = ifMatchRevision(c)
     const input = await readBody(c, verdictSchema)

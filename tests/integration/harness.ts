@@ -193,8 +193,10 @@ export async function createHarness(options: HarnessOptions = {}) {
       headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     })
-    const text = await response.text()
-    return { status: response.status, json: (text ? JSON.parse(text) : null) as T, headers: response.headers, text }
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    const text = new TextDecoder().decode(bytes) // drops a leading BOM, like response.text()
+    const isJson = (response.headers.get('Content-Type') ?? 'application/json').includes('json')
+    return { status: response.status, json: (text && isJson ? JSON.parse(text) : null) as T, headers: response.headers, text, bytes }
   }
 
   async function drainJobs(signal: AbortSignal = new AbortController().signal): Promise<JobOutcome[]> {
