@@ -35,7 +35,7 @@ NATIVE_AUTH_REDIRECT_URIS = ""
 # Model Court configuration (spec §14.1). Secrets are NOT here: the two
 # credential roots live in the DeepSpace secrets store (scripts/provision-app-secrets.mjs).
 # Fail-closed spending switch: flip to "true" only after V12/V13 verification.
-GENERATION_ENABLED = "false"
+GENERATION_ENABLED = "true"
 CREDENTIAL_WRITES_ENABLED = "true"
 CREDENTIAL_ACTIVE_KEY_VERSION = "v1"
 # Saved provider keys expire this many days after saving or renewal (D-23).
@@ -46,7 +46,7 @@ MAX_LIFETIME_CALLS_GLOBAL = "500"
 # Exact https origin used for invitation links; empty = the request origin.
 PUBLIC_APP_ORIGIN = ""
 # Shipped revision recorded in run snapshots; set to the commit you deploy.
-APP_COMMIT = "52868f5"
+APP_COMMIT = "2a6ac44"
 
 [[migrations]]
 tag = "v1"
