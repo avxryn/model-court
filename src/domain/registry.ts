@@ -24,7 +24,7 @@ export interface ModelRoute {
   adapterVersion: string
 }
 
-export const PROVIDER_REGISTRY_VERSION = '2026-11-16.1'
+export const PROVIDER_REGISTRY_VERSION = '2026-11-17.1'
 
 export const MODEL_ROUTES: readonly ModelRoute[] = [
   {
@@ -32,7 +32,7 @@ export const MODEL_ROUTES: readonly ModelRoute[] = [
     provider: 'openai',
     modelId: 'gpt-6-luna',
     label: 'OpenAI GPT-6 Luna',
-    verifiedAt: null,
+    verifiedAt: '2026-11-17',
     adapterVersion: 'openai-responses-v1',
   },
   {
@@ -40,7 +40,7 @@ export const MODEL_ROUTES: readonly ModelRoute[] = [
     provider: 'anthropic',
     modelId: 'claude-haiku-5-5',
     label: 'Anthropic Claude Haiku 5.5',
-    verifiedAt: null,
+    verifiedAt: '2026-11-17',
     adapterVersion: 'anthropic-messages-v1',
   },
 ]

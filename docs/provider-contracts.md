@@ -1,8 +1,7 @@
 # Provider contracts (BYOK)
 
-Status: **documented from the providers' official docs on 2026-11-16; no real call recorded yet.**
-Both routes ship with `verifiedAt: null`, so run admission rejects them (F04) until a smoke result is
-recorded below and the registry is updated.
+Status: **documented from the providers' official docs on 2026-11-16; one real call per route recorded on 2026-11-17 (below).**
+Both routes have `verifiedAt: '2026-11-17'` in the registry (version `2026-11-17.1`). The deployed check (V12) is still pending.
 
 | Registry key | Endpoint | Model | Request specifics | Auth |
 |---|---|---|---|---|
@@ -24,8 +23,8 @@ Why reasoning/thinking is off: both providers count reasoning tokens against the
 
 | Date | Provider | Model | Outcome kind | finishReason | tokens in/out | Observed model | Recorded by |
 |---|---|---|---|---|---|---|---|
-| | openai | gpt-6-luna | | | | | |
-| | anthropic | claude-haiku-5-5 | | | | | |
+| 2026-11-17 | openai | gpt-6-luna | success | `completed` | 153 / 24 | `gpt-6-luna` | Run by you from your terminal; output read by the agent. Request `req_b8ce2d2cf26f4e918d30f6d084a5cf48`, 2655 ms, not truncated. |
+| 2026-11-17 | anthropic | claude-haiku-5-5 | success | `end_turn` | 228 / 151 | `claude-haiku-5-5` | Run by you from your terminal; output read by the agent. Request `req_011Ch8kvC1Mwg93murTW4rHJ`, 1457 ms, not truncated. An earlier attempt with a different key returned `PROVIDER_AUTH_FAILED` (definite, `req_011Ch8kkRREaXWyzX1znA7hr`), which is normalized as designed. |
 
 After a successful row, set `verifiedAt: 'YYYY-MM-DD'` on that route in `src/domain/registry.ts`. If the
 mapping differs (for example, a field name), fix the adapter and add a regression to

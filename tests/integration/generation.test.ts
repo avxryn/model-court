@@ -104,9 +104,8 @@ describe('T05/T06 run admission and durable generation', () => {
   it('refuses unverified routes and disabled generation without calling providers', async () => {
     const unverified = await createHarness({ routes: undefined, env: {} })
     try {
-      // Default registry ships with verifiedAt: null for both routes.
       const { MODEL_ROUTES } = await import('../../src/domain/registry')
-      ;(unverified.deps as any).routes = MODEL_ROUTES
+      ;(unverified.deps as any).routes = MODEL_ROUTES.map((route) => ({ ...route, verifiedAt: null }))
       const setup = await setupOwner(unverified)
       const res = await startRun(unverified, setup)
       expect(res.json.error.code).toBe('UNSUPPORTED_CONFIGURATION')
