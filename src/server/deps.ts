@@ -30,6 +30,8 @@ export interface Deps {
   verifyToken: (token: string) => Promise<VerifiedCaller | null>
   /** Enqueue one generation job (IDs only). Resolves with the platform job id. */
   enqueueGeneration: (job: GenerationJob) => Promise<string>
+  /** Special-master grading jobs (D-40); IDs only. */
+  enqueueGrading: (job: { outboxId: string; graderItemId: string; attemptNo: number }) => Promise<string>
   /** Best-effort safe invalidation notices; failures never fail a command. */
   publishNotices: (notices: Array<{ recipientUserId: string; evaluationId: string; runId: string | null }>) => Promise<void>
   /** Remove every notice that refers to a purged evaluation. */

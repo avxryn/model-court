@@ -7,6 +7,7 @@ import { DAY_MS } from '../db/sql'
 import type { Deps } from '../deps'
 import { expireCredentials } from './credentials'
 import { dispatchOutbox, reconcileLeases } from './generation'
+import { dispatchGraderOutbox, reconcileGraderLeases } from './special-master'
 
 export interface MaintenanceReport {
   dispatched: number
@@ -42,6 +43,9 @@ export async function runMaintenance(deps: Deps): Promise<MaintenanceReport> {
 
   report.dispatched = await dispatchOutbox(deps)
   report.leasesExpired = await reconcileLeases(deps)
+  // Special master (D-40): same repair for grader calls.
+  report.dispatched += await dispatchGraderOutbox(deps)
+  report.leasesExpired += await reconcileGraderLeases(deps)
   report.credentialsExpired = await expireCredentials(deps)
 
   // Hard-delete tombstoned trees once no attempt can still commit (lease expired or terminal).
@@ -50,9 +54,12 @@ export async function runMaintenance(deps: Deps): Promise<MaintenanceReport> {
       `SELECT e.id FROM evaluations e WHERE e.deleted_at IS NOT NULL AND NOT EXISTS (
          SELECT 1 FROM generation_attempts a JOIN generations g ON g.id = a.generation_id JOIN runs r ON r.id = g.run_id
          WHERE r.evaluation_id = e.id AND a.status = 'running' AND a.deadline_at > ?)
+       AND NOT EXISTS (
+         SELECT 1 FROM grader_attempts ga JOIN grader_items gi ON gi.id = ga.grader_item_id JOIN grader_runs gr ON gr.id = gi.grader_run_id JOIN runs r2 ON r2.id = gr.run_id
+         WHERE r2.evaluation_id = e.id AND ga.status = 'running' AND ga.deadline_at > ?)
        ORDER BY e.deleted_at LIMIT 10`,
     )
-    .bind(now)
+    .bind(now, now)
     .all<{ id: string }>()
   for (const row of tombstoned.results) {
     try {

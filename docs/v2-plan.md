@@ -92,7 +92,7 @@ Size: about 2 sessions.
 - **Per-language breakdown**: tag questions by language; results per language.
 - ~~Email-link sign-in for jurors~~: not supported by DeepSpace 0.44.2 (D-33); dropped.
 
-Status: phases 1–4 and phase 5a (next-turn) done on `next` (D-26, D-34 to D-39); phase 5b waits for a live multi-message check; not deployed.
+Status: phases 1–4, phase 5a (next-turn), and phase 6 (special master) done on `next` (D-26, D-34 to D-40); phase 5b waits for a live multi-message check; phase 7 not started; not deployed.
 Size: about 2 sessions.
 
 ### Phase 4 — Imported evidence (S3c, S4 baseline)

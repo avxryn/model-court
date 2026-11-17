@@ -302,6 +302,90 @@ export const MIGRATIONS: Migration[] = [
        BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_IMPORTED_OUTPUTS'); END`,
     ],
   },
+  {
+    // D-40: the special master (advisory AI grader). Separate from hearings so its
+    // scores can never enter the jury's findings; mirrors the paid-call tables.
+    id: '0004_special_master',
+    statements: [
+      `CREATE TABLE grader_runs (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        owner_user_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('generating','ready','canceled')),
+        config_json TEXT NOT NULL CHECK (json_valid(config_json)),
+        config_hash TEXT NOT NULL,
+        revision INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX grader_runs_one_active ON grader_runs(run_id) WHERE status = 'generating'`,
+      immutable('grader_runs', 'config_json, config_hash'),
+      `CREATE TABLE grader_credentials (
+        grader_run_id TEXT NOT NULL REFERENCES grader_runs(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK (provider IN ('openai','anthropic')),
+        credential_id TEXT NOT NULL,
+        PRIMARY KEY (grader_run_id, provider)
+      )`,
+      `CREATE TRIGGER grader_credentials_immutable BEFORE UPDATE ON grader_credentials
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_GRADER_CREDENTIALS'); END`,
+      `CREATE TABLE grader_items (
+        id TEXT PRIMARY KEY,
+        grader_run_id TEXT NOT NULL REFERENCES grader_runs(id) ON DELETE CASCADE,
+        case_key TEXT NOT NULL,
+        configuration_key TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending','running','succeeded','failed','uncertain','canceled')),
+        attempt_count INTEGER NOT NULL DEFAULT 1,
+        accepted_attempt_id TEXT,
+        last_error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE (grader_run_id, case_key, configuration_key)
+      )`,
+      `CREATE TABLE grader_attempts (
+        id TEXT PRIMARY KEY,
+        grader_item_id TEXT NOT NULL REFERENCES grader_items(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        fence_token TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('running','succeeded','failed','uncertain')),
+        started_at INTEGER NOT NULL,
+        deadline_at INTEGER NOT NULL,
+        finished_at INTEGER,
+        output_text TEXT,
+        parsed_json TEXT CHECK (parsed_json IS NULL OR json_valid(parsed_json)),
+        error_code TEXT,
+        input_tokens INTEGER,
+        output_tokens INTEGER,
+        duration_ms INTEGER,
+        provider_request_id TEXT,
+        UNIQUE (grader_item_id, attempt_no)
+      )`,
+      immutable('grader_attempts', 'output_text, parsed_json, status', "OLD.status <> 'running'"),
+      `CREATE TABLE grader_outbox (
+        id TEXT PRIMARY KEY,
+        grader_item_id TEXT NOT NULL REFERENCES grader_items(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending','dispatched','claimed','terminal')),
+        next_dispatch_at INTEGER NOT NULL,
+        dispatch_count INTEGER NOT NULL DEFAULT 0,
+        job_id TEXT,
+        last_error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE (grader_item_id, attempt_no)
+      )`,
+      `CREATE TABLE grader_reservations (
+        grader_item_id TEXT NOT NULL REFERENCES grader_items(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        actor_subject TEXT NOT NULL,
+        global_subject TEXT NOT NULL,
+        lifetime_subject TEXT NOT NULL,
+        window_start INTEGER NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('reserved','consumed','released')),
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (grader_item_id, attempt_no)
+      )`,
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`

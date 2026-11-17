@@ -330,6 +330,28 @@ export async function withRunCredential<T>(
     )
     .bind(runId, provider)
     .first<CredentialRow>()
+  return decryptAndSend(deps, row, provider, runId, requestId, send)
+}
+
+/**
+ * The special master's key (D-40): the judge's own saved key, pinned to the
+ * grader run, with the same expiry, revocation, and decrypt checks as hearings.
+ */
+export async function withGraderCredential<T>(deps: Deps, graderRunId: string, provider: ProviderId, requestId: string, send: (apiKey: string) => Promise<T>): Promise<T> {
+  const row = await deps.db
+    .prepare(
+      `SELECT c.id, c.owner_user_id, c.provider, c.status, c.ciphertext, c.nonce, c.encryption_key_version, c.expires_at, gr.run_id
+       FROM grader_credentials gc JOIN provider_credentials c ON c.id = gc.credential_id
+       JOIN grader_runs gr ON gr.id = gc.grader_run_id
+       WHERE gc.grader_run_id = ? AND gc.provider = ? AND c.owner_user_id = gr.owner_user_id AND c.provider = gc.provider`,
+    )
+    .bind(graderRunId, provider)
+    .first<CredentialRow & { run_id: string }>()
+  return decryptAndSend(deps, row, provider, row?.run_id ?? graderRunId, requestId, send)
+}
+
+async function decryptAndSend<T>(deps: Deps, row: CredentialRow | null, provider: ProviderId, lastUsedRunId: string, requestId: string, send: (apiKey: string) => Promise<T>): Promise<T> {
+  const runId = lastUsedRunId
   if (!row) throw new CredentialUnusable('CREDENTIAL_UNAVAILABLE')
   if (row.status !== 'active' || !row.ciphertext || !row.nonce || !row.encryption_key_version) throw new CredentialUnusable('CREDENTIAL_REVOKED')
   // Expiry is enforced here too, so a key past its time is never decrypted even before the cron revokes it.

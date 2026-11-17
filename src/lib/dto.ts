@@ -10,6 +10,7 @@ import type { EvaluationSummary, getEvaluation } from '@/server/services/evaluat
 import type { getResults } from '@/server/services/results'
 import type { AnonymousReview } from '@/server/services/reviews'
 import type { getRun } from '@/server/services/runs'
+import type { getSpecialMaster } from '@/server/services/special-master'
 
 export type { AnonymousReview, CredentialMetadata, EvaluationSummary }
 
@@ -20,6 +21,7 @@ export type OwnerEvaluationView = Extract<EvaluationView, { role: 'owner' }>
 export type RunView = Resolved<typeof getRun>
 export type OwnerRunView = Extract<RunView, { role: 'owner' }>
 export type ResultsView = Resolved<typeof getResults>
+export type SpecialMasterView = Resolved<typeof getSpecialMaster>
 
 export interface CatalogView {
   providerRegistryVersion: string

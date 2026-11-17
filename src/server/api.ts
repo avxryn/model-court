@@ -18,6 +18,7 @@ import {
   revealSchema,
   saveRatingsSchema,
   startRunSchema,
+  startSpecialMasterSchema,
   verdictSchema,
 } from '../domain/contracts'
 import { LIMITS } from '../domain/limits'
@@ -31,6 +32,7 @@ import { exportRun, parseExportFormat } from './services/export'
 import { getResults, recordVerdict } from './services/results'
 import { createInvite, getReview, redeemInvite, reveal, revokeInvite, revokeSession, saveReview, submitReview } from './services/reviews'
 import { cancelRun, getRun, openReview, retryGenerations, startRun } from './services/runs'
+import { cancelSpecialMaster, getSpecialMaster, startSpecialMaster } from './services/special-master'
 
 const UTF8_BOM = String.fromCharCode(0xfeff)
 
@@ -84,7 +86,7 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     const now = deps.now()
     const general = await hitRateLimit(deps.db, `mut:${userId}`, 30, now)
     if (!general.allowed) throw new ApiError(429, 'RATE_LIMITED', 'Too many changes in a minute. Try again shortly.', { retryAfterSeconds: general.retryAfterSeconds })
-    if (/\/(runs|retries)$/.test(new URL(c.req.url).pathname)) {
+    if (/\/(runs|retries|special-master)$/.test(new URL(c.req.url).pathname)) {
       const generation = await hitRateLimit(deps.db, `gen:${userId}`, 5, now)
       if (!generation.allowed) throw new ApiError(429, 'RATE_LIMITED', 'Too many generation requests. Try again shortly.', { retryAfterSeconds: generation.retryAfterSeconds })
     }
@@ -217,6 +219,17 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
   })
   api.get('/runs/:runId/results', async (c) => ok(c, await getResults(deps(c), user(c), pathId(c, 'runId'))))
   // Certified record: owner-only, after reveal. JSON in the usual envelope, or CSV as a file.
+  // Special master (D-40): owner only, after unsealing.
+  api.get('/runs/:runId/special-master', async (c) => ok(c, await getSpecialMaster(deps(c), user(c), pathId(c, 'runId'))))
+  api.post('/runs/:runId/special-master', async (c) => {
+    const input = await readBody(c, startSpecialMasterSchema)
+    const result = await startSpecialMaster(deps(c), user(c), pathId(c, 'runId'), input, idempotencyKey(c), rid(c))
+    return ok(c, result.data, result.status)
+  })
+  api.post('/runs/:runId/special-master/:graderRunId/cancel', async (c) => {
+    await readBody(c, emptySchema)
+    return ok(c, await cancelSpecialMaster(deps(c), user(c), pathId(c, 'runId'), pathId(c, 'graderRunId'), rid(c)))
+  })
   api.get('/runs/:runId/export', async (c) => {
     const format = parseExportFormat(c.req.query('format'))
     const result = await exportRun(deps(c), user(c), pathId(c, 'runId'), format, rid(c))

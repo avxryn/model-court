@@ -119,8 +119,8 @@ export function reserveBudget(
  * bucket exactly once, then mark those reservations released. Only call this
  * for work proven never sent to a provider.
  */
-export function releaseReservations(db: D1Database, scope: Condition, fromState: 'reserved' | 'consumed', now: number): D1PreparedStatement[] {
-  const matching = `FROM attempt_reservations r WHERE r.state = '${fromState}' AND (${scope.sql})`
+export function releaseReservations(db: D1Database, scope: Condition, fromState: 'reserved' | 'consumed', now: number, table: 'attempt_reservations' | 'grader_reservations' = 'attempt_reservations'): D1PreparedStatement[] {
+  const matching = `FROM ${table} r WHERE r.state = '${fromState}' AND (${scope.sql})`
   const decrement = (column: 'actor_subject' | 'global_subject' | 'lifetime_subject', windowSql: string) =>
     db
       .prepare(
@@ -135,7 +135,7 @@ export function releaseReservations(db: D1Database, scope: Condition, fromState:
     decrement('global_subject', 'r.window_start = budget_buckets.window_start'),
     decrement('lifetime_subject', 'budget_buckets.window_start = 0'),
     db
-      .prepare(`UPDATE attempt_reservations SET state = 'released' WHERE rowid IN (SELECT r.rowid ${matching})`)
+      .prepare(`UPDATE ${table} SET state = 'released' WHERE rowid IN (SELECT r.rowid ${matching})`)
       .bind(...scope.binds),
   ]
 }

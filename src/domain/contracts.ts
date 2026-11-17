@@ -157,6 +157,14 @@ export const startRunSchema = z.strictObject({
   acknowledgeProviderCharges: z.literal(true),
 })
 
+/** Start the special master (D-40): the judge's own key for the grader's provider, with plain-words consent. */
+export const startSpecialMasterSchema = z.strictObject({
+  modelKey: z.string().min(1).max(80),
+  credentialIdsByProvider: z.partialRecord(providerSchema, uuid),
+  consentToProviderProcessing: z.literal(true),
+  acknowledgeProviderCharges: z.literal(true),
+})
+
 export const retrySchema = z.strictObject({
   generationIds: z.array(uuid).min(1).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun),
   acknowledgePossiblePriorCharge: z.literal(true),

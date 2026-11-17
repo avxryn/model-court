@@ -20,6 +20,7 @@ import { parseConfig, type ConfigEnv } from '../../src/server/config'
 import { ensureMigrated, migrate } from '../../src/server/db/migrations'
 import type { Deps, GenerationJob } from '../../src/server/deps'
 import { handleGenerationJob, type JobOutcome } from '../../src/server/services/generation'
+import { handleGradingJob, type GradingJob } from '../../src/server/services/special-master'
 
 const ISSUER = 'https://auth.model-court.test'
 
@@ -103,6 +104,7 @@ export async function createHarness(options: HarnessOptions = {}) {
 
   let clock = Date.UTC(2026, 10, 18, 15, 0, 0)
   const jobs: GenerationJob[] = []
+  const gradingJobs: GradingJob[] = []
   const notices: Array<{ recipientUserId: string; evaluationId: string; runId: string | null }> = []
   const logs: Array<Record<string, unknown>> = []
   const providerCalls: ProviderCall[] = []
@@ -150,6 +152,11 @@ export async function createHarness(options: HarnessOptions = {}) {
       if (enqueueFails) throw new Error('enqueue unavailable')
       jobs.push(job)
       return `job_${jobs.length}`
+    },
+    enqueueGrading: async (job) => {
+      if (enqueueFails) throw new Error('enqueue unavailable')
+      gradingJobs.push(job)
+      return `grade_${gradingJobs.length}`
     },
     publishNotices: async (batch) => {
       notices.push(...batch)
@@ -205,6 +212,10 @@ export async function createHarness(options: HarnessOptions = {}) {
       const job = jobs.shift()!
       outcomes.push(await handleGenerationJob(deps, job, signal, 'req_job_test'))
     }
+    while (gradingJobs.length > 0) {
+      const job = gradingJobs.shift()!
+      outcomes.push(await handleGradingJob(deps, job, signal, 'req_grade_test'))
+    }
     return outcomes
   }
 
@@ -214,6 +225,7 @@ export async function createHarness(options: HarnessOptions = {}) {
     env,
     app,
     jobs,
+    gradingJobs,
     notices,
     logs,
     providerCalls,

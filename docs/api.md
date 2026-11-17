@@ -3,6 +3,8 @@
 All routes require `Authorization: Bearer <platform JWT>`. Requests and responses are JSON. Every
 response carries `requestId` and `Cache-Control: private, no-store`. Unknown fields are rejected (422).
 
+Special master (D-40), judge only, after unsealing: `GET /runs/:id/special-master` (jurors get 404); `POST /runs/:id/special-master` (Idempotency-Key; body `{modelKey, credentialIdsByProvider, consentToProviderProcessing: true, acknowledgeProviderCharges: true}`; 202 with `plannedCalls`; counts toward the generation rate limit); `POST /runs/:id/special-master/:graderRunId/cancel`.
+
 Conversations (D-39): a case may carry `messages: [{role: "user"|"assistant", content}]`, the conversation so far. Review cases and results cases add `messages` (empty when none); the catalog adds `multiTurnVerifiedAt` per model.
 
 Imported evidence (D-38): a configuration may be `{kind: "imported", key, label, provenance}`. `PUT /evaluations/:id/imports/:configurationKey` (If-Match; body `{items: [{caseKey, text}], confirmMayShareWithJurors: true}`) replaces that party's answers and returns the new revision; `DELETE` on the same path removes them. The owner evaluation view adds `imports`; the owner run view adds `imported`; results add `source`/`provenance` on imported parties and `status: "imported"` plus `sha256` on their responses.

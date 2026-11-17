@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { ERROR_TEXT, ErrorPanel, formatDuration, formatTime, Page, PageSkeleton, StatusBadge } from '@/components/common'
 import { Caption, CaseProgress, ConversationSoFar, Sheet, SheetSection, Stamp, Term } from '@/components/court/CaseFile'
 import { FindingsChart } from '@/components/court/FindingsChart'
+import { SpecialMasterPanel } from '@/components/review/SpecialMasterPanel'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -288,6 +289,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
       </SheetSection>
 
       <VerdictSection data={data} reload={reload} />
+      {data.role === 'owner' && <SpecialMasterPanel results={data} />}
       {data.role === 'owner' && <CertifiedRecord runId={data.runId} />}
       </Sheet>
     </Page>

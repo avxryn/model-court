@@ -1,6 +1,6 @@
 # Design note: special master (phase 6)
 
-Status: proposal, Nov 17, 2026. Covers S4 LLM-judge calibration (spec §16.3 item 5). In plain words:
+Status: **built on `next`, Nov 17, 2026 (D-40)**, with the departures D-40 lists. Covers S4 LLM-judge calibration (spec §16.3 item 5). In plain words:
 **an AI grader that is advisory and billed to the judge's own API key.**
 
 ## Principles
