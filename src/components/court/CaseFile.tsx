@@ -25,7 +25,12 @@ export function Term({ name, plain = true, className }: { name: TermKey; plain?:
   return (
     <span className={className}>
       {entry.term}
-      {plain && <span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">({entry.plain})</span>}
+      {plain && (
+        <>
+          {' '}
+          <span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">({entry.plain})</span>
+        </>
+      )}
     </span>
   )
 }
@@ -42,7 +47,7 @@ export function SectionLabel({ id, name, children, className }: { id?: string; n
 export function CaseProgress({ step, complete = false, className }: { step: CaseStep; complete?: boolean; className?: string }) {
   const currentIndex = CASE_STEPS.findIndex((s) => s.key === step)
   return (
-    <ol aria-label="Case progress" className={cn('grid grid-cols-5 items-end gap-0.5 sm:gap-1', className)}>
+    <ol aria-label="Case progress" className={cn('grid grid-cols-[repeat(5,auto)] items-end gap-0.5 sm:grid-cols-5 sm:gap-1', className)}>
       {CASE_STEPS.map((s, index) => {
         const isCurrent = !complete && index === currentIndex
         const done = complete || index < currentIndex
@@ -194,8 +199,8 @@ export function Testimony({ label, text, children }: { label: string; text: stri
   return (
     <article className="min-w-0 rounded-[2px] bg-white ring-1 ring-exhibit-edge">
       <header className="flex items-center justify-between gap-3 border-b border-paper-rule px-4 py-3">
-        <h3 className="typewriter rounded-[3px] bg-foreground px-3 py-1 text-sm font-bold text-paper">TESTIMONY {label}</h3>
-        <span className="text-xs text-muted-foreground">shuffled · unlabeled</span>
+        <h3 className="typewriter shrink-0 rounded-[3px] bg-foreground px-3 py-1 text-sm font-bold whitespace-nowrap text-paper">TESTIMONY {label}</h3>
+        <span className="text-right text-xs leading-snug text-muted-foreground">shuffled · unlabeled</span>
       </header>
       <div role="region" aria-label={`Testimony ${label} text`} tabIndex={0} className="max-h-96 overflow-y-auto py-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
         <ol className="list-none p-0">

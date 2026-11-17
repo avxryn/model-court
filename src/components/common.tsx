@@ -175,7 +175,7 @@ export function PageSkeleton({ label = 'Loading' }: { label?: string }) {
         <Skeleton className="h-8 w-72 max-w-full" />
         <Skeleton className="h-4 w-md max-w-full" />
       </div>
-      <div className="surface divide-y divide-border overflow-hidden">
+      <div className="paper divide-y divide-paper-rule overflow-hidden rounded-sm">
         {[0, 1, 2, 3].map((row) => (
           <div key={row} className="flex items-center gap-4 px-5 py-4">
             <Skeleton className="h-4 flex-1" />
@@ -191,7 +191,7 @@ export function PageSkeleton({ label = 'Loading' }: { label?: string }) {
 /** Designed empty state: what is empty, why, and the next step. */
 export function EmptyState({ icon: Icon, title, children, actions }: { icon: LucideIcon; title: ReactNode; children?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="surface px-6 py-14 text-center">
+    <div className="paper rounded-sm px-6 py-14 text-center">
       <span aria-hidden className="mx-auto grid size-12 place-items-center rounded-full bg-accent text-accent-foreground ring-1 ring-brass/25">
         <Icon className="size-5" />
       </span>

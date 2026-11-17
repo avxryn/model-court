@@ -29,7 +29,7 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
   return (
     <div className="space-y-5">
       <div className="court-label">
-        Juror’s worksheet<span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(your ratings)</span>
+        Juror’s worksheet{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(your ratings)</span>
       </div>
       {DIMENSIONS.map((dimension) => (
         <FieldSet key={dimension} className="space-y-1.5 border-b border-dotted border-paper-edge pb-4" disabled={disabled}>
@@ -51,12 +51,12 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
                   key={score}
                   htmlFor={itemId}
                   className={cn(
-                    'flex cursor-pointer items-center gap-3 rounded-md px-1.5 py-1 text-sm leading-snug font-normal transition-colors duration-150 focus-within:ring-2 focus-within:ring-ring/50',
+                    'relative -mx-1.5 flex cursor-pointer items-center gap-3 rounded-md px-1.5 py-1 text-sm leading-snug font-normal transition-colors duration-150 focus-within:ring-2 focus-within:ring-ring/50',
                     checked ? 'bg-slip' : 'hover:bg-slip/60',
                     disabled && 'cursor-not-allowed opacity-70',
                   )}
                 >
-                  <RadioGroupItem id={itemId} value={String(score)} className="sr-only" aria-labelledby={`${itemId}-text`} />
+                  <RadioGroupItem id={itemId} value={String(score)} className="absolute sr-only" aria-labelledby={`${itemId}-text`} />
                   <span
                     aria-hidden
                     className={cn(
@@ -78,7 +78,7 @@ export function RubricForm({ label, rating, onChange, disabled }: { label: strin
       ))}
 
       <div className="space-y-1.5">
-        <Label htmlFor={`${id}-note`} className="font-heading text-base font-bold">
+        <Label htmlFor={`${id}-note`} className="flex-wrap gap-x-2 gap-y-1 font-heading text-base leading-snug font-bold">
           Evidence note {needsNote ? <span className="text-destructive">(required for any 0)</span> : <span className="font-normal text-muted-foreground">(optional)</span>}
         </Label>
         <Textarea

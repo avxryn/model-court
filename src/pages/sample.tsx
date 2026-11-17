@@ -142,7 +142,7 @@ export default function SamplePage() {
                 </div>
 
                 <div className="flex flex-col gap-4 border-t border-foreground pt-6 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button variant="outline" disabled={caseIndex === 0} onClick={() => goTo(caseIndex - 1)}>
                       <ChevronLeft aria-hidden /> Previous question
                     </Button>
@@ -161,7 +161,7 @@ export default function SamplePage() {
             ) : (
               <div className="space-y-10">
                 <section aria-labelledby="sample-mapping">
-                  <h2 id="sample-mapping" className="mb-3 font-heading text-xl font-bold">
+                  <h2 id="sample-mapping" className="court-label mb-4">
                     Who gave which testimony
                   </h2>
                   <div className="overflow-hidden rounded-[2px] bg-white ring-1 ring-exhibit-edge">
@@ -195,7 +195,7 @@ export default function SamplePage() {
                 </section>
 
                 <section aria-labelledby="sample-scores">
-                  <h2 id="sample-scores" className="mb-3 font-heading text-xl font-bold">
+                  <h2 id="sample-scores" className="court-label mb-4">
                     Your practice findings
                   </h2>
                   {practice?.byConfiguration ? (

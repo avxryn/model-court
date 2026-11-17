@@ -11,14 +11,14 @@ export function CaseMaterial({ title, input, reference, expectedBehavior, number
   return (
     <section aria-label="Question presented" className="space-y-6">
       <div>
-        <h2 className="court-label">
+        <h2 className="court-label text-wrap">
           <Term name="question" plain={false} />
           {number !== undefined && total !== undefined && (
-            <span className="typewriter ml-2 font-normal tracking-normal">
+            <span className="typewriter ml-2 font-normal tracking-normal whitespace-nowrap">
               · {number} OF {total}
             </span>
           )}
-          <span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(test case)</span>
+          {' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(test case)</span>
         </h2>
         <p className="mt-2 font-heading text-sm text-muted-foreground italic">{title}</p>
         <p className="mt-1 font-heading text-lg leading-relaxed break-words whitespace-pre-wrap">{input}</p>

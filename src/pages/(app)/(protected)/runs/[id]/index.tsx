@@ -134,7 +134,7 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
       <section aria-labelledby="progress-heading" className="space-y-4 border-t border-paper-rule px-5 py-6 sm:px-8">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 id="progress-heading" className="court-label">
-            Hearing testimony<span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(generating responses)</span>
+            Hearing testimony{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(generating responses)</span>
           </h2>
           <span className="text-sm tabular-nums text-muted-foreground" role="status">
             {terminal}/{run.counts.planned} finished · {run.counts.succeeded} succeeded · {run.counts.failed} failed · {run.counts.uncertain} uncertain
@@ -199,7 +199,7 @@ function OwnerRun({ run, reload, live }: { run: OwnerRunView; reload: () => Prom
         </div>
 
         {(run.status === 'generating' || run.status === 'ready') && (
-          <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+          <div className="flex flex-wrap gap-2 border-t border-paper-rule pt-3">
             {retryable.length > 0 && (
               <AlertDialog>
                 <AlertDialogTrigger render={<Button variant="outline" disabled={selected.size === 0 || busy} />}>
@@ -315,7 +315,7 @@ function ReviewPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean; act
     <section aria-labelledby="review-heading" className="space-y-4 border-t border-paper-rule px-5 pt-6 pb-10 sm:px-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="review-heading" className="court-label">
-          The jury<span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(blind review)</span>
+          The jury{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(blind review)</span>
         </h2>
         <span className="text-sm tabular-nums text-muted-foreground" role="status">
           {run.review.submittedCount} filed · {run.review.pendingCount} unfinished (worksheets in progress and unused summonses)

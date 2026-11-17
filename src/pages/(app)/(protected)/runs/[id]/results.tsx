@@ -91,7 +91,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
         </p>
       </SheetSection>
 
-      <SheetSection id="scores" label={<>Findings<span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(scores from the jury and from the judge)</span></>}>
+      <SheetSection id="scores" label={<>Findings{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(scores from the jury and from the judge)</span></>}>
         <Tabs defaultValue={data.cohorts.invited.reviewerCount > 0 ? 'invited' : 'owner'}>
           <TabsList>
             <TabsTrigger value="invited">Jury’s findings ({data.cohorts.invited.reviewerCount} {data.cohorts.invited.reviewerCount === 1 ? 'juror' : 'jurors'})</TabsTrigger>
@@ -107,7 +107,7 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
         </Tabs>
       </SheetSection>
 
-      <SheetSection id="coverage" label={<>Testimony taken<span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(generation coverage)</span></>}>
+      <SheetSection id="coverage" label={<>Testimony taken{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(generation coverage)</span></>}>
         <div className="overflow-x-auto rounded-[2px] bg-white ring-1 ring-exhibit-edge">
           <Table>
             <TableHeader>
@@ -186,11 +186,11 @@ function ResultsBody({ data, reload }: { data: ResultsView; reload: () => Promis
                         </span>
                       </div>
                       {response.text ? (
-                        <div className="max-h-72 overflow-y-auto rounded-[2px] bg-paper px-4 py-3 font-heading text-[0.9375rem] leading-relaxed break-words whitespace-pre-wrap ring-1 ring-paper-rule ring-inset" tabIndex={0} role="region" aria-label={`${labels[response.configurationKey]} testimony`}>
+                        <div className="max-h-72 overflow-y-auto rounded-[2px] bg-paper px-4 py-3 font-heading text-[0.9375rem] leading-relaxed break-words whitespace-pre-wrap ring-1 ring-paper-rule outline-none ring-inset focus-visible:ring-3 focus-visible:ring-ring/50" tabIndex={0} role="region" aria-label={`${labels[response.configurationKey]} testimony`}>
                           {response.text}
                         </div>
                       ) : (
-                        <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
+                        <p className="rounded-[2px] border border-dashed border-paper-edge p-3 text-sm text-muted-foreground">
                           No accepted response ({response.status}). {response.errorCode ? ERROR_TEXT[response.errorCode] ?? response.errorCode : ''}
                         </p>
                       )}

@@ -135,7 +135,7 @@ function Specimen() {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="court-label">
-            Question presented <span className="typewriter font-normal tracking-normal">· 2 OF 5</span>
+            Question presented <span className="typewriter font-normal tracking-normal whitespace-nowrap">· 2 OF 5</span>
           </div>
           <div className="mt-1 font-heading text-lg leading-snug font-bold">{SPECIMEN_CASE.title}</div>
         </div>

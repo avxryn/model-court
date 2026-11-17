@@ -131,7 +131,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
             <div className="court-label">
               {review.contextType === 'owner' ? (
                 <>
-                  The judge’s own review<span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(context-aware, reported separately)</span>
+                  The judge’s own review{' '}<span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">(context-aware, reported separately)</span>
                 </>
               ) : (
                 <Term name="worksheet" />
@@ -222,7 +222,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
           </div>
 
           <div className="flex flex-col gap-4 border-t border-foreground pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" disabled={caseIndex === 0} onClick={() => void goTo(caseIndex - 1)}>
                 <ChevronLeft aria-hidden /> Previous question
               </Button>

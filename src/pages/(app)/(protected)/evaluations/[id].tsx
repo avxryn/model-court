@@ -212,7 +212,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
       )}
 
       <Tabs defaultValue="cases">
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-2 group-data-horizontal/tabs:h-auto sm:inline-flex sm:w-fit sm:group-data-horizontal/tabs:h-8">
           <TabsTrigger value="cases">Questions ({draft.cases.length})</TabsTrigger>
           <TabsTrigger value="configurations">Parties</TabsTrigger>
           <TabsTrigger value="runs">Hearings ({evaluation.runs.length})</TabsTrigger>
