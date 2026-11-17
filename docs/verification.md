@@ -30,6 +30,8 @@ wrangler/workerd from the lockfile, Vitest 4.1, local D1 via `wrangler getPlatfo
 | 2026-11-17 | Deployed smoke (signed out) | `curl` + Chromium pane | `/healthz` → `{"build":"ebd870c","ready":true,"generationEnabled":false}` (secrets bound). `/`, `/sample`, `/evaluations` → 200. `/api/v1/evaluations` without or with a bad token → 401. Integration proxy, actions, AI chat, files, `/_deepspace/*`, debug, `/ws/jobs`, `/ws/cron`, arbitrary `/ws/<room>` → 404. CSP, X-Frame-Options, nosniff, Referrer-Policy present. No console errors on `/sample` and the signed-out gate. | V4, V7, T19 (deployed), §9.5 |
 | 2026-11-17 | Deployed scheduler + store | `npx deepspace logs --search cron` | `[cron] mc-maintenance ok 303ms` after the deploy wake-up; the task ran migrations and maintenance against the live `ModelCourtStore`. | V6 (scheduler half), V3 (revised, deployed) |
 
+| 2026-11-17 | Redeploy with merged UI polish (D-21) | `npx deepspace deploy` (commit 658e27b) + curl + Chromium pane | Release rel_01M7M28GWSM7YQTBEYH5956K7G; `/healthz` build 658e27b, ready true, generation off. Pages 200, API 401, integration proxy 404, CSP present. Fresh `/sample`: 18 labelled radios, label click selects, reveal works, no horizontal overflow, no console errors, no `/api/v1` or provider requests. Merge kept radio `aria-labelledby` wiring and all scaffold test ids; no server/domain/palette changes. | T19, T23 (partial), T30 |
+
 ### Not yet verified by the agent (blocked or pending)
 
 - Anything requiring a DeepSpace login: `dev start`, `test run` (Playwright multi-user fixture), registration, secrets, deploy.

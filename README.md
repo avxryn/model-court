@@ -18,7 +18,7 @@ Live URL: https://model-court.app.space (generation disabled until providers are
 |---|---|
 | Domain rules, D1 schema, API, generation pipeline, review, reveal, results, verdict, credentials | Implemented; covered by 35 unit and 49 integration tests (local D1, stubbed provider HTTP) |
 | UI (shadcn/ui on Base UI) | All screens implemented; landing, sample, and the signed-out gate checked in a browser; authenticated screens not yet exercised with real sign-in |
-| DeepSpace registration, secrets, deploy | Done Nov 17: app `app_01M7M0ATC59NFTPZSJJS47J0BX`, release `rel_01M7M1JKZ3WJ7P1YTKCN0EGF30`, `GENERATION_ENABLED="false"` |
+| DeepSpace registration, secrets, deploy | Done Nov 17: app `app_01M7M0ATC59NFTPZSJJS47J0BX`, release `rel_01M7M28GWSM7YQTBEYH5956K7G` (UI polish merged), `GENERATION_ENABLED="false"` |
 | Real provider calls | **None made.** Both model routes are disabled (`verifiedAt: null`) until a recorded smoke call |
 
 See `docs/implementation-plan.md` for the checklist, `docs/verification.md` for evidence, and
