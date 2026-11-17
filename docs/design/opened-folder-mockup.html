@@ -248,13 +248,13 @@ th { font-weight: 500; font-size: 0.8125rem; color: var(--muted-foreground); bor
 }
 </style>
 </head>
-<body data-label="top" data-width="desktop">
+<body data-label="corner" data-width="desktop">
 
 <form class="review-bar" aria-label="Mockup options">
   <strong>Opened folder · mockup</strong>
   <fieldset><legend>Case label</legend>
-    <label><input type="radio" name="label" value="top" checked> Tab on the folder edge</label>
-    <label><input type="radio" name="label" value="corner"> Folder corner</label>
+    <label><input type="radio" name="label" value="top"> Tab on the folder edge</label>
+    <label><input type="radio" name="label" value="corner" checked> Folder corner</label>
   </fieldset>
   <fieldset><legend>Width</legend>
     <label><input type="radio" name="width" value="desktop" checked> Desktop</label>
@@ -432,10 +432,10 @@ th { font-weight: 500; font-size: 0.8125rem; color: var(--muted-foreground); bor
 <div class="review-notes">
   <strong style="color:var(--foreground)">Decisions (approved 2026-11-17)</strong>
   <ol>
-    <li><b>Two kinds of tab.</b> The manila tab on the folder's top edge names the case; it carries a white file label with a red band and is not clickable. Every clickable tab is a lettered index divider.</li>
+    <li><b>Case label in the corner.</b> The case's file label (white, red band) sits in the folder's top-left corner beside the dividers, not on a raised tab; it is not clickable. Every clickable tab is a lettered index divider.</li>
     <li><b>Dividers.</b> The open section is the white sheet in front, joined to the page. Other sections are buff card underneath and lift slightly on hover. Locked sections stay visible, flat and dashed, with a lock and when they open.</li>
     <li><b>Case page.</b> Questions / Parties / Hearings are dividers A&ndash;C, like the hearing's A&ndash;D. Case progress is a stage line in the caption.</li>
-    <li><b>Phones.</b> The folder shrinks to a thin manila edge and the label tab is dropped; locked dividers keep the lock icon.</li>
+    <li><b>Phones.</b> The folder shrinks to a thin manila edge and the label is dropped; locked dividers keep the lock icon.</li>
     <li><b>Printing.</b> The folder, dividers and sheet edges are dropped; the judgment prints as plain paper.</li>
     <li><b>Motion.</b> Only the hover lift on idle dividers; nothing moves under reduced motion.</li>
   </ol>

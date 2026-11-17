@@ -1,12 +1,12 @@
 /**
  * The opened case folder (D-45): a manila back panel with a spine, the case's
- * label tab on its top edge, lettered index dividers for the sections, and a
- * short stack of paper with the current sheet on top.
+ * file label in the folder's top-left corner, lettered index dividers for the
+ * sections beside it, and a short stack of paper with the current sheet on top.
  *
- * Two kinds of tab, never mixed up: the manila label tab names the case and is
- * not clickable; every clickable tab is a divider. The open divider is the
- * white sheet in front; the others are buff card underneath. Printing drops
- * the folder, the dividers and the sheet edges.
+ * The label names the case and is not clickable; every clickable tab is a
+ * divider. The open divider is the white sheet in front; the others are buff
+ * card underneath. Phones drop the label (the caption names the case).
+ * Printing drops the folder, the label, the dividers and the sheet edges.
  */
 
 import { useEffect, useRef, type ReactNode } from 'react'
@@ -15,43 +15,27 @@ import { Tabs as TabsPrimitive } from '@base-ui/react/tabs'
 import { Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-/** One sloped shoulder of the label tab, curving into the folder's top edge. */
-function Shoulder({ flip = false }: { flip?: boolean }) {
-  return (
-    <svg aria-hidden viewBox="0 0 28 40" preserveAspectRatio="none" className={cn('block h-full w-7 shrink-0', flip && '-scale-x-100')}>
-      <path className="fill-manila" d="M0 40C5 40 7 38 8.5 34L18 6C19.2 2.4 21.5 0 25 0H28V40Z" />
-      <path className="fill-none stroke-paper-edge" vectorEffect="non-scaling-stroke" d="M0 39.5C5 39.5 7 38 8.5 34L18 6C19.2 2.4 21.5 0.5 25 0.5H28" />
-    </svg>
-  )
-}
-
 export function CaseFolder({ docket, title, dividers, children }: { docket?: string; title: string; dividers?: ReactNode; children: ReactNode }) {
   return (
-    <div className="print:contents">
-      <div className="relative z-[1] -mb-px ml-5 hidden h-10 w-max max-w-[min(28rem,80%)] sm:flex print:hidden">
-        <Shoulder />
-        <div className="-mx-px flex min-w-0 items-center border-t border-paper-edge bg-manila px-2 pt-1.5 pb-1">
-          <span className="flex min-w-0 items-baseline gap-2.5 rounded-[1px] border-t-[3px] border-stamp bg-paper px-2.5 pt-0.5 pb-1 ring-1 ring-paper-edge">
-            {docket && <span className="typewriter text-[0.8125rem] font-bold whitespace-nowrap text-stamp">{docket}</span>}
-            <span className="truncate font-heading text-sm">{title}</span>
-          </span>
-        </div>
-        <Shoulder flip />
-      </div>
-      <div className="folder-back relative rounded-lg bg-manila pt-2 pr-1.5 pb-1.5 pl-2.5 sm:pt-5 sm:pr-5 sm:pb-6 sm:pl-8 lg:pr-7 lg:pl-10 print:contents">
-        <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 rounded-l-lg bg-linear-to-r from-paper-edge to-manila sm:w-4 print:hidden" />
+    <div className="folder-back relative rounded-lg bg-manila pt-2 pr-1.5 pb-1.5 pl-2.5 sm:pt-4 sm:pr-5 sm:pb-6 sm:pl-8 lg:pr-7 lg:pl-10 print:contents">
+      <span aria-hidden className="absolute inset-y-0 left-0 w-1.5 rounded-l-lg bg-linear-to-r from-paper-edge to-manila sm:w-4 print:hidden" />
+      <div className={cn('relative z-[2] flex items-end gap-3 sm:gap-4 print:hidden', !dividers && 'sm:pb-3')}>
+        <span className="hidden max-w-[45%] min-w-0 shrink-0 items-baseline gap-2.5 self-center rounded-[1px] border-t-[3px] border-stamp bg-paper px-2.5 pt-0.5 pb-1 ring-1 ring-paper-edge sm:flex">
+          {docket && <span className="typewriter text-[0.8125rem] font-bold whitespace-nowrap text-stamp">{docket}</span>}
+          <span className="truncate font-heading text-sm">{title}</span>
+        </span>
         {dividers}
-        <div className="relative">
-          <span aria-hidden className="absolute inset-[12px_-10px_-9px_9px] -rotate-[0.35deg] rounded-sm bg-slip ring-1 ring-paper-edge max-sm:hidden print:hidden" />
-          <span aria-hidden className="absolute inset-[4px_-3px_-3px_2px] rotate-[0.25deg] rounded-sm bg-paper ring-1 ring-paper-edge sm:inset-[6px_-5px_-5px_4px] print:hidden" />
-          {children}
-        </div>
+      </div>
+      <div className="relative">
+        <span aria-hidden className="absolute inset-[12px_-10px_-9px_9px] -rotate-[0.35deg] rounded-sm bg-slip ring-1 ring-paper-edge max-sm:hidden print:hidden" />
+        <span aria-hidden className="absolute inset-[4px_-3px_-3px_2px] rotate-[0.25deg] rounded-sm bg-paper ring-1 ring-paper-edge sm:inset-[6px_-5px_-5px_4px] print:hidden" />
+        {children}
       </div>
     </div>
   )
 }
 
-const ROW = 'relative z-[2] -mx-1 -mt-1 -mb-px flex items-end gap-0.5 overflow-x-auto px-1 pt-1 [scrollbar-width:none] sm:gap-1 print:hidden'
+const ROW = 'relative -mx-1 -mt-1 -mb-px flex min-w-0 items-end gap-0.5 overflow-x-auto px-1 pt-1 [scrollbar-width:none] sm:gap-1'
 
 /** The shape of a divider; `state` picks the open, idle, or locked card. */
 export function dividerClass(state: 'open' | 'idle' | 'locked') {
