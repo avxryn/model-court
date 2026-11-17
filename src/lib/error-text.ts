@@ -1,0 +1,25 @@
+/** Plain-language text for generation error codes (spec §9). */
+
+export const ERROR_TEXT: Record<string, string> = {
+  PROVIDER_AUTH_FAILED: 'The provider rejected the API key. Replace the key in Settings.',
+  PROVIDER_ACCESS_DENIED: 'The key does not have access to this model.',
+  PROVIDER_MODEL_UNAVAILABLE: 'The model is not available to this key.',
+  PROVIDER_QUOTA_EXHAUSTED: 'The provider account is out of credit or quota.',
+  PROVIDER_RATE_LIMITED: 'The provider rate-limited the request.',
+  PROVIDER_UNAVAILABLE: 'The provider was unavailable.',
+  PROVIDER_REJECTED_REQUEST: 'The provider rejected the request.',
+  PROVIDER_BLOCKED: 'The provider blocked the response without text.',
+  PROVIDER_REDIRECT_REFUSED: 'The provider redirected the request; Model Court refused to forward the key.',
+  PROVIDER_TIMEOUT: 'No response within 90 seconds. The provider may still have processed (and charged for) the request.',
+  PROVIDER_NETWORK_ERROR: 'The connection failed mid-request. A charge may have occurred.',
+  PROVIDER_CANCELED: 'The request was canceled. A charge may have occurred.',
+  PROVIDER_LEASE_EXPIRED: 'The generation worker stopped responding. Whether the provider processed the request is unknown.',
+  INVALID_PROVIDER_RESPONSE: 'The provider returned a response Model Court could not read.',
+  OUTPUT_TOO_LARGE: 'The response exceeded the 16 KiB storage limit and was not kept.',
+  EMPTY_OUTPUT: 'The provider returned no text.',
+  CREDENTIAL_REVOKED: 'The key pinned to this run was removed or expired before this generation ran. Nothing was sent.',
+  CREDENTIAL_EXPIRED: 'The key pinned to this run expired before this generation ran. Nothing was sent. Save a new key and start a new run.',
+  CREDENTIAL_UNAVAILABLE: 'The saved key could not be used. Nothing was sent.',
+  CANCELED: 'Canceled by the judge.',
+  DELETED: 'The evaluation was deleted.',
+}

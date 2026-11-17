@@ -48,7 +48,9 @@
   --sticker: #f2cf5b;
   --sticker-foreground: #3d2e00;
   --stamp: #a8261c;
+  --exhibit: #ffffff;
   --exhibit-edge: #dcd3be;
+  --exhibit-shadow: 0 6px 14px -6px rgb(60 45 15 / 0.18);
   --slip: #f6f1e4;
   --slip-edge: #b9a87e;
   --tab-idle: #e0d6bf;
@@ -100,6 +102,8 @@
   --color-sticker: var(--sticker);
   --color-sticker-foreground: var(--sticker-foreground);
   --color-stamp: var(--stamp);
+  --color-exhibit: var(--exhibit);
+  --shadow-exhibit: var(--exhibit-shadow);
   --color-exhibit-edge: var(--exhibit-edge);
   --color-slip: var(--slip);
   --color-slip-edge: var(--slip-edge);
@@ -180,7 +184,7 @@
 
 /* A white exhibit-edged panel inside a sheet: lists, tables, transcripts. */
 @utility exhibit-panel {
-  @apply rounded-[2px] bg-white ring-1 ring-exhibit-edge;
+  @apply rounded-[2px] bg-exhibit ring-1 ring-exhibit-edge;
 }
 
 /* Typewriter face: docket numbers, stamps, exhibit stickers. */

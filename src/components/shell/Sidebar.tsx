@@ -9,12 +9,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from 'deepspace'
 import { BookOpen, ChevronRight, FileText, Folder, FolderOpen, KeyRound, Library, Menu, Scale, X, type LucideIcon } from 'lucide-react'
-import { statusInfo, TONE_DOT } from '@/components/common'
+import { statusInfo, TONE_DOT } from '@/lib/status'
 import { AccountMenu } from '@/components/shell/AccountMenu'
 import { useShellFocusValue } from '@/components/shell/ShellContext'
 import { BrandMark } from '@/components/BrandMark'
 import type { EvaluationSummary, EvaluationView } from '@/lib/dto'
 import { useApi } from '@/lib/use-api'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 const CASE_LIMIT = 8
@@ -40,16 +41,17 @@ export function Sidebar() {
         <Link to={isSignedIn ? '/evaluations' : '/'} className="rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
           <BrandMark />
         </Link>
-        <button
-          type="button"
-          className="grid size-9 place-items-center rounded-md text-muted-foreground outline-none hover:bg-paper/70 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 lg:hidden"
+        <Button
+          variant="ghost"
+          size="icon-lg"
+          className="text-muted-foreground hover:bg-paper/70 lg:hidden"
           onClick={() => setOpen((value) => !value)}
           aria-label={open ? 'Close menu' : 'Open menu'}
           aria-expanded={open}
           aria-controls="primary-nav"
         >
           {open ? <X className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}
-        </button>
+        </Button>
       </div>
       {open && <div aria-hidden className="fixed inset-0 top-14 z-30 bg-foreground/20 lg:hidden" onClick={() => setOpen(false)} />}
       <div
@@ -201,15 +203,16 @@ function CaseFolder({ item, open, current, currentRunId, onToggle }: { item: Eva
   return (
     <li>
       <div className={cn(rowClass(onCase), 'gap-1 pr-1 pl-0.5')}>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-xs"
           onClick={onToggle}
           aria-expanded={open}
           aria-label={`${open ? 'Close' : 'Open'} the ${item.title} folder`}
-          className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="text-muted-foreground hover:bg-transparent aria-expanded:bg-transparent"
         >
-          <ChevronRight className={cn('size-3.5 transition-transform duration-150', open && 'rotate-90')} aria-hidden />
-        </button>
+          <ChevronRight className={cn('size-3.5 motion-safe:transition-transform motion-safe:duration-150', open && 'rotate-90')} aria-hidden />
+        </Button>
         <Link to={casePath} aria-current={onCase ? 'page' : undefined} className="flex min-w-0 flex-1 items-center gap-2 self-stretch outline-none focus-visible:underline" title={item.title}>
           <FolderIcon className={cn('size-4 shrink-0', current ? 'text-manila-foreground' : 'text-muted-foreground')} strokeWidth={1.75} aria-hidden />
           <span className="truncate">{item.title}</span>

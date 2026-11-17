@@ -1,24 +1,21 @@
 /**
  * One frame for every page of a hearing (D-45): breadcrumbs back to the case,
  * then the opened case folder with a lettered divider per section
- * (Proceedings, Your review, Record, Judgment; jurors see Your worksheet and
- * Record). Dividers that are not open yet stay visible and say why. The page
+ * (Proceedings, Your review, Record, Judgment, Special master; jurors see
+ * Your worksheet and Record). Dividers that are not open yet stay visible and say why. The page
  * passes its sheet as children.
  */
 
 import type { ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Breadcrumbs } from '@/components/common'
+import { Breadcrumbs } from '@/components/layout/Page'
 import { CaseStage } from '@/components/court/CaseFile'
 import { CaseFolder, DividerNav, type DividerLink } from '@/components/court/Folder'
 import { useShellFocus } from '@/components/shell/ShellContext'
 import { caseStep, docketNumber } from '@/lib/court'
+import { isUnsealed } from '@/lib/status'
 
 type Role = 'owner' | 'reviewer'
-
-function isUnsealed(status: string) {
-  return status === 'revealed' || status === 'decided'
-}
 
 function dividersFor(runId: string, role: Role, status: string, guest: boolean): DividerLink[] {
   const sealed = isUnsealed(status) ? {} : { locked: 'Opens when the judge unseals the record', lockedShort: 'at unsealing' }
@@ -40,18 +37,21 @@ function dividersFor(runId: string, role: Role, status: string, guest: boolean):
     { to: `/runs/${runId}/review`, label: 'Your review', ...(reviewOpen ? {} : { locked: 'Opens when deliberation opens', lockedShort: 'at deliberation' }) },
     { to: `/runs/${runId}/results`, label: 'Record', ...sealed },
     { to: `/runs/${runId}/judgment`, label: 'Judgment', ...sealed },
+    { to: `/runs/${runId}/special-master`, label: 'Special master', ...sealed },
   ]
 }
 
-export function HearingFolder({ runId, caseId, caseTitle, role, status, children }: { runId: string; caseId?: string; caseTitle: string; role: Role; status: string; children: ReactNode }) {
+/** `actions` sits beside the breadcrumbs, like the case page's ⋯ menu. */
+export function HearingFolder({ runId, caseId, caseTitle, role, status, actions, children }: { runId: string; caseId?: string; caseTitle: string; role: Role; status: string; actions?: ReactNode; children: ReactNode }) {
   const { pathname } = useLocation()
   const guest = pathname.startsWith('/juror/')
   useShellFocus(guest ? undefined : caseId, guest ? undefined : runId)
 
   return (
     <>
-      <div className="print:hidden">
+      <div className="flex items-start justify-between gap-3 print:hidden">
         <Breadcrumbs items={guest ? [{ label: caseTitle }, { label: 'Hearing' }] : [{ label: 'Your cases', to: '/evaluations' }, { label: caseTitle, to: caseId ? `/evaluations/${caseId}` : undefined }, { label: 'Hearing' }]} />
+        {actions}
       </div>
       <CaseFolder docket={caseId ? docketNumber(caseId) : undefined} title={caseTitle} dividers={<DividerNav label="Hearing" items={dividersFor(runId, role, status, guest)} current={pathname} />}>
         {children}

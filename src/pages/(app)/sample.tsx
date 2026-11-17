@@ -6,20 +6,23 @@
 
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, ChevronLeft, ChevronRight, FlaskConical, RotateCcw } from 'lucide-react'
-import { Breadcrumbs, Page } from '@/components/common'
-import { Caption, CaseStage, DocketNumber, Sheet, Stamp, Term } from '@/components/court/CaseFile'
-import { CaseFolder } from '@/components/court/Folder'
+import { FlaskConical, RotateCcw } from 'lucide-react'
+import { Caption, CaseStage, DocketNumber, Sheet, Stamp } from '@/components/court/CaseFile'
 import { FindingsChart } from '@/components/court/FindingsChart'
+import { CaseFolder } from '@/components/court/Folder'
+import { JudgeSignature } from '@/components/court/JudgeSignature'
+import { Note } from '@/components/court/Paper'
+import { Breadcrumbs, Page } from '@/components/layout/Page'
+import { FindingsTable } from '@/components/record/FindingsTable'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
+import { QuestionPager, QuestionStepper, WorksheetGrid } from '@/components/review/Worksheet'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { DraftRating } from '@/domain/contracts'
-import { DIMENSIONS, formatScore, RUBRIC, scoreCohort, submissionIssues, type CompleteRating } from '@/domain/rubric'
+import { DIMENSIONS, scoreCohort, submissionIssues, type CompleteRating } from '@/domain/rubric'
 import { SAMPLE_CASES, SAMPLE_CONFIGURATIONS, SAMPLE_PROVENANCE, SAMPLE_VERDICT } from '@/sample/fixture'
-import { cn } from '@/lib/utils'
 
 export default function SamplePage() {
   const [ratings, setRatings] = useState<Record<string, DraftRating>>({})
@@ -103,59 +106,26 @@ export default function SamplePage() {
             {!revealed ? (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <nav aria-label="Questions" className="flex max-w-full flex-wrap gap-1">
-                    {SAMPLE_CASES.map((c, index) => (
-                      <Button
-                        key={c.key}
-                        size="sm"
-                        variant="ghost"
-                        className={cn('h-9 px-3 font-heading', index === caseIndex ? 'bg-foreground text-paper hover:bg-foreground hover:text-paper' : 'text-muted-foreground hover:bg-slip')}
-                        aria-current={index === caseIndex ? 'step' : undefined}
-                        onClick={() => goTo(index)}
-                      >
-                        {caseScored(index) && <CheckCircle2 aria-label="scored" className={index === caseIndex ? 'text-paper' : 'text-success'} />}Q{index + 1}
-                      </Button>
-                    ))}
-                  </nav>
+                  <QuestionPager count={SAMPLE_CASES.length} current={caseIndex} isDone={caseScored} onSelect={goTo} />
                   <Button variant="ghost" size="sm" onClick={reset}>
                     <RotateCcw aria-hidden /> Reset sample
                   </Button>
                 </div>
 
-                <div className="grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-                  <div className="lg:sticky lg:top-4 lg:self-start">
-                    <CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={SAMPLE_CASES.length} />
-                  </div>
-                  <div className="space-y-3">
-                    <h2 className="court-label">
-                      <Term name="testimony" />
-                    </h2>
-                    <div className="grid gap-6 xl:grid-cols-2">
-                      {current.responses.map((response) => (
-                        <ResponseCard key={response.responseId} label={response.label} text={response.text}>
-                          <RubricForm label={response.label} rating={ratings[response.responseId] ?? emptyRating(response.responseId)} onChange={(next) => setRatings((r) => ({ ...r, [next.responseId]: next }))} />
-                        </ResponseCard>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <WorksheetGrid material={<CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={SAMPLE_CASES.length} />}>
+                  {current.responses.map((response) => (
+                    <ResponseCard key={response.responseId} label={response.label} text={response.text}>
+                      <RubricForm label={response.label} rating={ratings[response.responseId] ?? emptyRating(response.responseId)} onChange={(next) => setRatings((r) => ({ ...r, [next.responseId]: next }))} />
+                    </ResponseCard>
+                  ))}
+                </WorksheetGrid>
 
-                <div className="flex flex-col gap-4 border-t border-foreground pt-6 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" disabled={caseIndex === 0} onClick={() => goTo(caseIndex - 1)}>
-                      <ChevronLeft aria-hidden /> Previous question
-                    </Button>
-                    <Button variant="outline" disabled={caseIndex === SAMPLE_CASES.length - 1} onClick={() => goTo(caseIndex + 1)}>
-                      Next question <ChevronRight aria-hidden />
-                    </Button>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {scoredCount} of {responseIds.length} testimonies scored
-                    </span>
-                    <Button onClick={() => setRevealed(true)}>Unseal the record</Button>
-                  </div>
-                </div>
+                <QuestionStepper current={caseIndex} count={SAMPLE_CASES.length} onGo={goTo}>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {scoredCount} of {responseIds.length} testimonies scored
+                  </span>
+                  <Button onClick={() => setRevealed(true)}>Unseal the record</Button>
+                </QuestionStepper>
               </>
             ) : (
               <div className="space-y-10">
@@ -200,61 +170,24 @@ export default function SamplePage() {
                   {practice?.byConfiguration ? (
                     <>
                     <FindingsChart cohort={practice} parties={SAMPLE_CONFIGURATIONS} />
-                    <div className="overflow-hidden exhibit-panel">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>1 juror × 5 questions (practice)</TableHead>
-                            {SAMPLE_CONFIGURATIONS.map((c) => (
-                              <TableHead key={c.key} className="text-right">
-                                {c.label}
-                              </TableHead>
-                            ))}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {DIMENSIONS.map((d) => (
-                            <TableRow key={d}>
-                              <TableCell>{RUBRIC[d].label}</TableCell>
-                              {SAMPLE_CONFIGURATIONS.map((c) => (
-                                <TableCell key={c.key} className="text-right tabular-nums">
-                                  {formatScore(practice.byConfiguration![c.key].dimensions[d].mean)}
-                                </TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
-                          <TableRow className="bg-slip font-semibold hover:bg-slip">
-                            <TableCell>Overall mean</TableCell>
-                            {SAMPLE_CONFIGURATIONS.map((c) => (
-                              <TableCell key={c.key} className="text-right tabular-nums">
-                                {formatScore(practice.byConfiguration![c.key].overallMean)}
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </div>
+                    <FindingsTable cohort={practice} parties={SAMPLE_CONFIGURATIONS} markHighest={false} />
                     </>
                   ) : (
-                    <p className="rounded-[2px] bg-slip px-5 py-4 text-sm leading-relaxed text-muted-foreground">
+                    <Note className="leading-relaxed">
                       Score every testimony on all three lines (with a note for any 0) to see practice findings. In a real hearing, findings appear only for filed worksheets.
-                    </p>
+                    </Note>
                   )}
                 </section>
 
-                <section aria-labelledby="sample-verdict" className="relative rounded-[2px] bg-white px-6 pt-6 pb-8 ring-1 ring-exhibit-edge sm:px-8">
+                <section aria-labelledby="sample-verdict" className="relative exhibit-panel px-6 pt-6 pb-8 sm:px-8">
                   <h2 id="sample-verdict" className="court-label">
                     Example judgment
                   </h2>
                   <p className="mt-3 font-heading text-2xl leading-snug font-bold">{SAMPLE_VERDICT.outcome}</p>
                   <p className="mt-3 max-w-3xl font-heading leading-relaxed">{SAMPLE_VERDICT.rationale}</p>
                   <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">Limitations: {SAMPLE_VERDICT.limitations}</p>
-                  <div className="mt-8 flex flex-wrap items-end justify-between gap-6">
-                    <div className="min-w-56">
-                      <div className="border-b border-foreground pb-1 font-heading text-xl italic">The judge</div>
-                      <div className="mt-1 text-xs text-muted-foreground">Signature · practice only</div>
-                    </div>
-                    <Stamp kind="entered" detail="ILLUSTRATIVE" />
+                  <div className="mt-8">
+                    <JudgeSignature note="Signature · practice only" stamp={<Stamp kind="entered" detail="ILLUSTRATIVE" />} />
                   </div>
                 </section>
 

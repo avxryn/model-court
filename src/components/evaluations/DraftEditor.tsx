@@ -1,206 +1,27 @@
 /**
- * CaseEditor and ConfigurationEditor: controlled, field-level validation from
- * the shared draft schema (E02). Server validation remains authoritative.
+ * The case's parties (E02): comparison mode, shared or per-party system
+ * instructions, model parties and imported parties. Controlled, with
+ * field-level validation from the shared draft schema; server validation
+ * remains authoritative. Questions live in QuestionsEditor.
  */
 
-import { Plain } from '@/components/common'
 import type { ReactNode } from 'react'
-import { ArrowDown, ArrowUp, Plus, Trash2, Upload } from 'lucide-react'
+import { Plus, Trash2, Upload } from 'lucide-react'
 import { ExhibitSticker } from '@/components/court/CaseFile'
-import { CaseImport } from '@/components/evaluations/CaseImport'
+import { ChoiceCard, ChoiceCardGroup } from '@/components/court/ChoiceCard'
+import { CountedField } from '@/components/evaluations/CountedField'
+import { ImportedPartyFields } from '@/components/evaluations/ImportedPartyFields'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { IMPORT_SOURCE_TYPES, isImported, type CaseInput, type ComparisonMode, type Configuration, type DraftInput, type ImportedConfiguration, type ModelConfiguration, type Provenance, type TranscriptMessage } from '@/domain/contracts'
+import { isImported, type ComparisonMode, type Configuration, type DraftInput, type ImportedConfiguration, type ModelConfiguration } from '@/domain/contracts'
 import { DEFAULT_SYSTEM_PROMPT } from '@/domain/example'
-import { SOURCE_LABELS } from '@/lib/parties'
 import { LIMITS } from '@/domain/limits'
-import { DIMENSIONS, RUBRIC_VERSION, RUBRIC_VERSIONS, RUBRICS, type RubricVersion } from '@/domain/rubric'
-import { codePointLength } from '@/domain/text'
 import type { CatalogView } from '@/lib/dto'
 import { cn } from '@/lib/utils'
 
 export type FieldErrors = Record<string, string>
-
-function TextField({ id, label, value, onChange, error, max, multiline, rows = 3, hint }: { id: string; label: string; value: string; onChange: (v: string) => void; error?: string; max: number; multiline?: boolean; rows?: number; hint?: string }) {
-  const count = codePointLength(value)
-  const describedBy = `${id}-help`
-  const props = { id, value, 'aria-invalid': error ? true : undefined, 'aria-describedby': describedBy }
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      {multiline ? <Textarea {...props} rows={rows} onChange={(e) => onChange(e.target.value)} /> : <Input {...props} onChange={(e) => onChange(e.target.value)} />}
-      <p id={describedBy} className={cn('flex justify-between gap-4 text-xs', error ? 'text-destructive' : 'text-muted-foreground')}>
-        <span>{error ?? hint}</span>
-        <span className={cn('tabular-nums', count > max && 'text-destructive')}>
-          {count.toLocaleString()}/{max.toLocaleString()}
-        </span>
-      </p>
-    </div>
-  )
-}
-
-export function CasesEditor({ cases, onChange, errors, newId, disabled }: { cases: CaseInput[]; onChange: (next: CaseInput[]) => void; errors: FieldErrors; newId: () => string; disabled?: boolean }) {
-  const update = (index: number, patch: Partial<CaseInput>) => onChange(cases.map((c, i) => (i === index ? { ...c, ...patch } : c)))
-  const move = (index: number, delta: number) => {
-    const next = [...cases]
-    const [item] = next.splice(index, 1)
-    next.splice(index + delta, 0, item)
-    onChange(next)
-  }
-  return (
-    <fieldset disabled={disabled} className="space-y-4">
-      <legend className="sr-only">Questions</legend>
-      <CaseImport currentCount={cases.length} newId={newId} onImport={onChange} disabled={disabled} />
-      {cases.map((testCase, index) => (
-        <Card key={testCase.key} className="rounded-[2px] bg-white ring-exhibit-edge">
-          <CardHeader>
-            <CardTitle className="court-label">
-              Question presented <span className="typewriter font-normal tracking-normal">· Q{index + 1}</span>
-            </CardTitle>
-            <CardAction className="flex gap-1">
-              <Button size="icon-sm" variant="ghost" aria-label={`Move question ${index + 1} up`} disabled={index === 0} onClick={() => move(index, -1)}>
-                <ArrowUp aria-hidden />
-              </Button>
-              <Button size="icon-sm" variant="ghost" aria-label={`Move question ${index + 1} down`} disabled={index === cases.length - 1} onClick={() => move(index, 1)}>
-                <ArrowDown aria-hidden />
-              </Button>
-              <Button size="icon-sm" variant="ghost" aria-label={`Remove question ${index + 1}`} disabled={cases.length <= LIMITS.minCases} onClick={() => onChange(cases.filter((_, i) => i !== index))}>
-                <Trash2 aria-hidden />
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <TextField id={`case-${testCase.key}-title`} label="Short title" value={testCase.title} max={LIMITS.caseTitle.max} error={errors[`cases.${index}.title`]} onChange={(title) => update(index, { title })} />
-            </div>
-            <div className="md:col-span-2">
-              <ConversationEditor caseKey={testCase.key} messages={testCase.messages ?? []} error={errors[`cases.${index}.messages`]} onChange={(messages) => update(index, { messages: messages.length > 0 ? messages : undefined })} />
-            </div>
-            <TextField id={`case-${testCase.key}-input`} label="The question (sent to the models)" multiline rows={4} value={testCase.input} max={LIMITS.caseInput.max} error={errors[`cases.${index}.input`]} onChange={(input) => update(index, { input })} />
-            <TextField
-              id={`case-${testCase.key}-reference`}
-              label="Exhibit: reference evidence (sent to the models)"
-              multiline
-              rows={4}
-              value={testCase.reference}
-              max={LIMITS.caseReference.max}
-              hint="May be empty to test abstention."
-              error={errors[`cases.${index}.reference`]}
-              onChange={(reference) => update(index, { reference })}
-            />
-            <div className="md:col-span-2">
-              <TextField
-                id={`case-${testCase.key}-expected`}
-                label="Jury instructions: what a good answer does (never sent to the models)"
-                multiline
-                rows={2}
-                value={testCase.expectedBehavior}
-                max={LIMITS.caseExpectedBehavior.max}
-                error={errors[`cases.${index}.expectedBehavior`]}
-                onChange={(expectedBehavior) => update(index, { expectedBehavior })}
-              />
-            </div>
-            <div className="md:col-span-2 md:max-w-xs">
-              <TextField
-                id={`case-${testCase.key}-language`}
-                label="Language (optional)"
-                value={testCase.language ?? ''}
-                max={LIMITS.caseLanguage.max}
-                hint="For example en or Spanish. Tag two or more languages to see findings by language."
-                error={errors[`cases.${index}.language`]}
-                onChange={(language) => update(index, { language: language.trim() === '' ? undefined : language })}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-      <Button
-        variant="outline"
-        disabled={cases.length >= LIMITS.maxCases}
-        onClick={() => onChange([...cases, { key: newId(), title: `Question ${cases.length + 1}`, input: '', reference: '', expectedBehavior: '' }])}
-      >
-        <Plus aria-hidden /> Add a question ({cases.length}/{LIMITS.maxCases})
-      </Button>
-    </fieldset>
-  )
-}
-
-/**
- * The conversation so far for one question (D-39): earlier exchanges of a user
- * turn and an assistant reply. The question field below stays the user's next message.
- */
-function ConversationEditor({ caseKey, messages, error, onChange }: { caseKey: string; messages: TranscriptMessage[]; error?: string; onChange: (next: TranscriptMessage[]) => void }) {
-  const exchanges = messages.length / 2
-  const canAdd = messages.length + 2 <= LIMITS.historyMessages
-  const set = (index: number, content: string) => onChange(messages.map((message, i) => (i === index ? { ...message, content } : message)))
-  return (
-    <div className="space-y-3 rounded-[2px] border border-dashed border-slip-edge bg-slip/60 px-4 py-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-sm font-medium">
-          Conversation so far <span className="font-normal text-muted-foreground">(optional)</span>
-        </div>
-        <span className="text-xs text-muted-foreground">Every party sees the same earlier turns and writes the next reply.</span>
-      </div>
-      {messages.map((message, i) => (
-        <div key={i} className="space-y-1">
-          <Label htmlFor={`case-${caseKey}-msg-${i}`} className={cn('typewriter text-xs font-bold', message.role === 'user' ? 'text-stamp' : 'text-primary')}>
-            {message.role === 'user' ? 'USER' : 'ASSISTANT'} · TURN {Math.floor(i / 2) + 1}
-          </Label>
-          <Textarea id={`case-${caseKey}-msg-${i}`} rows={2} className="bg-white" value={message.content} onChange={(e) => set(i, e.target.value)} />
-        </div>
-      ))}
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" disabled={!canAdd} onClick={() => onChange([...messages, { role: 'user', content: '' }, { role: 'assistant', content: '' }])}>
-          <Plus aria-hidden /> Add an earlier exchange
-        </Button>
-        {exchanges > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => onChange(messages.slice(0, -2))}>
-            Remove the last exchange
-          </Button>
-        )}
-      </div>
-      {exchanges > 0 && <p className="text-xs text-muted-foreground">The question below is the user’s next message after this conversation. A conversation needs a model that has passed a live multi-message check.</p>}
-    </div>
-  )
-}
-
-/** Choose the jury's rubric (D-35). Hearings keep the version they started with. */
-export function RubricPicker({ value, onChange, disabled }: { value: RubricVersion | undefined; onChange: (next: RubricVersion) => void; disabled?: boolean }) {
-  const current = value ?? RUBRIC_VERSION
-  return (
-    <fieldset disabled={disabled} className="mb-6 space-y-2">
-      <legend id="rubric-legend" className="court-label mb-2">
-        The jury’s rubric{' '}
-        <Plain>what jurors score; each line is 0–2</Plain>
-      </legend>
-      <RadioGroup aria-labelledby="rubric-legend" value={current} onValueChange={(v) => onChange(v as RubricVersion)} className="grid gap-2 md:grid-cols-3">
-        {RUBRIC_VERSIONS.map((version) => {
-          const rubric = RUBRICS[version]
-          return (
-            <Label key={version} htmlFor={`rubric-${version}`} className={cn('flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 font-normal transition-colors duration-150', current === version ? 'border-foreground bg-slip' : 'border-paper-edge bg-white hover:bg-slip/60')}>
-              <RadioGroupItem id={`rubric-${version}`} value={version} className="mt-0.5" aria-labelledby={`rubric-${version}-text`} />
-              <span id={`rubric-${version}-text`} className="leading-snug">
-                <span className="block font-medium text-foreground">{rubric.name}</span>
-                <span className="block text-xs text-muted-foreground">{DIMENSIONS.map((d) => rubric.lines[d].label).join(' · ')}</span>
-              </span>
-            </Label>
-          )
-        })}
-      </RadioGroup>
-    </fieldset>
-  )
-}
 
 export function ConfigurationsEditor({
   draft,
@@ -257,40 +78,19 @@ export function ConfigurationsEditor({
       <legend className="sr-only">Parties</legend>
       <div className="space-y-2">
         <Label id="mode-label">Comparison mode</Label>
-        <RadioGroup aria-labelledby="mode-label" value={draft.comparisonMode} onValueChange={(value) => setMode(value as ComparisonMode)} className="grid gap-2 sm:grid-cols-2">
-          {(
-            [
-              ['model', 'Model comparison', hasImported ? 'Not available with an imported party.' : 'Same instructions; only the model differs.'],
-              ['configuration', 'Configuration comparison', 'Instructions may differ too, and imported answers are allowed. Not an isolated test of model quality.'],
-            ] as const
-          ).map(([value, title, description]) => (
-            <Label
-              key={value}
-              htmlFor={`mode-${value}`}
-              className={cn(
-                'flex cursor-pointer items-start gap-3 rounded-md border px-3.5 py-3 font-normal transition-colors duration-150',
-                draft.comparisonMode === value ? 'border-foreground bg-slip' : 'border-paper-edge bg-white hover:bg-slip/60',
-                // Unavailable: no hover, muted title, but the reason stays readable (no opacity fade).
-                value === 'model' && hasImported && 'cursor-not-allowed border-paper-rule bg-transparent text-muted-foreground hover:bg-transparent',
-              )}
-            >
-              <RadioGroupItem id={`mode-${value}`} value={value} className="mt-0.5" disabled={value === 'model' && hasImported} aria-labelledby={`mode-${value}-text`} />
-              <span id={`mode-${value}-text`}>
-                <span className="block text-sm font-medium">{title}</span>
-                <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{description}</span>
-              </span>
-            </Label>
-          ))}
-        </RadioGroup>
+        <ChoiceCardGroup aria-labelledby="mode-label" value={draft.comparisonMode} onValueChange={(value) => setMode(value as ComparisonMode)} className="sm:grid-cols-2">
+          <ChoiceCard id="mode-model" value="model" disabled={hasImported} title="Model comparison" description={hasImported ? 'Not available with an imported party.' : 'Same instructions; only the model differs.'} />
+          <ChoiceCard id="mode-configuration" value="configuration" title="Configuration comparison" description="Instructions may differ too, and imported answers are allowed. Not an isolated test of model quality." />
+        </ChoiceCardGroup>
       </div>
 
       {draft.comparisonMode === 'model' && modelParties.length > 0 && (
-        <TextField id="shared-system-prompt" label="System instructions (shared, sent to every party)" multiline rows={4} value={sharedPrompt} max={LIMITS.systemPrompt.max} error={errors['configurations.0.systemPrompt']} onChange={setSharedPrompt} />
+        <CountedField id="shared-system-prompt" label="System instructions (shared, sent to every party)" multiline rows={4} value={sharedPrompt} max={LIMITS.systemPrompt.max} error={errors['configurations.0.systemPrompt']} onChange={setSharedPrompt} />
       )}
 
       <div className={cn('grid items-start gap-4 md:grid-cols-2', draft.configurations.length > 2 && 'xl:grid-cols-3')}>
         {draft.configurations.map((configuration, index) => (
-          <Card key={configuration.key} className="rounded-[2px] bg-white ring-exhibit-edge">
+          <Card key={configuration.key} className="rounded-[2px] bg-exhibit ring-exhibit-edge">
             <CardHeader>
               <CardTitle className="court-label">
                 Party <span className="typewriter font-normal tracking-normal">{index + 1}</span>
@@ -305,7 +105,7 @@ export function ConfigurationsEditor({
               )}
             </CardHeader>
             <CardContent className="space-y-4">
-              <TextField id={`cfg-${configuration.key}-label`} label="Name (sealed from jurors until you unseal)" value={configuration.label} max={LIMITS.configurationLabel.max} error={errors[`configurations.${index}.label`]} onChange={(label) => replaceParty(index, { ...configuration, label })} />
+              <CountedField id={`cfg-${configuration.key}-label`} label="Name (sealed from jurors until you unseal)" value={configuration.label} max={LIMITS.configurationLabel.max} error={errors[`configurations.${index}.label`]} onChange={(label) => replaceParty(index, { ...configuration, label })} />
               {isImported(configuration) ? (
                 <ImportedPartyFields party={configuration} index={index} errors={errors} onChange={(party) => replaceParty(index, party)} renderAnswers={renderImportedAnswers} />
               ) : (
@@ -328,7 +128,7 @@ export function ConfigurationsEditor({
                     <p className="text-xs text-muted-foreground">Output limit: {LIMITS.maxOutputTokens} tokens. No tools, browsing, or streaming.</p>
                   </div>
                   {draft.comparisonMode === 'configuration' && (
-                    <TextField
+                    <CountedField
                       id={`cfg-${configuration.key}-prompt`}
                       label="System instructions (sent to this model)"
                       multiline
@@ -357,64 +157,5 @@ export function ConfigurationsEditor({
         </div>
       )}
     </fieldset>
-  )
-}
-
-function ImportedPartyFields({ party, index, errors, onChange, renderAnswers }: { party: ImportedConfiguration; index: number; errors: FieldErrors; onChange: (next: ImportedConfiguration) => void; renderAnswers?: (party: ImportedConfiguration) => ReactNode }) {
-  const set = (patch: Partial<Provenance>) => onChange({ ...party, provenance: { ...party.provenance, ...patch } })
-  const base = `configurations.${index}.provenance`
-  return (
-    <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor={`cfg-${party.key}-source`}>Where these answers came from</Label>
-        <Select value={party.provenance.sourceType} onValueChange={(value) => set({ sourceType: value as Provenance['sourceType'] })} items={IMPORT_SOURCE_TYPES.map((value) => ({ value, label: SOURCE_LABELS[value] }))}>
-          <SelectTrigger id={`cfg-${party.key}-source`} className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {IMPORT_SOURCE_TYPES.map((value) => (
-              <SelectItem key={value} value={value}>
-                {SOURCE_LABELS[value]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <TextField
-        id={`cfg-${party.key}-description`}
-        label="Describe the source (shown after unsealing)"
-        multiline
-        rows={2}
-        value={party.provenance.description}
-        max={LIMITS.provenanceDescription.max}
-        hint="For example: written by the support lead in November."
-        error={errors[`${base}.description`]}
-        onChange={(description) => set({ description })}
-      />
-      <div className="space-y-1.5 sm:max-w-xs">
-        <Label htmlFor={`cfg-${party.key}-collected`}>Collected on (optional)</Label>
-        <Input
-          id={`cfg-${party.key}-collected`}
-          type="date"
-          value={party.provenance.collectedOn ?? ''}
-          onChange={(e) => set({ collectedOn: e.target.value || undefined })}
-          aria-invalid={errors[`${base}.collectedOn`] ? true : undefined}
-          aria-describedby={errors[`${base}.collectedOn`] ? `cfg-${party.key}-collected-help` : undefined}
-        />
-        {errors[`${base}.collectedOn`] && (
-          <p id={`cfg-${party.key}-collected-help`} className="text-xs text-destructive">
-            {errors[`${base}.collectedOn`]}
-          </p>
-        )}
-      </div>
-      <div className="flex items-start gap-3">
-        <Checkbox id={`cfg-${party.key}-redacted`} checked={party.provenance.redacted} onCheckedChange={(checked) => set({ redacted: checked === true })} />
-        <Label htmlFor={`cfg-${party.key}-redacted`} className="flex-col items-start gap-0.5 font-normal leading-snug">
-          I removed names, emails, and other details that could reveal the source
-          <span className="text-xs text-muted-foreground">The record says the answers were redacted.</span>
-        </Label>
-      </div>
-      {renderAnswers?.(party)}
-    </div>
   )
 }

@@ -89,7 +89,7 @@ export function ImportedAnswers({
                 <Label htmlFor={id} className="font-heading">
                   Q{index + 1}: {testCase.title}
                 </Label>
-                <Textarea id={id} rows={4} className="bg-white font-heading" value={value} aria-describedby={`${id}-help`} onChange={(e) => setTexts((t) => ({ ...t, [testCase.key]: e.target.value }))} />
+                <Textarea id={id} rows={4} className="bg-exhibit font-heading" value={value} aria-describedby={`${id}-help`} onChange={(e) => setTexts((t) => ({ ...t, [testCase.key]: e.target.value }))} />
                 <div id={`${id}-help`} className="space-y-0.5 text-xs">
                   <div className={cn('tabular-nums', codePointLength(value) > LIMITS.importedText.max ? 'text-destructive' : 'text-muted-foreground')}>
                     {codePointLength(value).toLocaleString()}/{LIMITS.importedText.max.toLocaleString()}

@@ -1,0 +1,115 @@
+/**
+ * The case's questions (E02): one card per question with field-level
+ * validation from the shared draft schema. The optional earlier
+ * conversation and language fold away until they are used.
+ */
+
+import { useState } from 'react'
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
+import { Fold } from '@/components/court/Fold'
+import { CaseImport } from '@/components/evaluations/CaseImport'
+import { ConversationEditor } from '@/components/evaluations/ConversationEditor'
+import { CountedField } from '@/components/evaluations/CountedField'
+import type { FieldErrors } from '@/components/evaluations/DraftEditor'
+import { Button } from '@/components/ui/button'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { CaseInput } from '@/domain/contracts'
+import { LIMITS } from '@/domain/limits'
+import { plural } from '@/lib/format'
+
+export function QuestionsEditor({ cases, onChange, errors, newId, disabled }: { cases: CaseInput[]; onChange: (next: CaseInput[]) => void; errors: FieldErrors; newId: () => string; disabled?: boolean }) {
+  const update = (index: number, patch: Partial<CaseInput>) => onChange(cases.map((c, i) => (i === index ? { ...c, ...patch } : c)))
+  const move = (index: number, delta: number) => {
+    const next = [...cases]
+    const [item] = next.splice(index, 1)
+    next.splice(index + delta, 0, item)
+    onChange(next)
+  }
+  return (
+    <fieldset disabled={disabled} className="space-y-4">
+      <legend className="sr-only">Questions</legend>
+      <CaseImport currentCount={cases.length} newId={newId} onImport={onChange} disabled={disabled} />
+      {cases.map((testCase, index) => (
+        <Card key={testCase.key} className="rounded-[2px] bg-exhibit ring-exhibit-edge">
+          <CardHeader>
+            <CardTitle className="court-label">
+              Question presented <span className="typewriter font-normal tracking-normal">· Q{index + 1}</span>
+            </CardTitle>
+            <CardAction className="flex gap-1">
+              <Button size="icon-sm" variant="ghost" aria-label={`Move question ${index + 1} up`} disabled={index === 0} onClick={() => move(index, -1)}>
+                <ArrowUp aria-hidden />
+              </Button>
+              <Button size="icon-sm" variant="ghost" aria-label={`Move question ${index + 1} down`} disabled={index === cases.length - 1} onClick={() => move(index, 1)}>
+                <ArrowDown aria-hidden />
+              </Button>
+              <Button size="icon-sm" variant="ghost" aria-label={`Remove question ${index + 1}`} disabled={cases.length <= LIMITS.minCases} onClick={() => onChange(cases.filter((_, i) => i !== index))}>
+                <Trash2 aria-hidden />
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <QuestionFields testCase={testCase} index={index} errors={errors} onChange={(patch) => update(index, patch)} />
+          </CardContent>
+        </Card>
+      ))}
+      <Button
+        variant="outline"
+        disabled={cases.length >= LIMITS.maxCases}
+        onClick={() => onChange([...cases, { key: newId(), title: `Question ${cases.length + 1}`, input: '', reference: '', expectedBehavior: '' }])}
+      >
+        <Plus aria-hidden /> Add a question ({cases.length}/{LIMITS.maxCases})
+      </Button>
+    </fieldset>
+  )
+}
+
+function QuestionFields({ testCase, index, errors, onChange }: { testCase: CaseInput; index: number; errors: FieldErrors; onChange: (patch: Partial<CaseInput>) => void }) {
+  const id = (field: string) => `case-${testCase.key}-${field}`
+  const error = (field: string) => errors[`cases.${index}.${field}`]
+  const messages = testCase.messages ?? []
+  const extrasError = error('messages') ?? error('language')
+  // Starts open when either optional part is in use; an error always opens it.
+  const [open, setOpen] = useState(messages.length > 0 || !!testCase.language)
+  const extras = [messages.length > 0 && plural(messages.length / 2, 'earlier exchange'), testCase.language && `language ${testCase.language}`].filter(Boolean).join(' · ')
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <CountedField className="md:col-span-2" id={id('title')} label="Short title" value={testCase.title} max={LIMITS.caseTitle.max} error={error('title')} onChange={(title) => onChange({ title })} />
+      <CountedField id={id('input')} label="The question (sent to the models)" multiline rows={4} value={testCase.input} max={LIMITS.caseInput.max} error={error('input')} onChange={(input) => onChange({ input })} />
+      <CountedField id={id('reference')} label="Exhibit: reference evidence (sent to the models)" multiline rows={4} value={testCase.reference} max={LIMITS.caseReference.max} hint="May be empty to test abstention." error={error('reference')} onChange={(reference) => onChange({ reference })} />
+      <CountedField
+        className="md:col-span-2"
+        id={id('expected')}
+        label="Jury instructions: what a good answer does (never sent to the models)"
+        multiline
+        rows={2}
+        value={testCase.expectedBehavior}
+        max={LIMITS.caseExpectedBehavior.max}
+        error={error('expectedBehavior')}
+        onChange={(expectedBehavior) => onChange({ expectedBehavior })}
+      />
+      <Fold
+        className="md:col-span-2"
+        open={open || !!extrasError}
+        onOpenChange={setOpen}
+        summary={
+          <span>
+            Earlier conversation and language <span className="text-xs">(optional{extras ? `: ${extras}` : ''})</span>
+          </span>
+        }
+        contentClassName="space-y-4"
+      >
+        <ConversationEditor caseKey={testCase.key} messages={messages} error={error('messages')} onChange={(next) => onChange({ messages: next.length > 0 ? next : undefined })} />
+        <CountedField
+          className="md:max-w-xs"
+          id={id('language')}
+          label="Language"
+          value={testCase.language ?? ''}
+          max={LIMITS.caseLanguage.max}
+          hint="For example en or Spanish. Tag two or more languages to see findings by language."
+          error={error('language')}
+          onChange={(language) => onChange({ language: language.trim() === '' ? undefined : language })}
+        />
+      </Fold>
+    </div>
+  )
+}

@@ -1,14 +1,14 @@
 /**
- * The special master on the record page (D-40), shown to the judge only.
+ * The special master (D-40), on its own judge-only divider (D-46).
  * Calibration against the jury comes first; the grader's own scores are
  * collapsed below it. Advisory: never part of the findings or the judgment.
  */
 
-import { Plain } from '@/components/common'
 import { useRef, useState } from 'react'
 import { AlertTriangle, Bot } from 'lucide-react'
 import { toast } from 'sonner'
-import { SheetSection, Term } from '@/components/court/CaseFile'
+import { Term } from '@/components/court/CaseFile'
+import { Fold } from '@/components/court/Fold'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -36,24 +36,13 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
   const plannedCalls = results.eligibleCaseKeys.length * results.configurations.length
 
   return (
-    <SheetSection
-      id="special-master"
-      label={
-        <>
-          Special master{' '}
-          <Plain>an advisory AI grader, visible only to you</Plain>
-        </>
-      }
-    >
-      <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        An AI model scores each testimony on the same rubric, one testimony at a time, without knowing which party gave it. It uses your own API key. Its scores are advisory: they never change the jury’s findings or your judgment. Check how often it agrees with the jury before relying on it.
-      </p>
+    <div className="px-5 pt-6 pb-10 sm:px-8">
       {view.data && runs.length < view.data.maxRuns && !active && (
         <StartForm runId={results.runId} catalog={catalog.data} keys={credentials.data?.items ?? []} plannedCalls={plannedCalls} partyProviders={results.configurations.flatMap((c) => (c.provider ? [c.provider] : []))} onStarted={() => void view.reload()} />
       )}
       <div className="mt-6 space-y-8">
         {[...runs].reverse().map((run) => (
-          <article key={run.id} className="rounded-[2px] bg-white px-5 py-4 ring-1 ring-exhibit-edge">
+          <article key={run.id} className="exhibit-panel px-5 py-4">
             <header className="flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="flex items-center gap-2 font-heading text-lg font-bold">
                 <Bot aria-hidden className="size-4" /> {PROVIDER_NAMES[run.model.provider as ProviderId]} <span className="typewriter text-sm font-normal">{run.model.modelId}</span>
@@ -123,9 +112,8 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
                 </p>
                 <p className="text-xs text-muted-foreground">{run.calibration.caveat}</p>
                 {run.calibration.disagreements.length > 0 && (
-                  <details>
-                    <summary className="cursor-pointer py-1 text-sm text-muted-foreground hover:text-foreground">Where the grader falls outside the jury’s range ({run.calibration.disagreements.length})</summary>
-                    <ul className="mt-2 space-y-1.5 text-sm">
+                  <Fold summary={<>Where the grader falls outside the jury’s range ({run.calibration.disagreements.length})</>}>
+                    <ul className="space-y-1.5 text-sm">
                       {run.calibration.disagreements.map((d, i) => (
                         <li key={i} className="rounded-[2px] bg-slip px-3 py-2">
                           <span className="font-medium">{results.cases.find((c) => c.key === d.caseKey)?.title}</span> · {labels[d.configurationKey]} · {lines[d.dimension].label}: grader {d.grader}, jury {d.juryMin === d.juryMax ? d.juryMin : `${d.juryMin}–${d.juryMax}`}
@@ -133,15 +121,14 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
                         </li>
                       ))}
                     </ul>
-                  </details>
+                  </Fold>
                 )}
               </div>
             )}
 
             {run.counts.succeeded > 0 && (
-              <details className="mt-4">
-                <summary className="cursor-pointer py-1 text-sm text-muted-foreground hover:text-foreground">The special master’s own scores (advisory)</summary>
-                <div className="mt-2 overflow-x-auto">
+              <Fold className="mt-4" summary={<>The special master’s own scores (advisory)</>}>
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -172,7 +159,7 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
                     </TableBody>
                   </Table>
                 </div>
-              </details>
+              </Fold>
             )}
             <p className="mt-3 text-xs break-all text-muted-foreground">
               Grader settings fingerprint <span className="typewriter">{run.configHash.slice(0, 16)}</span>
@@ -180,7 +167,7 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
           </article>
         ))}
       </div>
-    </SheetSection>
+    </div>
   )
 }
 
@@ -231,7 +218,7 @@ function StartForm({ runId, catalog, keys, plannedCalls, partyProviders, onStart
       <div className="space-y-1.5 sm:max-w-sm">
         <Label htmlFor="special-master-model">Grader model</Label>
         <Select value={modelKey || null} onValueChange={(value) => setModelKey(String(value))} items={models.map((m) => ({ value: m.key, label: m.label }))}>
-          <SelectTrigger id="special-master-model" className="w-full bg-white">
+          <SelectTrigger id="special-master-model" className="w-full bg-exhibit">
             <SelectValue placeholder="Choose a model" />
           </SelectTrigger>
           <SelectContent>

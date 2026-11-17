@@ -2,20 +2,24 @@ import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Folder, FolderOpen, Plus, Scale } from 'lucide-react'
 import { toast } from 'sonner'
-import { EmptyState as EmptyPanel, ErrorPanel, formatTime, Page, PageHeader, PageSkeleton, StaleNotice, StatusBadge } from '@/components/common'
+import { EmptyState as EmptyPanel } from '@/components/feedback/EmptyState'
+import { ErrorPanel, StaleNotice } from '@/components/feedback/ErrorPanel'
+import { formatTime } from '@/lib/format'
+import { Page, PageHeader } from '@/components/layout/Page'
+import { PageSkeleton } from '@/components/feedback/PageSkeleton'
+import { StatusBadge } from '@/components/status/StatusBadge'
 import { DocketNumber, Sheet, Term } from '@/components/court/CaseFile'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { ChoiceCard, ChoiceCardGroup } from '@/components/court/ChoiceCard'
 import { Textarea } from '@/components/ui/textarea'
 import type { DraftInput } from '@/domain/contracts'
 import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
 import { docketNumber } from '@/lib/court'
 import type { EvaluationSummary, OwnerEvaluationView } from '@/lib/dto'
 import { CASE_TEMPLATES } from '@/lib/templates'
-import { cn } from '@/lib/utils'
 import { useApi } from '@/lib/use-api'
 
 export default function EvaluationsPage() {
@@ -172,17 +176,11 @@ function CreateEvaluationDialog() {
         >
           <fieldset className="space-y-2">
             <legend id="template-legend" className="mb-2 text-sm font-medium">Template</legend>
-            <RadioGroup aria-labelledby="template-legend" value={templateId} onValueChange={(v) => pickTemplate(String(v))} className="grid gap-2">
+            <ChoiceCardGroup aria-labelledby="template-legend" value={templateId} onValueChange={pickTemplate}>
               {CASE_TEMPLATES.map((t) => (
-                <Label key={t.id} htmlFor={`template-${t.id}`} className={cn('flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 font-normal transition-colors duration-150', templateId === t.id ? 'border-foreground bg-slip' : 'border-paper-edge bg-white hover:bg-slip/60')}>
-                  <RadioGroupItem id={`template-${t.id}`} value={t.id} className="mt-0.5" aria-labelledby={`template-${t.id}-text`} />
-                  <span id={`template-${t.id}-text`} className="leading-snug">
-                    <span className="block font-medium text-foreground">{t.name}</span>
-                    <span className="block text-xs text-muted-foreground">{t.useCase}</span>
-                  </span>
-                </Label>
+                <ChoiceCard key={t.id} id={`template-${t.id}`} value={t.id} title={t.name} description={t.useCase} />
               ))}
-            </RadioGroup>
+            </ChoiceCardGroup>
           </fieldset>
           <div className="space-y-1.5">
             <Label htmlFor="eval-title">Case title</Label>

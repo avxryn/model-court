@@ -4,7 +4,7 @@
  * object. Model text renders as plain text in its own scrollable, labelled region.
  */
 
-import { Plain } from '@/components/common'
+import { Plain } from '@/components/court/Paper'
 import type { ReactNode } from 'react'
 import { ConversationSoFar, Exhibit, JuryInstructions, Term, Testimony } from '@/components/court/CaseFile'
 

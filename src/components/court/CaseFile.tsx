@@ -4,7 +4,7 @@
  * rubber stamps. Presentation only; every caller passes anonymous data.
  */
 
-import { Plain } from '@/components/common'
+import { Plain } from '@/components/court/Paper'
 import { useEffect, useState, type ReactNode } from 'react'
 import { CASE_STEPS, TERMS, type CaseStep, type TermKey } from '@/lib/court'
 import { cn } from '@/lib/utils'
@@ -152,7 +152,7 @@ export function ExhibitSticker({ children, className }: { children: ReactNode; c
 /** A stapled exhibit page with a yellow sticker. */
 export function Exhibit({ number, children, plain = true }: { number: number | string; children: ReactNode; plain?: boolean }) {
   return (
-    <section aria-label={`Exhibit ${number}`} className="relative rounded-[2px] bg-white px-5 pt-7 pb-5 ring-1 ring-exhibit-edge shadow-[0_6px_14px_-6px_rgb(60_45_15/0.18)]">
+    <section aria-label={`Exhibit ${number}`} className="relative exhibit-panel px-5 pt-7 pb-5 shadow-exhibit">
       <span aria-hidden className="absolute -top-1.5 left-6 h-3 w-7 rounded-t-[3px] border-2 border-b-0 border-staple" />
       <ExhibitSticker className="absolute -top-3 right-4 rotate-3">EXHIBIT {number}</ExhibitSticker>
       {plain && <div className="mb-1.5 text-xs text-muted-foreground">{TERMS.exhibit.plain}</div>}

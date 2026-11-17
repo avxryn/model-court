@@ -150,7 +150,7 @@ export default function JoinPage() {
                 <div className="space-y-1.5">
                   <p>Save this link to continue on another device. It works once and is shown only once; anyone with it can act as you.</p>
                   <div className="flex gap-2">
-                    <Input readOnly value={guest.resumeLink} aria-label="Resume link" className="typewriter bg-white" onFocus={(e) => e.currentTarget.select()} />
+                    <Input readOnly value={guest.resumeLink} aria-label="Resume link" className="typewriter bg-exhibit" onFocus={(e) => e.currentTarget.select()} />
                     <Button variant="outline" onClick={() => void navigator.clipboard.writeText(guest.resumeLink ?? '').then(() => toast.success('Link copied'), () => toast.error('Copy failed — select the link and copy it manually.'))}>
                       Copy
                     </Button>

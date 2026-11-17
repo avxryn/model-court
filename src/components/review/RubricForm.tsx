@@ -4,7 +4,7 @@
  * rubric definition shared with the server scorer (E02).
  */
 
-import { Plain } from '@/components/common'
+import { Plain } from '@/components/court/Paper'
 import { useId } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { FieldDescription, FieldLegend, FieldSet } from '@/components/ui/field'
@@ -92,7 +92,7 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
           aria-describedby={`${id}-note-help`}
           onChange={(event) => onChange({ ...rating, note: event.target.value })}
           placeholder="What in the testimony supports your scores?"
-          className="bg-white font-heading"
+          className="bg-exhibit font-heading"
           rows={3}
         />
         <FieldDescription id={`${id}-note-help`} className={cn('text-xs', noteInvalid && 'text-destructive')}>

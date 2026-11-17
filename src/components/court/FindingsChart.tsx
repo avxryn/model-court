@@ -15,7 +15,7 @@ export function FindingsChart({ cohort, parties, rubricVersion }: { cohort: Coho
   if (!by) return null
   const rows = [...DIMENSIONS.map((d) => ({ key: d, label: RUBRIC[d].label, value: (k: string) => by[k].dimensions[d].mean })), { key: 'overall', label: 'Overall mean', value: (k: string) => by[k].overallMean }]
   return (
-    <figure className="mb-4 rounded-[2px] bg-white px-5 py-4 ring-1 ring-exhibit-edge">
+    <figure className="mb-4 exhibit-panel px-5 py-4">
       <div aria-hidden className="space-y-4">
         {rows.map((row) => (
           <div key={row.key}>

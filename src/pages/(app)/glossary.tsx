@@ -4,7 +4,8 @@
  */
 
 import { Link } from 'react-router-dom'
-import { Page, PageHeader, Panel } from '@/components/common'
+import { Page, PageHeader } from '@/components/layout/Page'
+import { Panel } from '@/components/court/Paper'
 import { Sheet } from '@/components/court/CaseFile'
 import { Button } from '@/components/ui/button'
 import { CASE_STEPS, TERMS, type TermKey } from '@/lib/court'
