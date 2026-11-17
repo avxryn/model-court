@@ -151,9 +151,20 @@ export async function getEvaluation(deps: Deps, userId: string, evaluationId: st
   }
 }
 
+/** F24: the schema allows up to three configurations; the deployment may cap lower. */
+export function configurationCapError(deps: Deps, count: number): ApiError | null {
+  const cap = deps.config.maxConfigurationsPerRun
+  if (count <= cap) return null
+  return new ApiError(422, 'VALIDATION_FAILED', `This deployment allows at most ${cap} configurations per comparison.`, {
+    fields: [{ path: 'configurations', message: `At most ${cap} configurations` }],
+  })
+}
+
 export async function saveDraft(deps: Deps, userId: string, evaluationId: string, input: DraftInput, ifMatch: number) {
   const access = await loadEvaluationAccess(deps.db, evaluationId, userId)
   requireOwner(access)
+  const capError = configurationCapError(deps, input.configurations.length)
+  if (capError) throw capError
   const draft: Draft = { schemaVersion: 1, ...input }
   const now = deps.now()
   const result = await deps.db

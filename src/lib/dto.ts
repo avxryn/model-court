@@ -27,5 +27,5 @@ export interface CatalogView {
   credentialWritesEnabled: boolean
   providers: Array<{ id: 'openai' | 'anthropic'; name: string }>
   models: Array<{ key: string; provider: 'openai' | 'anthropic'; modelId: string; label: string; enabled: boolean; verifiedAt: string | null }>
-  limits: { maxCases: number; configurations: number; maxOutputTokens: number; maxAttemptsPerGeneration: number; credentialTtlDays: number; dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number }
+  limits: { maxCases: number; configurations: number; minConfigurations: number; maxOutputTokens: number; maxAttemptsPerGeneration: number; credentialTtlDays: number; dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number }
 }

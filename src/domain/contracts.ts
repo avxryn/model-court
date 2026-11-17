@@ -64,7 +64,8 @@ export const draftInputSchema = z
       .refine(uniqueKeys, 'Case keys must be unique'),
     configurations: z
       .array(configurationSchema)
-      .length(LIMITS.configurationsPerRun, `Exactly ${LIMITS.configurationsPerRun} configurations`)
+      .min(LIMITS.minConfigurationsPerRun, `Add at least ${LIMITS.minConfigurationsPerRun} configurations`)
+      .max(LIMITS.maxConfigurationsPerRun, `At most ${LIMITS.maxConfigurationsPerRun} configurations`)
       .refine(uniqueKeys, 'Configuration keys must be unique'),
   })
   .refine((draft) => utf8ByteLength(JSON.stringify(draft)) <= LIMITS.draftJsonBytes, {
@@ -94,7 +95,7 @@ export const startRunSchema = z.strictObject({
 })
 
 export const retrySchema = z.strictObject({
-  generationIds: z.array(uuid).min(1).max(LIMITS.maxCases * LIMITS.configurationsPerRun),
+  generationIds: z.array(uuid).min(1).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun),
   acknowledgePossiblePriorCharge: z.literal(true),
 })
 
@@ -129,7 +130,7 @@ export const draftRatingSchema = z.strictObject({
 export type DraftRating = z.infer<typeof draftRatingSchema>
 
 export const saveRatingsSchema = z.strictObject({
-  ratings: z.array(draftRatingSchema).max(LIMITS.maxCases * LIMITS.configurationsPerRun),
+  ratings: z.array(draftRatingSchema).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun),
 })
 
 export const revealSchema = z.strictObject({
