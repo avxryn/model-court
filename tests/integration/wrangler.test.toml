@@ -1,0 +1,9 @@
+# Test-only Worker config: a single local D1 binding for integration tests.
+name = "model-court-integration-test"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "model-court-test"
+database_id = "local-test"

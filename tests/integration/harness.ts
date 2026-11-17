@@ -1,0 +1,228 @@
+/**
+ * Integration harness: the real /api/v1 Hono app, real services and SQL, a
+ * real local D1 (wrangler getPlatformProxy → workerd SQLite), and real ES256 JWT verification via
+ * the SDK's `verifyJwt`. Only external boundaries are substituted:
+ *   - the platform auth issuer (test-generated signing key),
+ *   - the DeepSpace JobRoom queue (in-memory list, drained explicitly),
+ *   - DeepSpace notices (recorded),
+ *   - provider HTTP (`providerFetch` stub — no paid calls are possible).
+ * A passing test here is NOT evidence that a real provider call works.
+ */
+
+import { Hono } from 'hono'
+import { getPlatformProxy } from 'wrangler'
+import { verifyJwt } from 'deepspace/worker'
+import { MODEL_ROUTES, type ModelRoute } from '../../src/domain/registry'
+import { createApi } from '../../src/server/api'
+import { parseConfig, type ConfigEnv } from '../../src/server/config'
+import { migrate } from '../../src/server/db/migrations'
+import type { Deps, GenerationJob } from '../../src/server/deps'
+import { handleGenerationJob, type JobOutcome } from '../../src/server/services/generation'
+
+const ISSUER = 'https://auth.model-court.test'
+
+function b64url(bytes: ArrayBuffer | Uint8Array): string {
+  return Buffer.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)).toString('base64url')
+}
+
+export function randomKeyB64(): string {
+  return Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64')
+}
+
+export interface ProviderCall {
+  url: string
+  headers: Record<string, string>
+  body: Record<string, unknown>
+}
+
+export type ProviderStub = (call: ProviderCall, signal: AbortSignal) => Promise<Response>
+
+export const openAiOk = (text = 'Returns are accepted within 30 days with a receipt.') =>
+  new Response(
+    JSON.stringify({
+      id: 'resp_test',
+      status: 'completed',
+      model: 'gpt-6-luna',
+      output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] }],
+      usage: { input_tokens: 120, output_tokens: 24 },
+    }),
+    { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': 'req_openai_test' } },
+  )
+
+export const anthropicOk = (text = 'Yes — the policy allows returns within 30 days with a receipt.') =>
+  new Response(
+    JSON.stringify({ id: 'msg_test', type: 'message', model: 'claude-haiku-5-5', content: [{ type: 'text', text }], stop_reason: 'end_turn', usage: { input_tokens: 130, output_tokens: 20 } }),
+    { status: 200, headers: { 'content-type': 'application/json', 'request-id': 'req_anthropic_test' } },
+  )
+
+export const okStub: ProviderStub = async (call) => (call.url.includes('openai') ? openAiOk() : anthropicOk())
+
+export interface HarnessOptions {
+  env?: Partial<ConfigEnv>
+  routes?: readonly ModelRoute[]
+}
+
+export async function createHarness(options: HarnessOptions = {}) {
+  // persist: false → a fresh in-memory local D1 per harness.
+  const proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: 'tests/integration/wrangler.test.toml', persist: false })
+  const db = proxy.env.DB
+  await migrate(db)
+
+  const signing = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
+  const spki = Buffer.from(await crypto.subtle.exportKey('spki', signing.publicKey)).toString('base64')
+  const publicKeyPem = `-----BEGIN PUBLIC KEY-----\n${spki.match(/.{1,64}/g)!.join('\n')}\n-----END PUBLIC KEY-----`
+
+  let clock = Date.UTC(2026, 10, 18, 15, 0, 0)
+  const jobs: GenerationJob[] = []
+  const notices: Array<{ recipientUserId: string; evaluationId: string; runId: string | null }> = []
+  const logs: Array<Record<string, unknown>> = []
+  const providerCalls: ProviderCall[] = []
+  let providerStub: ProviderStub = okStub
+  let enqueueFails = false
+
+  const env: ConfigEnv = {
+    DEEPSPACE_APP_ID: 'app_test',
+    GENERATION_ENABLED: 'true',
+    CREDENTIAL_ACTIVE_KEY_VERSION: 'v1',
+    CREDENTIAL_ENCRYPTION_KEY_V1: randomKeyB64(),
+    CREDENTIAL_REQUEST_HMAC_KEY: randomKeyB64(),
+    PUBLIC_APP_ORIGIN: 'https://model-court.test',
+    APP_COMMIT: 'test-commit',
+    ...options.env,
+  }
+
+  const providerFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    const headers = Object.fromEntries(new Headers(init?.headers).entries())
+    const call = { url, headers, body: JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown> }
+    providerCalls.push(call)
+    if (init?.redirect !== 'manual') throw new Error('Adapters must refuse redirects')
+    return providerStub(call, init?.signal ?? new AbortController().signal)
+  }) as typeof fetch
+
+  let idCounter = 0
+  const deps: Deps = {
+    db,
+    get config() {
+      return parseConfig(env)
+    },
+    routes: options.routes ?? MODEL_ROUTES.map((route) => ({ ...route, verifiedAt: '2026-11-16' })),
+    now: () => clock,
+    newId: () => {
+      idCounter++
+      return crypto.randomUUID()
+    },
+    verifyToken: async (token) => {
+      const { result } = await verifyJwt({ publicKey: publicKeyPem, issuer: ISSUER }, token)
+      return result ? { userId: result.userId, name: null } : null
+    },
+    enqueueGeneration: async (job) => {
+      if (enqueueFails) throw new Error('enqueue unavailable')
+      jobs.push(job)
+      return `job_${jobs.length}`
+    },
+    publishNotices: async (batch) => {
+      notices.push(...batch)
+    },
+    purgeNotices: async () => {},
+    providerFetch,
+    log: (event) => logs.push(event),
+  } as Deps
+
+  const app = new Hono()
+  app.route('/api/v1', createApi(() => deps))
+
+  async function token(userId: string, expiresInSeconds = 3600): Promise<string> {
+    const header = b64url(new TextEncoder().encode(JSON.stringify({ alg: 'ES256', typ: 'JWT' })))
+    const now = Math.floor(Date.now() / 1000)
+    const payload = b64url(new TextEncoder().encode(JSON.stringify({ sub: userId, iss: ISSUER, iat: now, exp: now + expiresInSeconds })))
+    const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, signing.privateKey, new TextEncoder().encode(`${header}.${payload}`))
+    return `${header}.${payload}.${b64url(signature)}`
+  }
+
+  interface RequestOptions {
+    as?: string | null
+    body?: unknown
+    ifMatch?: number
+    idempotencyKey?: string | false
+    headers?: Record<string, string>
+    rawToken?: string
+  }
+
+  async function request<T = any>(method: string, path: string, opts: RequestOptions = {}) {
+    const headers: Record<string, string> = { ...(opts.headers ?? {}) }
+    if (opts.rawToken) headers.Authorization = `Bearer ${opts.rawToken}`
+    else if (opts.as) headers.Authorization = `Bearer ${await token(opts.as)}`
+    if (opts.body !== undefined) headers['Content-Type'] = 'application/json'
+    if (opts.ifMatch !== undefined) headers['If-Match'] = `"${opts.ifMatch}"`
+    if (opts.idempotencyKey !== false && method !== 'GET' && method !== 'PUT' && method !== 'DELETE') {
+      headers['Idempotency-Key'] = opts.idempotencyKey ?? crypto.randomUUID()
+    }
+    const response = await app.request(`https://model-court.test/api/v1${path}`, {
+      method,
+      headers,
+      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+    })
+    const text = await response.text()
+    return { status: response.status, json: (text ? JSON.parse(text) : null) as T, headers: response.headers, text }
+  }
+
+  async function drainJobs(signal: AbortSignal = new AbortController().signal): Promise<JobOutcome[]> {
+    const outcomes: JobOutcome[] = []
+    while (jobs.length > 0) {
+      const job = jobs.shift()!
+      outcomes.push(await handleGenerationJob(deps, job, signal, 'req_job_test'))
+    }
+    return outcomes
+  }
+
+  return {
+    db,
+    deps,
+    env,
+    app,
+    jobs,
+    notices,
+    logs,
+    providerCalls,
+    token,
+    request,
+    drainJobs,
+    setProvider: (stub: ProviderStub) => {
+      providerStub = stub
+    },
+    setEnqueueFails: (fails: boolean) => {
+      enqueueFails = fails
+    },
+    advance: (ms: number) => {
+      clock += ms
+    },
+    now: () => clock,
+    get idCount() {
+      return idCounter
+    },
+    dispose: () => proxy.dispose(),
+  }
+}
+
+export type Harness = Awaited<ReturnType<typeof createHarness>>
+
+export const OWNER = 'user_owner_1'
+export const REVIEWER = 'user_reviewer_2'
+export const OTHER = 'user_unrelated_3'
+
+/** Owner saves both provider keys and creates an evaluation with the seeded draft. */
+export async function setupOwner(h: Harness, user = OWNER) {
+  const openai = await h.request('POST', '/credentials', { as: user, body: { provider: 'openai', label: 'Test OpenAI', apiKey: 'sk-test-SENTINEL-OPENAI-KEY', consentToStorage: true } })
+  const anthropic = await h.request('POST', '/credentials', { as: user, body: { provider: 'anthropic', label: 'Test Anthropic', apiKey: 'sk-ant-SENTINEL-ANTHROPIC-KEY', consentToStorage: true } })
+  const evaluation = await h.request('POST', '/evaluations', { as: user, body: { title: 'Support policy QA', taskDescription: 'Reference-grounded support answers' } })
+  return { openaiKeyId: openai.json.data.id as string, anthropicKeyId: anthropic.json.data.id as string, evaluationId: evaluation.json.data.id as string, draft: evaluation.json.data.draft }
+}
+
+export async function startRun(h: Harness, setup: Awaited<ReturnType<typeof setupOwner>>, user = OWNER, idempotencyKey?: string) {
+  return h.request('POST', `/evaluations/${setup.evaluationId}/runs`, {
+    as: user,
+    idempotencyKey,
+    body: { draftRevision: 1, credentialIdsByProvider: { openai: setup.openaiKeyId, anthropic: setup.anthropicKeyId }, consentToProviderProcessing: true, acknowledgeProviderCharges: true },
+  })
+}

@@ -1,0 +1,304 @@
+/**
+ * Append-only D1 migrations (spec §5.2, §5.4–5.6).
+ *
+ * Each migration is an explicit list of statements executed one at a time with
+ * `prepare().run()`. The SDK's `runMigrations` splits strings on `;`, which
+ * would break trigger bodies (verified Nov 16, 2026), so Model Court keeps its
+ * own ledger table. NEVER edit or reorder an applied migration; append a new one.
+ */
+
+export interface Migration {
+  id: string
+  statements: string[]
+}
+
+const immutable = (table: string, columns: string, when = '1') => `
+CREATE TRIGGER ${table}_${columns.replace(/[^a-z]+/g, '_')}_immutable
+BEFORE UPDATE OF ${columns} ON ${table}
+FOR EACH ROW WHEN ${when}
+BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_${table.toUpperCase()}'); END`
+
+export const MIGRATIONS: Migration[] = [
+  {
+    id: '0001_initial',
+    statements: [
+      `CREATE TABLE evaluations (
+        id TEXT PRIMARY KEY,
+        owner_user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        task_description TEXT NOT NULL,
+        draft_json TEXT NOT NULL CHECK (json_valid(draft_json)),
+        revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        deleted_at INTEGER
+      )`,
+      `CREATE INDEX evaluations_by_owner ON evaluations(owner_user_id, updated_at, id)`,
+
+      `CREATE TABLE runs (
+        id TEXT PRIMARY KEY,
+        evaluation_id TEXT NOT NULL REFERENCES evaluations(id) ON DELETE CASCADE,
+        owner_user_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('generating','ready','reviewing','revealed','decided','canceled')),
+        snapshot_json TEXT NOT NULL CHECK (json_valid(snapshot_json)),
+        snapshot_hash TEXT NOT NULL,
+        revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
+        eligible_manifest_json TEXT CHECK (eligible_manifest_json IS NULL OR json_valid(eligible_manifest_json)),
+        review_opened_at INTEGER,
+        revealed_at INTEGER,
+        reveal_cohort_json TEXT CHECK (reveal_cohort_json IS NULL OR json_valid(reveal_cohort_json)),
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        canceled_at INTEGER
+      )`,
+      `CREATE UNIQUE INDEX one_active_run_per_evaluation ON runs(evaluation_id) WHERE status IN ('generating','ready','reviewing')`,
+      `CREATE INDEX runs_by_evaluation ON runs(evaluation_id, created_at, id)`,
+      `CREATE INDEX runs_by_status ON runs(status, updated_at)`,
+      immutable('runs', 'snapshot_json, snapshot_hash, owner_user_id, evaluation_id',
+        'NEW.snapshot_json IS NOT OLD.snapshot_json OR NEW.snapshot_hash IS NOT OLD.snapshot_hash OR NEW.owner_user_id IS NOT OLD.owner_user_id OR NEW.evaluation_id IS NOT OLD.evaluation_id'),
+      immutable('runs', 'eligible_manifest_json', 'OLD.eligible_manifest_json IS NOT NULL AND NEW.eligible_manifest_json IS NOT OLD.eligible_manifest_json'),
+      immutable('runs', 'reveal_cohort_json', 'OLD.reveal_cohort_json IS NOT NULL AND NEW.reveal_cohort_json IS NOT OLD.reveal_cohort_json'),
+
+      `CREATE TABLE generations (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        case_key TEXT NOT NULL,
+        configuration_key TEXT NOT NULL,
+        provider TEXT NOT NULL CHECK (provider IN ('openai','anthropic')),
+        status TEXT NOT NULL CHECK (status IN ('pending','running','succeeded','failed','uncertain','canceled')),
+        attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count BETWEEN 0 AND 2),
+        accepted_attempt_id TEXT,
+        last_error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE (run_id, case_key, configuration_key)
+      )`,
+      `CREATE INDEX generations_by_run_status ON generations(run_id, status)`,
+      immutable('generations', 'accepted_attempt_id', 'OLD.accepted_attempt_id IS NOT NULL AND NEW.accepted_attempt_id IS NOT OLD.accepted_attempt_id'),
+
+      `CREATE TABLE generation_attempts (
+        id TEXT PRIMARY KEY,
+        generation_id TEXT NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        fence_token TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL CHECK (status IN ('running','succeeded','failed','uncertain','canceled')),
+        started_at INTEGER NOT NULL,
+        deadline_at INTEGER NOT NULL,
+        finished_at INTEGER,
+        queue_wait_ms INTEGER CHECK (queue_wait_ms IS NULL OR queue_wait_ms >= 0),
+        output_text TEXT,
+        finish_reason TEXT,
+        input_tokens INTEGER CHECK (input_tokens IS NULL OR input_tokens >= 0),
+        output_tokens INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0),
+        duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0),
+        error_code TEXT,
+        provider_request_id TEXT,
+        observed_model TEXT,
+        truncated INTEGER NOT NULL DEFAULT 0 CHECK (truncated IN (0,1)),
+        UNIQUE (generation_id, attempt_no)
+      )`,
+      `CREATE INDEX attempts_by_status_deadline ON generation_attempts(status, deadline_at)`,
+      immutable('generation_attempts', 'output_text, status, finish_reason', "OLD.status <> 'running'"),
+
+      `CREATE TABLE review_sessions (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        reviewer_user_id TEXT NOT NULL,
+        context_type TEXT NOT NULL CHECK (context_type IN ('invited','owner')),
+        status TEXT NOT NULL CHECK (status IN ('draft','submitted','closed','revoked')),
+        assignment_json TEXT NOT NULL CHECK (json_valid(assignment_json)),
+        ratings_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(ratings_json)),
+        revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
+        joined_at INTEGER NOT NULL,
+        submitted_at INTEGER,
+        closed_at INTEGER,
+        identity_clue_flag INTEGER NOT NULL DEFAULT 0 CHECK (identity_clue_flag IN (0,1)),
+        UNIQUE (run_id, reviewer_user_id)
+      )`,
+      `CREATE INDEX review_sessions_by_run_status ON review_sessions(run_id, status)`,
+      `CREATE INDEX review_sessions_by_reviewer ON review_sessions(reviewer_user_id, status, run_id)`,
+      immutable('review_sessions', 'assignment_json', 'NEW.assignment_json IS NOT OLD.assignment_json'),
+      immutable('review_sessions', 'ratings_json, identity_clue_flag', "OLD.status <> 'draft'"),
+
+      `CREATE TABLE invites (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        redeemed_by TEXT,
+        redeemed_at INTEGER,
+        revoked_at INTEGER
+      )`,
+      `CREATE INDEX invites_by_run ON invites(run_id, expires_at)`,
+
+      `CREATE TABLE verdict_revisions (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        revision INTEGER NOT NULL CHECK (revision >= 1),
+        outcome TEXT NOT NULL CHECK (outcome IN ('selected','tie','inconclusive')),
+        selected_configuration_key TEXT,
+        rationale TEXT NOT NULL,
+        limitations TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        UNIQUE (run_id, revision),
+        CHECK ((outcome = 'selected') = (selected_configuration_key IS NOT NULL))
+      )`,
+      `CREATE TRIGGER verdict_revisions_append_only BEFORE UPDATE ON verdict_revisions
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_VERDICT_REVISIONS'); END`,
+
+      `CREATE TABLE command_receipts (
+        actor_user_id TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        entity_id TEXT,
+        http_status INTEGER NOT NULL,
+        response_json TEXT NOT NULL CHECK (json_valid(response_json)),
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        PRIMARY KEY (actor_user_id, idempotency_key)
+      )`,
+      `CREATE INDEX command_receipts_by_expiry ON command_receipts(expires_at)`,
+
+      // Guarded-transaction sentinel (spec §5.4): the first statement of a guarded
+      // batch inserts ok = CASE WHEN <preconditions> THEN 1 ELSE 0 END; the CHECK
+      // aborts the whole batch when any precondition fails. The last statement deletes it.
+      `CREATE TABLE command_guards (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        ok INTEGER NOT NULL CHECK (ok = 1)
+      )`,
+
+      `CREATE TABLE outbox (
+        id TEXT PRIMARY KEY,
+        generation_id TEXT NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        status TEXT NOT NULL CHECK (status IN ('pending','dispatched','claimed','terminal')),
+        job_id TEXT,
+        dispatch_count INTEGER NOT NULL DEFAULT 0 CHECK (dispatch_count >= 0),
+        next_dispatch_at INTEGER NOT NULL,
+        last_error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE (generation_id, attempt_no)
+      )`,
+      `CREATE INDEX outbox_by_status ON outbox(status, next_dispatch_at)`,
+
+      `CREATE TABLE budget_buckets (
+        subject TEXT NOT NULL,
+        window_start INTEGER NOT NULL,
+        limit_units INTEGER NOT NULL CHECK (limit_units >= 0),
+        allocated_units INTEGER NOT NULL DEFAULT 0 CHECK (allocated_units >= 0 AND allocated_units <= limit_units),
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (subject, window_start)
+      )`,
+
+      `CREATE TABLE attempt_reservations (
+        generation_id TEXT NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        actor_subject TEXT NOT NULL,
+        global_subject TEXT NOT NULL,
+        lifetime_subject TEXT NOT NULL,
+        window_start INTEGER NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('reserved','consumed','released')),
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (generation_id, attempt_no)
+      )`,
+
+      `CREATE TABLE rate_buckets (
+        subject TEXT NOT NULL,
+        window_start INTEGER NOT NULL,
+        count INTEGER NOT NULL,
+        PRIMARY KEY (subject, window_start)
+      )`,
+
+      `CREATE TABLE provider_credentials (
+        id TEXT PRIMARY KEY,
+        owner_user_id TEXT NOT NULL,
+        provider TEXT NOT NULL CHECK (provider IN ('openai','anthropic')),
+        label TEXT NOT NULL,
+        ciphertext TEXT,
+        nonce TEXT,
+        encryption_key_version TEXT,
+        status TEXT NOT NULL CHECK (status IN ('active','revoked')),
+        revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
+        created_at INTEGER NOT NULL,
+        revoked_at INTEGER,
+        CHECK (
+          (status = 'active' AND ciphertext IS NOT NULL AND nonce IS NOT NULL AND encryption_key_version IS NOT NULL AND revoked_at IS NULL)
+          OR (status = 'revoked' AND ciphertext IS NULL AND nonce IS NULL AND encryption_key_version IS NULL AND revoked_at IS NOT NULL)
+        )
+      )`,
+      `CREATE UNIQUE INDEX one_active_credential_per_provider ON provider_credentials(owner_user_id, provider) WHERE status = 'active'`,
+      // Revocation is one-way: a revoked row can never be reactivated (restore safety, §9.6).
+      immutable('provider_credentials', 'status', "OLD.status = 'revoked'"),
+      immutable('provider_credentials', 'owner_user_id, provider', 'NEW.owner_user_id IS NOT OLD.owner_user_id OR NEW.provider IS NOT OLD.provider'),
+
+      `CREATE TABLE run_credentials (
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK (provider IN ('openai','anthropic')),
+        credential_id TEXT NOT NULL REFERENCES provider_credentials(id) ON DELETE RESTRICT,
+        PRIMARY KEY (run_id, provider)
+      )`,
+      `CREATE TRIGGER run_credentials_immutable BEFORE UPDATE ON run_credentials
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_RUN_CREDENTIALS'); END`,
+
+      `CREATE TABLE audit_events (
+        id TEXT PRIMARY KEY,
+        evaluation_id TEXT,
+        run_id TEXT,
+        actor_user_id TEXT,
+        event_type TEXT NOT NULL,
+        request_id TEXT NOT NULL,
+        outcome TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(metadata_json)),
+        created_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX audit_events_by_evaluation ON audit_events(evaluation_id, created_at)`,
+      `CREATE INDEX audit_events_by_created ON audit_events(created_at)`,
+    ],
+  },
+]
+
+const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`
+
+/**
+ * Apply pending migrations in order. Each migration's statements plus its ledger
+ * row run as one D1 batch, so a failure leaves that migration entirely unapplied.
+ */
+export async function migrate(db: D1Database, migrations: Migration[] = MIGRATIONS): Promise<string[]> {
+  await db.prepare(LEDGER).run()
+  const applied = new Set(
+    (await db.prepare('SELECT id FROM mc_schema_migrations').all<{ id: string }>()).results.map((row) => row.id),
+  )
+  const newlyApplied: string[] = []
+  for (const migration of migrations) {
+    if (applied.has(migration.id)) continue
+    await db.batch([
+      ...migration.statements.map((sql) => db.prepare(sql)),
+      db.prepare('INSERT INTO mc_schema_migrations (id, applied_at) VALUES (?, ?)').bind(migration.id, Date.now()),
+    ])
+    newlyApplied.push(migration.id)
+  }
+  return newlyApplied
+}
+
+const migrated = new WeakMap<D1Database, Promise<unknown>>()
+
+/**
+ * Once per isolate and binding. Safe if two isolates race: the loser's batch
+ * fails atomically and the next request sees the ledger row.
+ */
+export function ensureMigrated(db: D1Database): Promise<unknown> {
+  let pending = migrated.get(db)
+  if (!pending) {
+    pending = migrate(db).catch((error: unknown) => {
+      migrated.delete(db)
+      throw error
+    })
+    migrated.set(db, pending)
+  }
+  return pending
+}

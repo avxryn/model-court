@@ -1,0 +1,540 @@
+/**
+ * Run admission and owner run management (F05–F08, F18, F27).
+ */
+
+import { z } from 'zod'
+import { canonicalJson, sha256Hex } from '../../domain/canonical'
+import { cancelRunSchema, retrySchema, startRunSchema } from '../../domain/contracts'
+import { LIMITS } from '../../domain/limits'
+import type { ProviderId } from '../../domain/registry'
+import { buildSnapshot, describeIssue, readinessIssues, requiredProviders, type RunSnapshot } from '../../domain/snapshot'
+import { canRun, isRetryable, type GenerationStatus, type RunStatus } from '../../domain/transitions'
+import { loadEvaluationAccess, loadRunAccess, requireOwner, type RunAccess } from '../access'
+import { all, auditStatement, budgetSubjects, classifyConstraint, cond, GuardFailed, releaseReservations, reserveBudget, runGuarded, type Condition } from '../db/sql'
+import type { Deps } from '../deps'
+import { ApiError, revisionConflict, stateConflict } from '../http'
+import { idempotent, requestHash } from '../receipts'
+import { parseStoredDraft } from './evaluations'
+import { dispatchOutbox, notifyRun, reconcileLeases } from './generation'
+
+export interface GenerationRow {
+  id: string
+  run_id: string
+  case_key: string
+  configuration_key: string
+  provider: ProviderId
+  status: GenerationStatus
+  attempt_count: number
+  accepted_attempt_id: string | null
+  last_error_code: string | null
+}
+
+export interface EligibleManifest {
+  caseKeys: string[]
+  excludedCaseKeys: string[]
+  entries: Array<{ caseKey: string; configurationKey: string; generationId: string; acceptedAttemptId: string }>
+}
+
+export function parseSnapshot(json: string): RunSnapshot {
+  return JSON.parse(json) as RunSnapshot
+}
+
+function credentialActive(runId: string, provider: ProviderId): Condition {
+  return cond(
+    `EXISTS (SELECT 1 FROM run_credentials rc JOIN provider_credentials c ON c.id = rc.credential_id WHERE rc.run_id = ? AND rc.provider = ? AND c.status = 'active')`,
+    runId,
+    provider,
+  )
+}
+
+function capacity(ownerUserId: string, excludeRunId: string | null): Condition {
+  return all(
+    cond(`(SELECT COUNT(*) FROM runs WHERE owner_user_id = ? AND status = 'generating' AND id IS NOT ?) < 1`, ownerUserId, excludeRunId),
+    cond(`(SELECT COUNT(*) FROM runs WHERE status = 'generating' AND id IS NOT ?) < 2`, excludeRunId),
+  )
+}
+
+function requireGenerationEnabled(deps: Deps): void {
+  if (!deps.config.generationEnabled) {
+    throw new ApiError(503, 'GENERATION_DISABLED', 'Live generation is disabled on this deployment. The sample remains available.')
+  }
+}
+
+function quotaError(): ApiError {
+  return new ApiError(429, 'QUOTA_EXHAUSTED', 'The provider-call limit for today (or for this deployment) has been reached. Existing work is preserved.', {
+    retryAfterSeconds: Math.ceil((86_400_000 - (Date.now() % 86_400_000)) / 1000),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Start a run
+// ---------------------------------------------------------------------------
+
+export async function startRun(deps: Deps, userId: string, evaluationId: string, input: z.output<typeof startRunSchema>, key: string, requestId: string) {
+  requireGenerationEnabled(deps)
+  const access = await loadEvaluationAccess(deps.db, evaluationId, userId)
+  requireOwner(access)
+  const db = deps.db
+  const operation = `run.start:${evaluationId}`
+  const hash = await requestHash(operation, input)
+
+  const result = await idempotent(deps, { actorUserId: userId, idempotencyKey: key, operation, requestHash: hash }, async (receipt) => {
+    if (access.evaluation.revision !== input.draftRevision) throw revisionConflict()
+    const draft = parseStoredDraft(access.evaluation)
+    const issues = readinessIssues(draft, deps.routes)
+    if (issues.length > 0) {
+      throw new ApiError(422, 'UNSUPPORTED_CONFIGURATION', describeIssue(issues[0]), { details: { issues } })
+    }
+    const providers = requiredProviders(draft.configurations, deps.routes)
+    const supplied = Object.keys(input.credentialIdsByProvider).sort()
+    if (canonicalJson(supplied) !== canonicalJson(providers)) {
+      throw new ApiError(422, 'CREDENTIAL_MISSING', 'Provide exactly one saved key for each selected provider.', { details: { requiredProviders: providers } })
+    }
+
+    const now = deps.now()
+    const runId = deps.newId()
+    const snapshot = buildSnapshot(draft, deps.routes, deps.config.appCommit, now)
+    const snapshotJson = JSON.stringify(snapshot)
+    if (new TextEncoder().encode(snapshotJson).byteLength > LIMITS.snapshotJsonBytes) {
+      throw new ApiError(422, 'VALIDATION_FAILED', 'The run snapshot exceeds 96 KiB.')
+    }
+    const snapshotHash = await sha256Hex(canonicalJson(snapshot))
+    const subjects = budgetSubjects(userId, now)
+
+    const generations = snapshot.cases.flatMap((testCase) =>
+      snapshot.configurations.map((configuration) => ({ id: deps.newId(), outboxId: deps.newId(), caseKey: testCase.key, configurationKey: configuration.key, provider: configuration.provider })),
+    )
+    const response = { status: 202 as const, data: { runId, status: 'generating' as RunStatus, revision: 1, plannedCalls: generations.length } }
+
+    const credentialChecks = providers.map((provider) =>
+      cond(
+        `EXISTS (SELECT 1 FROM provider_credentials WHERE id = ? AND owner_user_id = ? AND provider = ? AND status = 'active')`,
+        input.credentialIdsByProvider[provider],
+        userId,
+        provider,
+      ),
+    )
+
+    const statements: D1PreparedStatement[] = [
+      receipt(response, runId),
+      db
+        .prepare(
+          `INSERT INTO runs (id, evaluation_id, owner_user_id, status, snapshot_json, snapshot_hash, revision, created_at, updated_at)
+           VALUES (?, ?, ?, 'generating', ?, ?, 1, ?, ?)`,
+        )
+        .bind(runId, evaluationId, userId, snapshotJson, snapshotHash, now, now),
+      ...providers.map((provider) =>
+        db.prepare('INSERT INTO run_credentials (run_id, provider, credential_id) VALUES (?, ?, ?)').bind(runId, provider, input.credentialIdsByProvider[provider]),
+      ),
+      ...reserveBudget(db, subjects, generations.length, deps.config.limits, now),
+      ...generations.flatMap((generation) => [
+        db
+          .prepare(
+            `INSERT INTO generations (id, run_id, case_key, configuration_key, provider, status, attempt_count, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'pending', 1, ?, ?)`,
+          )
+          .bind(generation.id, runId, generation.caseKey, generation.configurationKey, generation.provider, now, now),
+        db
+          .prepare(
+            `INSERT INTO attempt_reservations (generation_id, attempt_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at)
+             VALUES (?, 1, ?, ?, ?, ?, 'reserved', ?)`,
+          )
+          .bind(generation.id, subjects.actor, subjects.global, subjects.lifetime, subjects.windowStart, now),
+        db
+          .prepare(`INSERT INTO outbox (id, generation_id, attempt_no, status, next_dispatch_at, created_at, updated_at) VALUES (?, ?, 1, 'pending', ?, ?, ?)`)
+          .bind(generation.outboxId, generation.id, now, now, now),
+      ]),
+      db.prepare('UPDATE evaluations SET updated_at = ? WHERE id = ?').bind(now, evaluationId),
+      auditStatement(db, { eventType: 'run.create', requestId, outcome: 'ok', actorUserId: userId, evaluationId, runId, metadata: { plannedCalls: generations.length, providers: providers.join(',') } }, now),
+    ]
+
+    try {
+      await runGuarded(
+        db,
+        'run.start',
+        all(
+          cond('EXISTS (SELECT 1 FROM evaluations WHERE id = ? AND owner_user_id = ? AND revision = ? AND deleted_at IS NULL)', evaluationId, userId, input.draftRevision),
+          ...credentialChecks,
+          capacity(userId, null),
+        ),
+        statements,
+      )
+    } catch (error) {
+      if (error instanceof GuardFailed) throw await explainAdmissionFailure(deps, userId, evaluationId, input)
+      const kind = classifyConstraint(error)
+      if (kind === 'active_run') throw new ApiError(409, 'ACTIVE_RUN_EXISTS', 'This evaluation already has an unfinished run. Finish or cancel it first.')
+      if (kind === 'budget') throw quotaError()
+      throw error
+    }
+    return response
+  })
+
+  if (!result.replayed) {
+    const runId = (result.data as { runId: string }).runId
+    await dispatchOutbox(deps, runId) // best effort; cron repairs anything left pending
+    await notifyRun(deps, runId)
+  }
+  return result
+}
+
+async function explainAdmissionFailure(deps: Deps, userId: string, evaluationId: string, input: z.output<typeof startRunSchema>): Promise<ApiError> {
+  const evaluation = await deps.db.prepare('SELECT revision FROM evaluations WHERE id = ? AND deleted_at IS NULL').bind(evaluationId).first<{ revision: number }>()
+  if (!evaluation || evaluation.revision !== input.draftRevision) return revisionConflict()
+  const active = await deps.db.prepare(`SELECT 1 AS ok FROM runs WHERE evaluation_id = ? AND status IN ('generating','ready','reviewing')`).bind(evaluationId).first()
+  if (active) return new ApiError(409, 'ACTIVE_RUN_EXISTS', 'This evaluation already has an unfinished run. Finish or cancel it first.')
+  for (const [provider, id] of Object.entries(input.credentialIdsByProvider)) {
+    const row = await deps.db
+      .prepare(`SELECT 1 AS ok FROM provider_credentials WHERE id = ? AND owner_user_id = ? AND provider = ? AND status = 'active'`)
+      .bind(id, userId, provider)
+      .first()
+    if (!row) return new ApiError(422, 'CREDENTIAL_MISSING', `The selected ${provider} key is missing, revoked, or not yours. Add a key in Settings.`)
+  }
+  return new ApiError(429, 'RATE_LIMITED', 'Another comparison is already generating. Wait for it to finish, then try again.', { retryable: true })
+}
+
+// ---------------------------------------------------------------------------
+// Read a run (role-specific projection)
+// ---------------------------------------------------------------------------
+
+export async function loadGenerations(db: D1Database, runId: string): Promise<GenerationRow[]> {
+  return (await db.prepare('SELECT * FROM generations WHERE run_id = ? ORDER BY created_at, id').bind(runId).all<GenerationRow>()).results
+}
+
+export function computeEligibility(snapshot: RunSnapshot, generations: readonly GenerationRow[]): EligibleManifest {
+  const caseKeys: string[] = []
+  const excludedCaseKeys: string[] = []
+  const entries: EligibleManifest['entries'] = []
+  for (const testCase of snapshot.cases) {
+    const forCase = snapshot.configurations.map((configuration) =>
+      generations.find((generation) => generation.case_key === testCase.key && generation.configuration_key === configuration.key),
+    )
+    if (forCase.every((generation) => generation?.status === 'succeeded' && generation.accepted_attempt_id)) {
+      caseKeys.push(testCase.key)
+      for (const generation of forCase) {
+        entries.push({ caseKey: testCase.key, configurationKey: generation!.configuration_key, generationId: generation!.id, acceptedAttemptId: generation!.accepted_attempt_id! })
+      }
+    } else {
+      excludedCaseKeys.push(testCase.key)
+    }
+  }
+  return { caseKeys, excludedCaseKeys, entries }
+}
+
+export async function getRun(deps: Deps, userId: string, runId: string) {
+  let access = await loadRunAccess(deps.db, runId, userId)
+  if (access.role === 'owner' && (access.run.status === 'generating' || access.run.status === 'ready')) {
+    // Cheap per-run lease reconciliation so abandoned work does not wait for cron (§10.2).
+    if ((await reconcileLeases(deps, runId)) > 0) access = await loadRunAccess(deps.db, runId, userId)
+  }
+  return access.role === 'owner' ? ownerRunView(deps, access) : reviewerRunView(access)
+}
+
+function reviewerRunView(access: RunAccess) {
+  // Deliberately minimal: no configuration, provider, generation, or peer data.
+  return {
+    runId: access.run.id,
+    role: 'reviewer' as const,
+    evaluationId: access.evaluation.id,
+    evaluationTitle: access.evaluation.title,
+    status: access.run.status,
+    revision: access.run.revision,
+    session: access.session ? { id: access.session.id, status: access.session.status, submittedAt: access.session.submitted_at } : null,
+  }
+}
+
+async function ownerRunView(deps: Deps, access: RunAccess) {
+  const db = deps.db
+  const { run } = access
+  const snapshot = parseSnapshot(run.snapshot_json)
+  const generations = await loadGenerations(db, run.id)
+  const attempts = (
+    await db
+      .prepare(
+        `SELECT a.generation_id, a.attempt_no, a.status, a.error_code, a.duration_ms, a.queue_wait_ms, a.truncated
+         FROM generation_attempts a JOIN generations g ON g.id = a.generation_id WHERE g.run_id = ? ORDER BY a.attempt_no`,
+      )
+      .bind(run.id)
+      .all<{ generation_id: string; attempt_no: number; status: string; error_code: string | null; duration_ms: number | null; queue_wait_ms: number | null; truncated: number }>()
+  ).results
+  const sessions = (
+    await db
+      .prepare(`SELECT id, reviewer_user_id, context_type, status, submitted_at, joined_at FROM review_sessions WHERE run_id = ? ORDER BY joined_at`)
+      .bind(run.id)
+      .all<{ id: string; reviewer_user_id: string; context_type: 'invited' | 'owner'; status: string; submitted_at: number | null; joined_at: number }>()
+  ).results
+  const invites = (
+    await db.prepare(`SELECT id, expires_at, redeemed_at, revoked_at FROM invites WHERE run_id = ? ORDER BY created_at`).bind(run.id).all<{ id: string; expires_at: number; redeemed_at: number | null; revoked_at: number | null }>()
+  ).results
+  const now = deps.now()
+  const manifest: EligibleManifest = run.eligible_manifest_json ? (JSON.parse(run.eligible_manifest_json) as EligibleManifest) : computeEligibility(snapshot, generations)
+  const counts: Record<GenerationStatus, number> = { pending: 0, running: 0, succeeded: 0, failed: 0, uncertain: 0, canceled: 0 }
+  for (const generation of generations) counts[generation.status]++
+
+  let invitedIndex = 0
+  return {
+    runId: run.id,
+    role: 'owner' as const,
+    evaluationId: access.evaluation.id,
+    evaluationTitle: access.evaluation.title,
+    status: run.status,
+    revision: run.revision,
+    createdAt: run.created_at,
+    snapshotHash: run.snapshot_hash,
+    comparisonMode: snapshot.comparisonMode,
+    providerRegistryVersion: snapshot.providerRegistryVersion,
+    configurations: snapshot.configurations.map((c) => ({ key: c.key, label: c.label, provider: c.provider, modelId: c.modelId })),
+    cases: snapshot.cases.map((c) => ({ key: c.key, title: c.title })),
+    generations: generations.map((generation) => {
+      const last = attempts.filter((attempt) => attempt.generation_id === generation.id).at(-1)
+      return {
+        id: generation.id,
+        caseKey: generation.case_key,
+        configurationKey: generation.configuration_key,
+        status: generation.status,
+        attemptCount: generation.attempt_count,
+        errorCode: generation.last_error_code,
+        retryable: canRun('retry', run.status) && isRetryable(generation.status, generation.attempt_count, LIMITS.maxAttemptsPerGeneration),
+        durationMs: last?.duration_ms ?? null,
+        queueWaitMs: last?.queue_wait_ms ?? null,
+      }
+    }),
+    counts: { planned: generations.length, ...counts },
+    eligibility: { caseKeys: manifest.caseKeys, excludedCaseKeys: manifest.excludedCaseKeys, frozen: run.eligible_manifest_json !== null },
+    review: {
+      openedAt: run.review_opened_at,
+      revealedAt: run.revealed_at,
+      ownerSessionId: sessions.find((session) => session.context_type === 'owner')?.id ?? null,
+      // Participation only: never drafts or ratings before reveal.
+      participants: sessions.map((session) => ({
+        id: session.id,
+        label: session.context_type === 'owner' ? 'You (owner-context-aware)' : `Reviewer ${++invitedIndex}`,
+        contextType: session.context_type,
+        status: session.status,
+        submittedAt: session.submitted_at,
+      })),
+      invites: invites.map((invite) => ({
+        id: invite.id,
+        expiresAt: invite.expires_at,
+        state: invite.revoked_at ? 'revoked' : invite.redeemed_at ? 'redeemed' : invite.expires_at <= now ? 'expired' : 'unused',
+      })),
+      submittedCount: sessions.filter((session) => session.status === 'submitted').length,
+      pendingCount: pendingReviewCount(sessions, invites, now),
+    },
+  }
+}
+
+export function pendingReviewCount(
+  sessions: ReadonlyArray<{ status: string }>,
+  invites: ReadonlyArray<{ expires_at: number; redeemed_at: number | null; revoked_at: number | null }>,
+  now: number,
+): number {
+  const drafts = sessions.filter((session) => session.status === 'draft').length
+  const unused = invites.filter((invite) => !invite.redeemed_at && !invite.revoked_at && invite.expires_at > now).length
+  return drafts + unused
+}
+
+// ---------------------------------------------------------------------------
+// Retry, cancel, open review
+// ---------------------------------------------------------------------------
+
+export async function retryGenerations(deps: Deps, userId: string, runId: string, input: z.output<typeof retrySchema>, ifMatch: number, key: string, requestId: string) {
+  requireGenerationEnabled(deps)
+  const access = await loadRunAccess(deps.db, runId, userId)
+  requireOwner(access)
+  const db = deps.db
+  const operation = `run.retry:${runId}`
+  const hash = await requestHash(operation, { ...input, ifMatch })
+
+  const result = await idempotent(deps, { actorUserId: userId, idempotencyKey: key, operation, requestHash: hash }, async (receipt) => {
+    if (!canRun('retry', access.run.status)) throw stateConflict('Retries are allowed only before review opens.')
+    if (access.run.revision !== ifMatch) throw revisionConflict()
+    const all_ = await loadGenerations(db, runId)
+    const selected = [...new Set(input.generationIds)].map((id) => all_.find((generation) => generation.id === id))
+    if (selected.some((generation) => !generation)) throw new ApiError(422, 'VALIDATION_FAILED', 'A selected generation does not belong to this run.')
+    const targets = selected as GenerationRow[]
+    for (const generation of targets) {
+      if (!isRetryable(generation.status, generation.attempt_count, LIMITS.maxAttemptsPerGeneration)) {
+        throw stateConflict('Only failed or uncertain generations with an attempt remaining can be retried. Successful outputs are never replaced.')
+      }
+    }
+    const now = deps.now()
+    const subjects = budgetSubjects(userId, now)
+    const providers = [...new Set(targets.map((generation) => generation.provider))]
+    const response = { status: 202 as const, data: { runId, status: 'generating' as RunStatus, retried: targets.length } }
+    const outboxIds: string[] = []
+    const statements: D1PreparedStatement[] = [
+      receipt(response, runId),
+      ...reserveBudget(db, subjects, targets.length, deps.config.limits, now),
+      ...targets.flatMap((generation) => {
+        const attemptNo = generation.attempt_count + 1
+        const outboxId = deps.newId()
+        outboxIds.push(outboxId)
+        return [
+          db.prepare(`UPDATE generations SET status = 'pending', attempt_count = ?, last_error_code = NULL, updated_at = ? WHERE id = ?`).bind(attemptNo, now, generation.id),
+          db
+            .prepare(
+              `INSERT INTO attempt_reservations (generation_id, attempt_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, 'reserved', ?)`,
+            )
+            .bind(generation.id, attemptNo, subjects.actor, subjects.global, subjects.lifetime, subjects.windowStart, now),
+          db.prepare(`INSERT INTO outbox (id, generation_id, attempt_no, status, next_dispatch_at, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?, ?)`).bind(outboxId, generation.id, attemptNo, now, now, now),
+        ]
+      }),
+      db.prepare(`UPDATE runs SET status = 'generating', revision = revision + 1, updated_at = ? WHERE id = ?`).bind(now, runId),
+      auditStatement(db, { eventType: 'run.retry', requestId, outcome: 'ok', actorUserId: userId, runId, evaluationId: access.run.evaluation_id, metadata: { count: targets.length } }, now),
+    ]
+    try {
+      await runGuarded(
+        db,
+        'run.retry',
+        all(
+          cond(`EXISTS (SELECT 1 FROM runs WHERE id = ? AND owner_user_id = ? AND revision = ? AND status IN ('generating','ready'))`, runId, userId, ifMatch),
+          ...targets.map((generation) =>
+            cond(`EXISTS (SELECT 1 FROM generations WHERE id = ? AND run_id = ? AND status IN ('failed','uncertain') AND attempt_count = ? AND attempt_count < ?)`, generation.id, runId, generation.attempt_count, LIMITS.maxAttemptsPerGeneration),
+          ),
+          ...providers.map((provider) => credentialActive(runId, provider)),
+          capacity(userId, runId),
+        ),
+        statements,
+      )
+    } catch (error) {
+      if (error instanceof GuardFailed) {
+        const current = await loadRunAccess(db, runId, userId)
+        if (current.run.revision !== ifMatch) throw revisionConflict()
+        for (const provider of providers) {
+          const ok = await db
+            .prepare(`SELECT 1 AS ok FROM run_credentials rc JOIN provider_credentials c ON c.id = rc.credential_id WHERE rc.run_id = ? AND rc.provider = ? AND c.status = 'active'`)
+            .bind(runId, provider)
+            .first()
+          if (!ok) throw new ApiError(409, 'STATE_CONFLICT', 'The key pinned to this run was removed. Cancel this run and start a new one with your current key.')
+        }
+        throw new ApiError(429, 'RATE_LIMITED', 'Another comparison is already generating. Try again when it finishes.', { retryable: true })
+      }
+      if (classifyConstraint(error) === 'budget') throw quotaError()
+      throw error
+    }
+    return response
+  })
+  if (!result.replayed) {
+    await dispatchOutbox(deps, runId)
+    await notifyRun(deps, runId)
+  }
+  return result
+}
+
+export async function cancelRun(deps: Deps, userId: string, runId: string, _input: z.output<typeof cancelRunSchema>, ifMatch: number, requestId: string) {
+  const access = await loadRunAccess(deps.db, runId, userId)
+  requireOwner(access)
+  if (!canRun('cancel', access.run.status)) throw stateConflict('Only generating or ready runs can be canceled. Close review with Reveal instead.')
+  const db = deps.db
+  const now = deps.now()
+  const inRun = 'SELECT id FROM generations WHERE run_id = ?'
+  try {
+    await runGuarded(
+      db,
+      'run.cancel',
+      cond(`EXISTS (SELECT 1 FROM runs WHERE id = ? AND owner_user_id = ? AND revision = ? AND status IN ('generating','ready'))`, runId, userId, ifMatch),
+      [
+        ...releaseReservations(db, cond(`r.generation_id IN (${inRun})`, runId), 'reserved', now),
+        db.prepare(`UPDATE outbox SET status = 'terminal', last_error_code = 'CANCELED', updated_at = ? WHERE status IN ('pending','dispatched') AND generation_id IN (${inRun})`).bind(now, runId),
+        // An in-flight request may still be billed; its late output will be fenced out.
+        db.prepare(`UPDATE generation_attempts SET status = 'canceled', error_code = 'CANCELED', finished_at = ? WHERE status = 'running' AND generation_id IN (${inRun})`).bind(now, runId),
+        db.prepare(`UPDATE generations SET status = 'canceled', last_error_code = 'CANCELED', updated_at = ? WHERE status IN ('pending','running') AND run_id = ?`).bind(now, runId),
+        db.prepare(`UPDATE runs SET status = 'canceled', canceled_at = ?, revision = revision + 1, updated_at = ? WHERE id = ?`).bind(now, now, runId),
+        auditStatement(db, { eventType: 'run.cancel', requestId, outcome: 'ok', actorUserId: userId, runId, evaluationId: access.run.evaluation_id }, now),
+      ],
+    )
+  } catch (error) {
+    if (error instanceof GuardFailed) throw revisionConflict()
+    throw error
+  }
+  await notifyRun(deps, runId)
+  return { runId, status: 'canceled' as RunStatus, revision: ifMatch + 1 }
+}
+
+/** Fisher–Yates with cryptographic randomness (spec §6.3). */
+export function shuffle<T>(items: readonly T[]): T[] {
+  const result = [...items]
+  for (let i = result.length - 1; i > 0; i--) {
+    const bound = i + 1
+    const limit = Math.floor(0x1_0000_0000 / bound) * bound
+    let value: number
+    do value = crypto.getRandomValues(new Uint32Array(1))[0]
+    while (value >= limit) // rejection sampling avoids modulo bias
+    const j = value % bound
+    ;[result[i], result[j]] = [result[j], result[i]]
+  }
+  return result
+}
+
+export interface AssignmentCase {
+  caseKey: string
+  responses: Array<{ responseId: string; label: 'A' | 'B' | 'C'; generationId: string; acceptedAttemptId: string; configurationKey: string }>
+}
+
+export function buildAssignment(manifest: EligibleManifest, newId: () => string): AssignmentCase[] {
+  const labels = ['A', 'B', 'C'] as const
+  return manifest.caseKeys.map((caseKey) => ({
+    caseKey,
+    responses: shuffle(manifest.entries.filter((entry) => entry.caseKey === caseKey)).map((entry, index) => ({
+      responseId: newId(),
+      label: labels[index],
+      generationId: entry.generationId,
+      acceptedAttemptId: entry.acceptedAttemptId,
+      configurationKey: entry.configurationKey,
+    })),
+  }))
+}
+
+export function insertSessionStatement(db: D1Database, session: { id: string; runId: string; userId: string; contextType: 'invited' | 'owner'; assignment: AssignmentCase[]; now: number }) {
+  return db
+    .prepare(
+      `INSERT INTO review_sessions (id, run_id, reviewer_user_id, context_type, status, assignment_json, ratings_json, revision, joined_at)
+       VALUES (?, ?, ?, ?, 'draft', ?, '[]', 1, ?)`,
+    )
+    .bind(session.id, session.runId, session.userId, session.contextType, JSON.stringify(session.assignment), session.now)
+}
+
+export async function openReview(deps: Deps, userId: string, runId: string, acknowledgeExcludedCases: boolean, ifMatch: number, requestId: string) {
+  const access = await loadRunAccess(deps.db, runId, userId)
+  requireOwner(access)
+  if (!canRun('openReview', access.run.status)) throw stateConflict('Review can open only when every generation has finished.')
+  if (access.run.revision !== ifMatch) throw revisionConflict()
+  const db = deps.db
+  const snapshot = parseSnapshot(access.run.snapshot_json)
+  const manifest = computeEligibility(snapshot, await loadGenerations(db, runId))
+  if (manifest.caseKeys.length === 0) {
+    throw stateConflict('No case has a successful response from every configuration, so there is nothing comparable to review. Retry failures or cancel the run.')
+  }
+  if (manifest.excludedCaseKeys.length > 0 && !acknowledgeExcludedCases) {
+    throw stateConflict('Acknowledge the excluded cases to open review.', { excludedCaseKeys: manifest.excludedCaseKeys })
+  }
+  const now = deps.now()
+  const sessionId = deps.newId()
+  try {
+    await runGuarded(
+      db,
+      'run.open_review',
+      all(
+        cond(`EXISTS (SELECT 1 FROM runs WHERE id = ? AND owner_user_id = ? AND revision = ? AND status = 'ready')`, runId, userId, ifMatch),
+        // Recheck the frozen evidence at commit time.
+        ...manifest.entries.map((entry) =>
+          cond(`EXISTS (SELECT 1 FROM generations WHERE id = ? AND status = 'succeeded' AND accepted_attempt_id = ?)`, entry.generationId, entry.acceptedAttemptId),
+        ),
+      ),
+      [
+        db
+          .prepare(`UPDATE runs SET status = 'reviewing', eligible_manifest_json = ?, review_opened_at = ?, revision = revision + 1, updated_at = ? WHERE id = ?`)
+          .bind(JSON.stringify(manifest), now, now, runId),
+        insertSessionStatement(db, { id: sessionId, runId, userId, contextType: 'owner', assignment: buildAssignment(manifest, deps.newId), now }),
+        auditStatement(db, { eventType: 'review.open', requestId, outcome: 'ok', actorUserId: userId, runId, evaluationId: access.run.evaluation_id, metadata: { eligible: manifest.caseKeys.length, excluded: manifest.excludedCaseKeys.length } }, now),
+      ],
+    )
+  } catch (error) {
+    if (error instanceof GuardFailed) throw revisionConflict()
+    throw error
+  }
+  await notifyRun(deps, runId)
+  return { runId, status: 'reviewing' as RunStatus, revision: ifMatch + 1, eligibleCaseCount: manifest.caseKeys.length, excludedCaseCount: manifest.excludedCaseKeys.length, ownerSessionId: sessionId }
+}
+
