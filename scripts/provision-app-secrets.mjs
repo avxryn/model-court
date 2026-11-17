@@ -17,12 +17,23 @@
  * Usage (from the app directory, signed in to the DeepSpace CLI as the owner):
  *   node scripts/provision-app-secrets.mjs            # dry run: shows what would be set
  *   node scripts/provision-app-secrets.mjs --apply    # uploads; then `npx deepspace deploy`
+ *
+ * Root rotation (docs/runbook.md "Root-key rotation", step 2) adds only the
+ * next root, with the same refusal to overwrite:
+ *   node scripts/provision-app-secrets.mjs --rotation-root v2 [--apply]
  */
 
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 
-const NAMES = ['CREDENTIAL_ENCRYPTION_KEY_V1', 'CREDENTIAL_REQUEST_HMAC_KEY']
+const rotationIndex = process.argv.indexOf('--rotation-root')
+const rotationRoot = rotationIndex === -1 ? null : process.argv[rotationIndex + 1]
+// Only roots the Worker can parse (src/server/config.ts) may be provisioned.
+if (rotationIndex !== -1 && rotationRoot !== 'v2') {
+  console.error('--rotation-root accepts only v2 (the roots src/server/config.ts reads are v1 and v2).')
+  process.exit(1)
+}
+const NAMES = rotationRoot ? [`CREDENTIAL_ENCRYPTION_KEY_${rotationRoot.toUpperCase()}`] : ['CREDENTIAL_ENCRYPTION_KEY_V1', 'CREDENTIAL_REQUEST_HMAC_KEY']
 const apply = process.argv.includes('--apply')
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx'
 

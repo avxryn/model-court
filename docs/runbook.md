@@ -16,6 +16,13 @@ Never paste secret values into commands, chats, or documents.
 | `PUBLIC_APP_ORIGIN` | `[vars]` | empty → the request origin is used for invite links |
 | `APP_COMMIT` | `[vars]` | set to the shipped commit before each deploy |
 | `CREDENTIAL_ENCRYPTION_KEY_V1`, `CREDENTIAL_REQUEST_HMAC_KEY` | DeepSpace secrets store | create with `npm run secrets:provision -- --apply` |
+| `CREDENTIAL_ENCRYPTION_KEY_V2` | DeepSpace secrets store | absent; added only for a rotation (`npm run secrets:provision -- --rotation-root v2 --apply`) |
+| `CREDENTIAL_REKEY_TARGET_VERSION` | `[vars]` | empty (off). Set to `"v2"` during rotation: the cron re-encrypts active keys to that root |
+| `CREDENTIAL_REKEY_REVOKE_UNREADABLE` | `[vars]` | empty (off). `"true"` revokes keys that fail authentication during re-keying |
+| `CREDENTIAL_REVOKE_CREATED_BEFORE` | `[vars]` | empty (off). After a restore: epoch ms; the cron revokes every active key created before it |
+
+The three operator settings are read only by the maintenance cron (`src/server/services/credential-ops.ts`).
+No HTTP route reaches them. A malformed value turns the operation off and shows up in `/healthz` as `ready:false`.
 
 `/healthz` reports `ready:false` when any setting is missing or malformed. Generation then stays
 disabled even if `GENERATION_ENABLED` is `true`.
@@ -49,21 +56,107 @@ those, the owner cancels the run.
 | Deletion not finishing | The tombstone already blocks access. Check `[cron] mc-maintenance` log lines; cleanup retries every minute in batches of 10. |
 | Identity leak suspected | Disable review routes by deploying a fix, mark the affected runs as potentially unblinded, and rerun the evaluation if needed. |
 
-## Root-key rotation (planned, manual)
+## Root-key rotation
 
-1. Set `CREDENTIAL_WRITES_ENABLED="false"` and `GENERATION_ENABLED="false"`, then deploy.
-2. Add `CREDENTIAL_ENCRYPTION_KEY_V2` (generate the same way the provisioning script does; never print it), then deploy.
-3. Re-encrypt active rows from v1 to v2 with fresh nonces (**not implemented yet**; this is a gap), verify, and set `CREDENTIAL_ACTIVE_KEY_VERSION="v2"`.
-4. Retire v1 only after the backup and rollback check.
+Re-keying runs in the maintenance cron, once a minute, on up to 250 active keys per tick. Each key is
+decrypted under the root its row records. It is then sealed under the target root with a fresh nonce and
+the same canonical AAD, which now names the target version. The new ciphertext is opened once as a check
+before a guarded update replaces the old one. The update changes only `ciphertext`, `nonce`, and
+`encryption_key_version`. Revision, expiry, and last-use stay the same, so owners notice nothing and
+`If-Match` values stay valid. Revoked rows are never selected. The job keeps no state: every tick picks
+up the active rows that are not on the target yet, so it can be stopped, redeployed, or run twice safely.
+Each re-keyed row writes a `credential.rekey` audit event. Log lines carry counts and opaque ids only,
+never key material.
 
-Until step 3 exists, rotate by asking users to re-add their keys after a root change.
+1. Set `CREDENTIAL_WRITES_ENABLED="false"` and `GENERATION_ENABLED="false"`, then deploy. Re-keying
+   tolerates concurrent saves, renewals, and removals. Pausing writes keeps the window short and the counts
+   easy to read.
+2. Run `npm run secrets:provision -- --rotation-root v2` (dry run), then add `--apply`. This generates
+   `CREDENTIAL_ENCRYPTION_KEY_V2` in memory and refuses to overwrite an existing root. The Worker reads
+   only `v1` and `v2`, so a third root needs a code change in `src/server/config.ts`.
+3. Set `CREDENTIAL_ACTIVE_KEY_VERSION="v2"` (new saves use v2) and `CREDENTIAL_REKEY_TARGET_VERSION="v2"`,
+   then deploy. Watch `npx deepspace logs --search credential.rekey`. Each tick logs `rekeyed`,
+   `unreadable`, `revokedUnreadable`, `rootMissing`, `skipped`, and `remaining`.
+   - `remaining: 0` means every active key is on v2. Continue with step 4.
+   - If every row is `unreadable` and none is `rekeyed`, the v1 root in the secrets store is not the one
+     that sealed the keys. Nothing was changed. Clear the target, deploy, and investigate.
+     **Never overwrite a root as a fix.**
+   - If a few rows are `unreadable` (ids in `unreadableIds`), those rows were altered or corrupted. They
+     are already unusable: generation fails them with `CREDENTIAL_UNAVAILABLE`. To finish, set
+     `CREDENTIAL_REKEY_REVOKE_UNREADABLE="true"` and deploy. The next tick revokes them through the normal
+     path (fences their runs, deletes ciphertext). Then clear the flag. Never set this flag while the
+     first case above is possible: it would revoke every key.
+   - `rootMissing > 0` means a row records a root this Worker does not have. Restore that secret, never a
+     new value under its name.
+4. Clear `CREDENTIAL_REKEY_TARGET_VERSION`, re-enable writes and generation, deploy, and run one
+   verification run (README §"Verification after deploy").
+5. Retire v1 only once `remaining` has been 0 and a backup exists. A rollback to an older release keeps
+   the live secrets (`deepspace rollback`), and every v1 release already reads `CREDENTIAL_ENCRYPTION_KEY_V2`,
+   so v2 rows stay readable after a rollback. Releases built before the rotation still set
+   `CREDENTIAL_ACTIVE_KEY_VERSION="v1"`. Rolling back to one of them after v1 is removed fails closed:
+   saving keys and generation stay off until v2 is made active again. Removing v1 is the only step that
+   cannot be undone.
 
-## Backup and restore
+Verified locally on both stores (`tests/integration/credential-rekey.test.ts`): fresh nonces, AAD bound to
+v2, generation after v1 removal, resumable batches, idempotent reruns, revoked rows unchanged, tampered and
+swapped ciphertext refused, wrong-root no-op, no plaintext anywhere. **Not yet run on the live platform.**
+The cron tick and the `deepspace logs` output need a live check the first time this runs.
 
-V9 is unresolved: the data lives in the `ModelCourtStore` SQLite Durable Object, and no export/restore procedure exists yet. A restore
-must leave `provider_credentials` rows revoked and without ciphertext. The schema makes revocation
-one-way (a trigger blocks `revoked → active`), but a raw restore could reinsert old rows, so after any
-restore revoke every credential row before re-enabling generation.
+## Backup and restore (V9)
+
+The data lives in one `ModelCourtStore` SQLite Durable Object. `src/server/services/backup.ts` provides
+the parts that can be tested locally:
+
+- `exportSnapshot` reads every Model Court table in one store call, so the snapshot is consistent. It
+  includes the schema, the migration ledger, and all rows. Credential secrets never leave the store:
+  every `provider_credentials` row is exported **revoked with no ciphertext, nonce, or root version**.
+  Receipts of `credential.*` commands are dropped, because they hold a keyed digest of the submitted key.
+  Export refuses a table that is missing from `BACKUP_TABLES`, so a new migration cannot be left out of
+  a backup without anyone noticing.
+- `sealSnapshot` / `openSnapshot` encrypt the file with AES-256-GCM under a dedicated 32-byte backup
+  key, with the header authenticated. The snapshot still holds user content (prompts, responses, ratings,
+  verdicts), so never store it unsealed. Never use a credential root as the backup key.
+- `restoreSnapshot` loads into an **empty**, migrated store and refuses anything else. It also refuses
+  another app's file, a digest mismatch, unknown tables, column names that are not identifiers, and
+  migrations the target lacks. It forces every credential row revoked without ciphertext again, even for
+  a file that was not made by `exportSnapshot`. It drops credential receipts and fences all queued or
+  in-flight work pinned to a restored key (`CREDENTIAL_REVOKED`, reservations released). It writes a
+  `store.restore` audit event. It is not one transaction across tables: if it fails, discard the target
+  store and restore into a fresh one.
+- `CREDENTIAL_REVOKE_CREATED_BEFORE` (cron) revokes every active key created before a cutoff, through
+  the normal revocation path. Use it after any restore that may have brought back ciphertext, such as a
+  platform point-in-time restore. A key the user removed after the restore point would otherwise come back.
+
+Verified locally on both stores (`tests/integration/backup-restore.test.ts`, and the post-restore cases in
+`credential-rekey.test.ts`).
+
+### What still needs the live platform (unverified)
+
+No operator path yet runs `exportSnapshot` against the live store or carries a file in or out. Choose one,
+then verify it end to end on a staging app before relying on it:
+
+1. **Durable Object point-in-time recovery.** SQLite-backed Durable Objects keep 30 days of history
+   (`ctx.storage.getBookmarkForTime`, `onNextSessionRestoreBookmark`). This needs a method on
+   `ModelCourtStore` and a way for the operator to call it. It is unknown whether DeepSpace exposes
+   either. The restore happens in place and **brings back old ciphertext**, so step 3 below is mandatory.
+2. **Sealed export to per-app storage.** A cron-triggered export, sealed under a new
+   `MODEL_COURT_BACKUP_KEY` secret and written to a per-app R2 bucket (`[[r2_buckets]]` with
+   `bucket_name = "auto"`), then downloaded with a platform tool. Neither the bucket provisioning nor a
+   download command has been checked. A stronger variant seals to an operator-held public key, so the
+   Worker cannot read old backups.
+3. **No temporary public route.** Do not add an HTTP export or restore endpoint, even one restricted to the owner.
+
+### Restore procedure (any method)
+
+1. Set `GENERATION_ENABLED="false"` and `CREDENTIAL_WRITES_ENABLED="false"`, then deploy.
+2. Restore: for an empty store, `restoreSnapshot` with the opened file; otherwise, the platform restore.
+3. Set `CREDENTIAL_REVOKE_CREATED_BEFORE` to the current epoch ms (`node -e "console.log(Date.now())"`)
+   and deploy. Wait for `npx deepspace logs --search credential.restore_revoke` to show `remaining: 0`.
+   Leaving the value set is harmless: keys saved after the cutoff are never touched.
+4. Check `/healthz`. The `remaining` value in that log line counts the active keys created before the
+   cutoff, so `0` is the check that none is left.
+5. Re-enable writes and generation, deploy, and tell users to add their keys again. Saved keys never
+   survive a restore by design. The schema also makes revocation one-way: a trigger blocks `revoked → active`.
 
 ## Rollback
 
