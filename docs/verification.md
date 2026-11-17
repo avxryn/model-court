@@ -39,6 +39,7 @@ wrangler/workerd from the lockfile, Vitest 4.1, local D1 via `wrangler getPlatfo
 | 2026-11-17 | Provider smoke (V2/T04) | `npm run smoke:providers`, run by you in your terminal; the agent read the output | Both routes succeeded. OpenAI `gpt-6-luna`: `completed`, 153/24 tokens, observed model matches. Anthropic `claude-haiku-5-5`: `end_turn`, 228/151 tokens, observed model matches. An earlier Anthropic attempt with a different key was normalized to `PROVIDER_AUTH_FAILED`. Both routes now have `verifiedAt: 2026-11-17`. Not yet deployed; live generation is still off. | V2, T04 |
 | 2026-11-17 | Live generation turned on | `npx deepspace deploy --json`; `/healthz` x3; `deepspace logs` | Release `rel_01M7N38E2Z4MCHZAGFDWB3TP4Z` (build `2a6ac44`), with `GENERATION_ENABLED=true` and both routes verified. `/healthz` returned ready, storeOk true and generationEnabled true on 3 of 3 calls. Cron `mc-maintenance ok` at 09:51 and 09:52 (local), after the deploy. No error or warning logs in the next 5 minutes. `/api/v1/catalog` returns 401 when not signed in, so the agent did not see the model list. No live run yet. | V5 |
 | 2026-11-17 | Judge/Juror rename deployed (D-24) | `npm run check`; `npx deepspace deploy --json`; `/healthz` x3; landing page in the built-in browser; `deepspace logs` | 35 unit tests pass; 57 integration tests pass on D1 and 57 on the Durable Object store. Release `rel_01M7N419XEG8MS00G2TWBRD36F` (build `36fd5bf`). `/healthz` returned ready, storeOk true and generationEnabled true on 3 of 3 calls. The live landing page shows the judge/juror wording. Cron `mc-maintenance ok` at 10:05 and 10:06 (local), after the deploy. No error logs. Signed-in screens not viewed. | V5 |
+| 2026-11-17 | Playwright suites (first run) | `npx deepspace test run all --port 5210` (local dev server) | 9 passed, 3 skipped, 0 failed. Passed: auth proxy, WebSocket endpoint, landing has no JS errors and makes no auth or socket requests, single title/description/canonical, /home app boundary, signed-out sign-in button, 404, public sample makes no API or provider requests (T19). Skipped: the three two-account specs (per-account rendering, cross-account evaluation isolation, the API keys page never shows a stored key), because no DeepSpace test accounts exist. Local cron ran `mc-maintenance ok`. | T19, T28 (local) |
 
 ### Not yet verified by the agent (blocked or pending)
 
@@ -47,7 +48,7 @@ Updated 2026-11-17. Sign-in, registration, secrets, deploy, the Durable Object s
 - Deployed generation (V12, T34): a real run in the live app with keys saved in Settings. Live generation has been on since release `rel_01M7N38E2Z4MCHZAGFDWB3TP4Z`.
 - JobRoom execution in production, and RecordRoom notice access across two users (V5 jobs, V6). Both need a live run.
 - Encryption round trip with the deployed secret binding (V13 deployed half). This happens on the first live run.
-- Playwright E2E (`deepspace test run`) has not been executed.
+- Playwright two-account specs: skipped until two DeepSpace test accounts exist (creating them needs your OK and your own passwords).
 - Authenticated screens with real data; keyboard-only review; 200% zoom; 390px width; Firefox and Safari.
 - Performance targets N01–N03 (T25), backup/restore (V9, T27).
 

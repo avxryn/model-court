@@ -41,7 +41,7 @@ those, the owner cancels the run.
 |---|---|
 | `CREDENTIAL_UNAVAILABLE` on many attempts | Disable generation. Check `npx deepspace secrets list` for the root name and version (never print values). **Never overwrite a root as a fix**: that makes every saved key undecryptable. |
 | Suspected user-key exposure | Disable generation. The affected users remove their keys in Settings (or the operator revokes the rows). Tell them to rotate the key **at the provider**. Fix the leak before re-enabling. |
-| Unusual spend | Disable generation. Inspect `budget_buckets`, `attempt_reservations`, and `audit_events` (D1 console). Re-enable only after a bypass test passes. |
+| Unusual spend | Disable generation. Inspect `budget_buckets`, `attempt_reservations`, and `audit_events`. The Durable Object store has no console yet, so this needs a temporary read-only operator query. Re-enable only after a bypass test passes. |
 | Run stuck generating | `npx deepspace logs --search outbox` / `attempt.`. Cron re-dispatches pending outbox rows and expires leases after 120 seconds. Never resend all calls by hand. |
 | Provider failing repeatedly | Set the route's `verifiedAt` to `null` in `src/domain/registry.ts` and deploy. Old evidence stays readable. |
 | `/healthz` shows `storeOk:false` or API 500s mentioning "different Durable Object" | A Durable Object stub was reused across contexts. Stubs must be created per request/job/cron run (D-22). Roll back to the previous release if needed. |
@@ -60,7 +60,7 @@ Until step 3 exists, rotate by asking users to re-add their keys after a root ch
 
 ## Backup and restore
 
-V9 is unresolved: managed D1 export/restore access through DeepSpace is not yet verified. A restore
+V9 is unresolved: the data lives in the `ModelCourtStore` SQLite Durable Object, and no export/restore procedure exists yet. A restore
 must leave `provider_credentials` rows revoked and without ciphertext. The schema makes revocation
 one-way (a trigger blocks `revoked → active`), but a raw restore could reinsert old rows, so after any
 restore revoke every credential row before re-enabling generation.
@@ -68,5 +68,5 @@ restore revoke every credential row before re-enabling generation.
 ## Rollback
 
 `npx deepspace releases`, then `npx deepspace rollback` to a retained bundle. Code rollback does not roll
-back D1. All migrations are additive, so the previous bundle can read the current schema. Never approve
+back the store. All migrations are additive, so the previous bundle can read the current schema. Never approve
 a rollback that deletes Durable Object classes.

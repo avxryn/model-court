@@ -12,16 +12,16 @@ anonymously (you as the judge, plus up to three invited jurors) → reveal → r
 - **Jurors need no keys.**
 - **The public sample (`/sample`) is an illustrative, hand-written fixture.** It makes no provider requests and needs no account.
 
-Live URL: https://model-court.app.space (generation disabled until providers are verified) · Built from specification v1.2 (Nov 15, 2026).
+Live URL: https://model-court.app.space (live generation on since Nov 17, 2026) · Built from specification v1.2 (Nov 15, 2026).
 
-## Status (Nov 16, 2026)
+## Status (Nov 17, 2026)
 
 | Area | State |
 |---|---|
-| Domain rules, D1 schema, API, generation pipeline, review, reveal, results, verdict, credentials | Implemented; covered by 35 unit and 49 integration tests (local D1, stubbed provider HTTP) |
-| UI (shadcn/ui on Base UI) | All screens implemented; landing, sample, and the signed-out gate checked in a browser; authenticated screens not yet exercised with real sign-in |
-| DeepSpace registration, secrets, deploy | Done Nov 17: app `app_01M7M0ATC59NFTPZSJJS47J0BX`, release `rel_01M7M2S7YJHBV8PYN8FE77R48P` (UI polish merged; store-stub fix D-22), `GENERATION_ENABLED="false"` |
-| Real provider calls | **None made.** Both model routes are disabled (`verifiedAt: null`) until a recorded smoke call |
+| Domain rules, schema, API, generation pipeline, review, reveal, results, verdict, credentials | Implemented; 35 unit tests and 57 integration tests, run against both local D1 and the real `ModelCourtStore` Durable Object (provider HTTP stubbed) |
+| UI (shadcn/ui on Base UI) | All screens implemented. Landing, sample, signed-out gate, and signed-in page loading checked on the live app; a full signed-in run not yet exercised |
+| Deployment | Live: app `app_01M7M0ATC59NFTPZSJJS47J0BX`, generation on. Release history and evidence in `docs/verification.md` |
+| Real provider calls | One smoke call per provider succeeded on Nov 17 (OpenAI `gpt-6-luna`, Anthropic `claude-haiku-5-5`); both routes verified. No run in the deployed app yet |
 
 See `docs/implementation-plan.md` for the checklist, `docs/verification.md` for evidence, and
 `docs/decisions.md` for deviations.
@@ -76,13 +76,13 @@ npx deepspace dev start
 |---|---|
 | `npm run test:unit` | Pure rules: scoring, validation, prompt construction, adapter mappings |
 | `npm run test:integration` / `test:integration:store` | Real Hono API + real local D1 / the real `ModelCourtStore` Durable Object + real JWT verification. Stubbed: auth issuer key, JobRoom queue, notices, provider HTTP. **No paid calls are possible.** |
-| `npx deepspace test run` | Scaffold Playwright suites (needs sign-in) |
+| `npx deepspace test run all` | Playwright against a local dev server: smoke, API, public sample, and two-account isolation. The two-account specs skip until two DeepSpace test accounts exist (`npx deepspace test accounts create ... --password-stdin`) |
 | `npm run smoke:providers` | **Paid**, manual: one request per provider; keys typed into a hidden prompt in your own terminal |
 
 ## Deploy
 
-See `docs/runbook.md` → "First deployment". Generation stays off (`GENERATION_ENABLED="false"`) until the
-verification steps below pass.
+See `docs/runbook.md` → "First deployment". Keep generation off (`GENERATION_ENABLED="false"`) on a new
+deployment until both providers pass `npm run smoke:providers`. On the live app it was turned on Nov 17, 2026.
 
 ### Verification after deploy
 
@@ -106,9 +106,9 @@ Text only · 1–5 cases · exactly 2 configurations · 512 output tokens · fix
 
 ## Known unfinished edges
 
-- Not deployed. No real provider call made. V2/V3-deployed/V5/V6/V9/V12/V13-deployed are open.
-- Read-request rate limiting (120 per minute) not implemented (D-13).
+- No live run in the deployed app yet (V12, T34): the first one also proves JobRoom execution and the deployed encryption round trip.
+- Two-account flow (judge plus juror, blinding before reveal) not yet run live.
+- Read-request rate limiting (120 per minute) not implemented (D-13); writes are limited.
 - Root-key re-encryption tool for rotation not implemented (runbook).
-- Backup/restore procedure for managed D1 unverified (V9).
-- Playwright E2E for the multi-user path not written yet; the scaffold's specs still need updating to the new UI.
+- Backup/restore for the Durable Object store not designed or verified (V9).
 - Accessibility checks beyond radio naming and 390px layout (keyboard-only review, 200% zoom, contrast audit) are pending.
