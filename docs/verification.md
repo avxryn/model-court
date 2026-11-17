@@ -26,6 +26,10 @@ wrangler/workerd from the lockfile, Vitest 4.1, local D1 via `wrangler getPlatfo
 | 2026-11-17 | First deploy attempt | `npx deepspace deploy` | Refused: D1 custom binding requires an admin tier (account is free). No release created. | V3 → D-20 |
 | 2026-11-17 | Durable Object SQLite semantics | local workerd probe + `npm run test:integration:store` | Probe: trigger abort, `transactionSync` rollback on guard CHECK, partial unique, RETURNING, JSON, FK cascade all hold. Full integration suite 49/49 against the real `ModelCourtStore`; a mode check confirmed the run used the Durable Object, not D1. | V3 (revised) |
 
+| 2026-11-17 | Deploy | `npx deepspace deploy` (commit ebd870c) | Live at https://model-court.app.space, release rel_01M7M1JKZ3WJ7P1YTKCN0EGF30, edge and data plane confirmed, bundle retained. | T23 (partial) |
+| 2026-11-17 | Deployed smoke (signed out) | `curl` + Chromium pane | `/healthz` → `{"build":"ebd870c","ready":true,"generationEnabled":false}` (secrets bound). `/`, `/sample`, `/evaluations` → 200. `/api/v1/evaluations` without or with a bad token → 401. Integration proxy, actions, AI chat, files, `/_deepspace/*`, debug, `/ws/jobs`, `/ws/cron`, arbitrary `/ws/<room>` → 404. CSP, X-Frame-Options, nosniff, Referrer-Policy present. No console errors on `/sample` and the signed-out gate. | V4, V7, T19 (deployed), §9.5 |
+| 2026-11-17 | Deployed scheduler + store | `npx deepspace logs --search cron` | `[cron] mc-maintenance ok 303ms` after the deploy wake-up; the task ran migrations and maintenance against the live `ModelCourtStore`. | V6 (scheduler half), V3 (revised, deployed) |
+
 ### Not yet verified by the agent (blocked or pending)
 
 - Anything requiring a DeepSpace login: `dev start`, `test run` (Playwright multi-user fixture), registration, secrets, deploy.
