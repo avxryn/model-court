@@ -14,7 +14,7 @@ import { all, auditStatement, budgetSubjects, classifyConstraint, cond, GuardFai
 import type { Deps } from '../deps'
 import { ApiError, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
-import { parseStoredDraft } from './evaluations'
+import { configurationCapError, parseStoredDraft } from './evaluations'
 import { dispatchOutbox, notifyRun, reconcileLeases } from './generation'
 
 export interface GenerationRow {
@@ -82,6 +82,8 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
   const result = await idempotent(deps, { actorUserId: userId, idempotencyKey: key, operation, requestHash: hash }, async (receipt) => {
     if (access.evaluation.revision !== input.draftRevision) throw revisionConflict()
     const draft = parseStoredDraft(access.evaluation)
+    const capError = configurationCapError(deps, draft.configurations.length)
+    if (capError) throw capError
     const issues = readinessIssues(draft, deps.routes)
     if (issues.length > 0) {
       throw new ApiError(422, 'UNSUPPORTED_CONFIGURATION', describeIssue(issues[0]), { details: { issues } })

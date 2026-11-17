@@ -19,6 +19,7 @@ export interface ConfigEnv {
   PUBLIC_APP_ORIGIN?: string
   PROVIDER_TIMEOUT_MS?: string
   CREDENTIAL_TTL_DAYS?: string
+  MAX_CONFIGURATIONS_PER_RUN?: string
   APP_COMMIT?: string
   DEEPSPACE_APP_ID: string
 }
@@ -35,6 +36,8 @@ export interface AppConfig {
   hmacKey: Uint8Array<ArrayBuffer> | null
   limits: { dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number }
   providerTimeoutMs: number
+  /** F24: 2 or 3 configurations per run; operators may hold a deployment at 2. */
+  maxConfigurationsPerRun: number
   /** Saved provider keys expire this long after saving or renewal (D-23). */
   credentialTtlMs: number
   problems: string[]
@@ -59,6 +62,14 @@ function positiveInt(value: string | undefined, fallback: number, problems: stri
     return 0
   }
   return parsed
+}
+
+function configurationCap(value: string | undefined, problems: string[]): number {
+  if (value === undefined || value.trim() === '') return LIMITS.maxConfigurationsPerRun
+  const parsed = Number(value)
+  if (Number.isInteger(parsed) && parsed >= LIMITS.minConfigurationsPerRun && parsed <= LIMITS.maxConfigurationsPerRun) return parsed
+  problems.push(`MAX_CONFIGURATIONS_PER_RUN must be ${LIMITS.minConfigurationsPerRun}–${LIMITS.maxConfigurationsPerRun}; using ${LIMITS.minConfigurationsPerRun}.`)
+  return LIMITS.minConfigurationsPerRun
 }
 
 export function parseConfig(env: ConfigEnv): AppConfig {
@@ -109,6 +120,7 @@ export function parseConfig(env: ConfigEnv): AppConfig {
     },
     // Operators may shorten, never lengthen, the 90s provider deadline.
     providerTimeoutMs: Math.min(positiveInt(env.PROVIDER_TIMEOUT_MS, LIMITS.providerTimeoutMs, problems, 'PROVIDER_TIMEOUT_MS') || LIMITS.providerTimeoutMs, LIMITS.providerTimeoutMs),
+    maxConfigurationsPerRun: configurationCap(env.MAX_CONFIGURATIONS_PER_RUN, problems),
     credentialTtlMs: Math.min(Math.max(positiveInt(env.CREDENTIAL_TTL_DAYS, 7, problems, 'CREDENTIAL_TTL_DAYS') || 7, 1), 90) * 24 * 60 * 60 * 1000,
     problems,
   }

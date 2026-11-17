@@ -2,7 +2,9 @@
 export const LIMITS = {
   minCases: 1,
   maxCases: 5,
-  configurationsPerRun: 2,
+  /** F24: P1 allows a third configuration; operators may cap at 2 (MAX_CONFIGURATIONS_PER_RUN). */
+  minConfigurationsPerRun: 2,
+  maxConfigurationsPerRun: 3,
   caseTitle: { min: 1, max: 100 },
   caseInput: { min: 1, max: 4_000 },
   caseReference: { min: 0, max: 8_000 },
@@ -13,6 +15,8 @@ export const LIMITS = {
   taskDescription: { min: 0, max: 2_000 },
   maxOutputTokens: 512,
   draftJsonBytes: 96 * 1024,
+  /** CSV case import (browser-side parse). */
+  caseImportCsvBytes: 128 * 1024,
   snapshotJsonBytes: 96 * 1024,
   requestBodyBytes: 128 * 1024,
   credentialRequestBytes: 16 * 1024,

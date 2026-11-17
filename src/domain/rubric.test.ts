@@ -116,3 +116,47 @@ describe('submissionIssues', () => {
     expect(submissionIssues(assigned, [full(assigned[0], 2)])).toContainEqual({ kind: 'missing_response', responseId: assigned[1] })
   })
 })
+
+describe('T24 three configurations score on common cases', () => {
+  const C = 'cfg-c'
+  function session3(id: string, contextType: 'invited' | 'owner', scores: Record<string, [Score, Score, Score]>): ScoredSession {
+    const responses: ScoredSession['responses'] = []
+    const ratings: CompleteRating[] = []
+    for (const [caseKey, triple] of Object.entries(scores)) {
+      ;[A, B, C].forEach((configurationKey, index) => {
+        const responseId = `${id}-${caseKey}-${index}`
+        responses.push({ caseKey, responseId, configurationKey })
+        ratings.push(rating(responseId, triple[index]))
+      })
+    }
+    return { sessionId: id, contextType, identityClueFlag: false, responses, ratings }
+  }
+
+  it('uses one denominator per configuration and finds the single highest', () => {
+    const sessions = [session3('r1', 'invited', { c1: [2, 1, 0], c2: [1, 1, 2] }), session3('r2', 'invited', { c1: [2, 2, 1], c2: [2, 0, 2] })]
+    const result = scoreCohort('invited', ['c1', 'c2'], [A, B, C], sessions)
+    expect(result.byConfiguration?.[A].overallMean).toBe(7 / 4)
+    expect(result.byConfiguration?.[B].overallMean).toBe(1)
+    expect(result.byConfiguration?.[C].overallMean).toBe(5 / 4)
+    for (const key of [A, B, C]) expect(result.byConfiguration?.[key].dimensions.grounding.count).toBe(4)
+    expect(result.highest).toEqual([A])
+  })
+
+  it('reports a three-way exact tie and a two-of-three tie', () => {
+    expect(scoreCohort('invited', ['c1'], [A, B, C], [session3('r1', 'invited', { c1: [1, 1, 1] })]).highest).toEqual([A, B, C])
+    expect(scoreCohort('invited', ['c1'], [A, B, C], [session3('r1', 'invited', { c1: [2, 0, 2] })]).highest).toEqual([A, C])
+  })
+
+  it('ignores cases outside the common (eligible) set', () => {
+    const sessions = [session3('r1', 'invited', { c1: [2, 2, 2], c2: [0, 0, 0] })]
+    const result = scoreCohort('invited', ['c1'], [A, B, C], sessions)
+    expect(result.caseCount).toBe(1)
+    expect(result.byConfiguration?.[C].overallMean).toBe(2)
+  })
+
+  it('finds disagreements on the third configuration', () => {
+    const sessions = [session3('r1', 'invited', { c1: [2, 2, 2] }), session3('r2', 'invited', { c1: [2, 2, 0] })]
+    const disagreements = findDisagreements(sessions)
+    expect(disagreements.map((d) => d.configurationKey)).toEqual([C, C, C])
+  })
+})

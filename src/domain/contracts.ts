@@ -54,17 +54,20 @@ function uniqueKeys(items: { key: string }[]): boolean {
   return new Set(items.map((item) => item.key)).size === items.length
 }
 
+export const casesSchema = z
+  .array(caseInputSchema)
+  .min(LIMITS.minCases, `Add at least ${LIMITS.minCases} case`)
+  .max(LIMITS.maxCases, `At most ${LIMITS.maxCases} cases`)
+  .refine(uniqueKeys, 'Case keys must be unique')
+
 export const draftInputSchema = z
   .strictObject({
     comparisonMode: comparisonModeSchema,
-    cases: z
-      .array(caseInputSchema)
-      .min(LIMITS.minCases, `Add at least ${LIMITS.minCases} case`)
-      .max(LIMITS.maxCases, `At most ${LIMITS.maxCases} cases`)
-      .refine(uniqueKeys, 'Case keys must be unique'),
+    cases: casesSchema,
     configurations: z
       .array(configurationSchema)
-      .length(LIMITS.configurationsPerRun, `Exactly ${LIMITS.configurationsPerRun} configurations`)
+      .min(LIMITS.minConfigurationsPerRun, `Add at least ${LIMITS.minConfigurationsPerRun} configurations`)
+      .max(LIMITS.maxConfigurationsPerRun, `At most ${LIMITS.maxConfigurationsPerRun} configurations`)
       .refine(uniqueKeys, 'Configuration keys must be unique'),
   })
   .refine((draft) => utf8ByteLength(JSON.stringify(draft)) <= LIMITS.draftJsonBytes, {
@@ -94,7 +97,7 @@ export const startRunSchema = z.strictObject({
 })
 
 export const retrySchema = z.strictObject({
-  generationIds: z.array(uuid).min(1).max(LIMITS.maxCases * LIMITS.configurationsPerRun),
+  generationIds: z.array(uuid).min(1).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun),
   acknowledgePossiblePriorCharge: z.literal(true),
 })
 
@@ -129,7 +132,7 @@ export const draftRatingSchema = z.strictObject({
 export type DraftRating = z.infer<typeof draftRatingSchema>
 
 export const saveRatingsSchema = z.strictObject({
-  ratings: z.array(draftRatingSchema).max(LIMITS.maxCases * LIMITS.configurationsPerRun),
+  ratings: z.array(draftRatingSchema).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun),
 })
 
 export const revealSchema = z.strictObject({

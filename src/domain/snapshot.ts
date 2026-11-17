@@ -59,7 +59,7 @@ export function describeIssue(issue: ReadinessIssue): string {
     case 'model_mode_instructions_differ':
       return 'Model comparison requires identical system instructions. Switch to configuration comparison to vary them.'
     case 'model_mode_same_model':
-      return 'Model comparison needs two different models.'
+      return 'Model comparison needs a different model for each configuration.'
   }
 }
 

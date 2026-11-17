@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createCredentialSchema, draftInputSchema, verdictSchema } from './contracts'
+import { createCredentialSchema, draftInputSchema, retrySchema, saveRatingsSchema, verdictSchema } from './contracts'
 import { canonicalJson, sha256Hex } from './canonical'
 import { makeExampleDraft } from './example'
 import { buildMessages } from './messages'
@@ -44,10 +44,19 @@ describe('draftInputSchema (T03)', () => {
     expect(draftInputSchema.safeParse(six).success).toBe(false)
   })
 
-  it('requires exactly two configurations with the fixed output cap', () => {
+  it('requires two or three configurations with the fixed output cap (T24)', () => {
     const one = draft()
     one.configurations.pop()
     expect(draftInputSchema.safeParse(one).success).toBe(false)
+    const three = draft()
+    three.configurations.push({ ...three.configurations[0], key: newId(), label: 'Candidate 3' })
+    expect(draftInputSchema.safeParse(three).success).toBe(true)
+    const four = structuredClone(three)
+    four.configurations.push({ ...four.configurations[0], key: newId(), label: 'Candidate 4' })
+    expect(draftInputSchema.safeParse(four).success).toBe(false)
+    const dupKey = structuredClone(three)
+    dupKey.configurations[2].key = dupKey.configurations[0].key
+    expect(draftInputSchema.safeParse(dupKey).success).toBe(false)
     const cap = draft() as unknown as { configurations: { maxOutputTokens: number }[] }
     cap.configurations[0].maxOutputTokens = 4096
     expect(draftInputSchema.safeParse(cap).success).toBe(false)
@@ -59,6 +68,19 @@ describe('draftInputSchema (T03)', () => {
       c.reference = '界'.repeat(LIMITS.caseReference.max) // 3 bytes each → 24 KB per case
     }
     expect(draftInputSchema.safeParse(big).success).toBe(false)
+  })
+})
+
+describe('T24 per-run bounds scale to three configurations', () => {
+  it('accepts up to cases × 3 retries and ratings, and no more', () => {
+    const ids = (n: number) => Array.from({ length: n }, newId)
+    const max = LIMITS.maxCases * LIMITS.maxConfigurationsPerRun
+    expect(max).toBe(15)
+    expect(retrySchema.safeParse({ generationIds: ids(max), acknowledgePossiblePriorCharge: true }).success).toBe(true)
+    expect(retrySchema.safeParse({ generationIds: ids(max + 1), acknowledgePossiblePriorCharge: true }).success).toBe(false)
+    const rating = (responseId: string) => ({ responseId, correctness: 2, completeness: 2, grounding: 2, note: '', suspectedIdentityClue: false })
+    expect(saveRatingsSchema.safeParse({ ratings: ids(max).map(rating) }).success).toBe(true)
+    expect(saveRatingsSchema.safeParse({ ratings: ids(max + 1).map(rating) }).success).toBe(false)
   })
 })
 
