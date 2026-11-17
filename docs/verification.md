@@ -48,7 +48,7 @@ Updated 2026-11-17. Sign-in, registration, secrets, deploy, the Durable Object s
 - Deployed generation (V12, T34): a real run in the live app with keys saved in Settings. Live generation has been on since release `rel_01M7N38E2Z4MCHZAGFDWB3TP4Z`.
 - JobRoom execution in production, and RecordRoom notice access across two users (V5 jobs, V6). Both need a live run.
 - Encryption round trip with the deployed secret binding (V13 deployed half). This happens on the first live run.
-- Playwright two-account specs: skipped until two DeepSpace test accounts exist (creating them needs your OK and your own passwords).
+- Playwright two-account specs: skipped by your choice (Nov 17); no DeepSpace test accounts were created. The live two-account run you do by hand covers the same isolation checks.
 - Authenticated screens with real data; keyboard-only review; 200% zoom; 390px width; Firefox and Safari.
 - Performance targets N01–N03 (T25), backup/restore (V9, T27).
 
