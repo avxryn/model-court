@@ -36,6 +36,8 @@ wrangler/workerd from the lockfile, Vitest 4.1, local D1 via `wrangler getPlatfo
 
 | 2026-11-17 | Key safeguards (D-23) | `npm run check` | 35 unit tests pass; 57 integration tests pass on local D1 and 57 on the Durable Object store. New tests: admin keys refused at save (both providers) with nothing stored; 7-day expiry and renewal; an expired key is never decrypted before the cron sweep (zero provider calls, reservations released); cron revokes expired keys via the revocation path (ciphertext removed, queued work fenced, blocked from new runs); last use recorded with run id and no key material. Not deployed yet. | T31–T33 (extended) |
 
+| 2026-11-17 | Key safeguards deployed (D-23) | `npx deepspace deploy --json`; `/healthz` x5; `deepspace logs` | Release `rel_01M7N1VZ51HAWR7C3MH00RXG49` (build `52868f5`), serving and data plane confirmed. `/healthz` returned build 52868f5, ready, storeOk true, generation disabled on 5 of 5 calls. `/api/v1/credentials` 401 unauthenticated; `/sample` 200. Cron `mc-maintenance ok` at 09:26, 09:28, 09:29 (local), after the deploy. The sweep now queries `expires_at`, so migration 0002 ran on the live store. No error-level logs in the 6 minutes after deploy. Renew and expiry UI not yet seen signed in. | V5, T31–T33 |
+
 ### Not yet verified by the agent (blocked or pending)
 
 - Anything requiring a DeepSpace login: `dev start`, `test run` (Playwright multi-user fixture), registration, secrets, deploy.
