@@ -143,9 +143,19 @@ app.use('*', async (c, next) => {
 })
 
 // Public readiness: build id and a boolean only — no secrets or provider config.
-app.get('/healthz', (c) => {
+app.get('/healthz', async (c) => {
   const config = parseConfig(c.env)
-  return c.json({ build: config.appCommit, ready: config.problems.length === 0, generationEnabled: config.generationEnabled }, 200, { 'Cache-Control': 'no-store' })
+  let storeOk = false
+  try {
+    storeOk = (await platformDeps(c.env).db.prepare('SELECT 1 AS ok').first<{ ok: number }>())?.ok === 1
+  } catch {
+    storeOk = false
+  }
+  return c.json(
+    { build: config.appCommit, ready: config.problems.length === 0 && storeOk, storeOk, generationEnabled: config.generationEnabled },
+    200,
+    { 'Cache-Control': 'no-store' },
+  )
 })
 
 app.route('/api/v1', createApi((c) => platformDeps(c.env as Env)))

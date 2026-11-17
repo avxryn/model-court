@@ -285,6 +285,29 @@ export async function migrate(db: D1Database, migrations: Migration[] = MIGRATIO
   return newlyApplied
 }
 
+/**
+ * Synchronous variant for the ModelCourtStore Durable Object, which applies the
+ * same ledgered migrations to its own SQLite storage when it starts.
+ */
+export function migrateSync(
+  exec: (sql: string, ...params: Array<string | number>) => Array<Record<string, unknown>>,
+  transaction: (fn: () => void) => void,
+  migrations: Migration[] = MIGRATIONS,
+): string[] {
+  exec(LEDGER)
+  const applied = new Set(exec('SELECT id FROM mc_schema_migrations').map((row) => String(row.id)))
+  const newlyApplied: string[] = []
+  for (const migration of migrations) {
+    if (applied.has(migration.id)) continue
+    transaction(() => {
+      for (const sql of migration.statements) exec(sql)
+      exec('INSERT INTO mc_schema_migrations (id, applied_at) VALUES (?, ?)', migration.id, Date.now())
+    })
+    newlyApplied.push(migration.id)
+  }
+  return newlyApplied
+}
+
 const migrated = new WeakMap<D1Database, Promise<unknown>>()
 
 /**

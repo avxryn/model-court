@@ -20,6 +20,8 @@ export interface GenerationJob {
 
 export interface Deps {
   db: D1Database
+  /** Make sure the schema exists before use (idempotent). */
+  ensureSchema: () => Promise<unknown>
   config: AppConfig
   routes: readonly ModelRoute[]
   now: () => number

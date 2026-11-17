@@ -14,18 +14,15 @@ import { GENERATION_JOB_TYPE } from './services/generation'
 import { SqlBatchDatabase } from './db/sql-batch-database'
 import { storeStub, type ModelCourtStore } from './db/store-object'
 
-// One adapter per isolate and namespace, so migrations run once per isolate.
-const databases = new WeakMap<object, D1Database>()
-
+/**
+ * A fresh adapter (and Durable Object stub) per call of platformDeps, i.e. per
+ * request, job, or cron run. Stubs are I/O objects tied to the context that
+ * created them; sharing one across contexts fails with "Cannot perform I/O on
+ * behalf of a different Durable Object" (production incident, D-22).
+ */
 function storeDatabase(env: Env): D1Database {
-  const namespace = env.MODEL_COURT_STORE as unknown as DurableObjectNamespace<ModelCourtStore>
-  let db = databases.get(namespace)
-  if (!db) {
-    const stub = storeStub(namespace)
-    db = new SqlBatchDatabase((statements) => stub.execute(statements)).asD1()
-    databases.set(namespace, db)
-  }
-  return db
+  const stub = storeStub(env.MODEL_COURT_STORE as unknown as DurableObjectNamespace<ModelCourtStore>)
+  return new SqlBatchDatabase((statements) => stub.execute(statements)).asD1()
 }
 
 /** Trusted server write into the app RecordRoom; bypasses collection RBAC by design. */
@@ -45,6 +42,8 @@ async function recordTool(env: Env, tool: string, params: Record<string, unknown
 export function platformDeps(env: Env): Deps {
   return {
     db: storeDatabase(env),
+    // ModelCourtStore migrates itself on start-up.
+    ensureSchema: async () => {},
     config: parseConfig(env),
     routes: MODEL_ROUTES,
     now: () => Date.now(),

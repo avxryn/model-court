@@ -43,6 +43,7 @@ those, the owner cancels the run.
 | Unusual spend | Disable generation. Inspect `budget_buckets`, `attempt_reservations`, and `audit_events` (D1 console). Re-enable only after a bypass test passes. |
 | Run stuck generating | `npx deepspace logs --search outbox` / `attempt.`. Cron re-dispatches pending outbox rows and expires leases after 120 seconds. Never resend all calls by hand. |
 | Provider failing repeatedly | Set the route's `verifiedAt` to `null` in `src/domain/registry.ts` and deploy. Old evidence stays readable. |
+| `/healthz` shows `storeOk:false` or API 500s mentioning "different Durable Object" | A Durable Object stub was reused across contexts. Stubs must be created per request/job/cron run (D-22). Roll back to the previous release if needed. |
 | Live updates stale | The UI falls back to a 15-second authorized refetch and refetches on focus. Check RecordRoom logs and the `mc_notices` schema. |
 | Deletion not finishing | The tombstone already blocks access. Check `[cron] mc-maintenance` log lines; cleanup retries every minute in batches of 10. |
 | Identity leak suspected | Disable review routes by deploying a fix, mark the affected runs as potentially unblinded, and rerun the evaluation if needed. |

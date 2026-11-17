@@ -17,7 +17,7 @@ import { verifyJwt } from 'deepspace/worker'
 import { MODEL_ROUTES, type ModelRoute } from '../../src/domain/registry'
 import { createApi } from '../../src/server/api'
 import { parseConfig, type ConfigEnv } from '../../src/server/config'
-import { migrate } from '../../src/server/db/migrations'
+import { ensureMigrated, migrate } from '../../src/server/db/migrations'
 import type { Deps, GenerationJob } from '../../src/server/deps'
 import { handleGenerationJob, type JobOutcome } from '../../src/server/services/generation'
 
@@ -132,6 +132,7 @@ export async function createHarness(options: HarnessOptions = {}) {
   let idCounter = 0
   const deps: Deps = {
     db,
+    ensureSchema: () => ensureMigrated(db),
     get config() {
       return parseConfig(env)
     },

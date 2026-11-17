@@ -7,7 +7,6 @@
 import type { Job, JobContext } from 'deepspace/worker'
 import type { Env } from '../worker'
 import type { GenerationJob } from './server/deps'
-import { ensureMigrated } from './server/db/migrations'
 import { platformDeps } from './server/platform'
 import { GENERATION_JOB_TYPE, handleGenerationJob } from './server/services/generation'
 
@@ -21,7 +20,7 @@ export async function runJob(job: Job, ctx: JobContext, env: Env): Promise<unkno
     throw new Error('Unknown job type')
   }
   const deps = platformDeps(env)
-  await ensureMigrated(deps.db)
+  await deps.ensureSchema()
   const outcome = await handleGenerationJob(deps, job.payload, ctx.signal, `job_${job.id}`)
   return { handled: true, outcome }
 }

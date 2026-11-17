@@ -21,7 +21,6 @@ import {
 } from '../domain/contracts'
 import { LIMITS } from '../domain/limits'
 import { isRouteEnabled, PROVIDER_NAMES, PROVIDER_REGISTRY_VERSION } from '../domain/registry'
-import { ensureMigrated } from './db/migrations'
 import { hitRateLimit } from './db/sql'
 import type { Deps, VerifiedCaller } from './deps'
 import { ApiError, errorResponse, idempotencyKey, ifMatchRevision, noContent, ok, pathId, readBody, requestIdOf } from './http'
@@ -53,7 +52,7 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     requestIdOf(c)
     const deps = await resolveDeps(c)
     c.set('deps', deps)
-    await ensureMigrated(deps.db)
+    await deps.ensureSchema()
     await next()
     c.header('X-Request-Id', requestIdOf(c))
   })
