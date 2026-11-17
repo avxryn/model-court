@@ -28,7 +28,7 @@ export default function EvaluationsPage() {
         eyebrow={<Term name="docket" />}
         title="Your cases"
         description="Compare AI setups on your own questions, have a jury score the answers blind, then enter judgment."
-        actions={<CreateEvaluationDialog />}
+        actions={list.data && list.data.items.length === 0 && !cursor ? undefined : <CreateEvaluationDialog />}
       />
       {list.stale && <StaleNotice onRetry={list.reload} />}
       {list.loading && !list.data ? (

@@ -199,7 +199,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
 
 
       <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
-        <TabsList className="w-full justify-start overflow-x-auto sm:w-fit">
+        <TabsList className="max-w-full justify-start overflow-x-auto overflow-y-hidden">
           <TabsTrigger value="cases">Questions ({draft.cases.length})</TabsTrigger>
           <TabsTrigger value="configurations">Parties ({draft.configurations.length})</TabsTrigger>
           <TabsTrigger value="runs">Hearings ({evaluation.runs.length})</TabsTrigger>
@@ -333,8 +333,8 @@ function RunDialog({ evaluationId, revision, draft, providers, keys, blockers }:
         }
       }}
     >
-      <DialogTrigger render={<Button disabled={blockers.length > 0} />}>
-        <Play aria-hidden /> Start a hearing
+      <DialogTrigger render={<Button disabled={blockers.length > 0} aria-label="Start a hearing" />}>
+        <Play aria-hidden /> Start<span className="hidden sm:inline"> a hearing</span>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
@@ -418,22 +418,23 @@ function CaseActions({ onDelete }: { onDelete: () => void }) {
  */
 function ActionBar({ saveState, dirty, canSave, onSave, calls, blockers, start }: { saveState: SaveState; dirty: boolean; canSave: boolean; onSave: () => void; calls: number; blockers: string[]; start: ReactNode }) {
   return (
-    <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-b-sm border-t border-paper-edge bg-slip/95 px-5 py-3 backdrop-blur-sm sm:px-8 print:hidden">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="sticky bottom-0 z-20 -ml-6 flex items-center justify-between gap-2 rounded-b-sm border-t border-paper-edge bg-slip/95 px-3 py-2.5 backdrop-blur-sm sm:-ml-12 sm:gap-4 sm:px-8 sm:py-3 print:hidden">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <Button variant="outline" disabled={!canSave} onClick={onSave}>
-          Save draft
+          Save<span className="hidden sm:inline"> draft</span>
         </Button>
         <SaveIndicator state={saveState} onRetry={onSave} />
-        {dirty && saveState === 'idle' && <span className="text-xs text-muted-foreground">Unsaved changes</span>}
+        {dirty && saveState === 'idle' && <span className="hidden text-xs text-muted-foreground sm:inline">Unsaved changes</span>}
       </div>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         {blockers.length > 0 ? (
-          <details className="relative">
+          <details className="group">
             <summary className="inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-sm text-warning outline-none hover:bg-paper/70 focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
               <AlertTriangle className="size-4" aria-hidden />
-              {blockers.length} {blockers.length === 1 ? 'thing' : 'things'} to do before the hearing
+              {blockers.length}<span className="sm:hidden"> to do</span>
+              <span className="hidden sm:inline">{blockers.length === 1 ? ' thing' : ' things'} to do before the hearing</span>
             </summary>
-            <div role="status" className="absolute right-0 bottom-full z-30 mb-2 w-[min(26rem,calc(100vw-2rem))] rounded-[2px] border border-dashed border-slip-edge bg-slip px-5 py-4 text-sm shadow-lg">
+            <div role="status" className="absolute right-3 bottom-full left-3 z-30 mb-2 rounded-[2px] sm:left-auto sm:w-[26rem] border border-dashed border-slip-edge bg-slip px-5 py-4 text-sm shadow-lg">
               <div className="court-label">Before the hearing can start</div>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-foreground/80 marker:text-stamp">
                 {blockers.map((b) => (
@@ -446,11 +447,13 @@ function ActionBar({ saveState, dirty, canSave, onSave, calls, blockers, start }
           <span className="text-sm text-muted-foreground tabular-nums">
             {calls > 0 ? (
               <>
-                <strong className="text-foreground">{calls} paid calls</strong>, billed to your keys
+                <strong className="text-foreground">{calls} paid calls</strong>
+                <span className="hidden md:inline">, billed to your keys</span>
               </>
             ) : (
               <>
-                <strong className="text-foreground">No paid calls</strong>: imported answers only
+                <strong className="text-foreground">No paid calls</strong>
+                <span className="hidden md:inline">: imported answers only</span>
               </>
             )}
           </span>

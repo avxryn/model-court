@@ -167,7 +167,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
             <Alert>
               <CheckCircle2 aria-hidden />
               <AlertTitle>Findings filed</AlertTitle>
-              <AlertDescription>Your ratings are final. The record opens when the judge unseals it.</AlertDescription>
+              <AlertDescription>{review.runStatus === 'revealed' || review.runStatus === 'decided' ? 'Your ratings are final and the record is unsealed. Open the Record tab to see the findings.' : 'Your ratings are final. The record opens when the judge unseals it.'}</AlertDescription>
             </Alert>
           )}
           {review.contextType === 'owner' && editable && (
