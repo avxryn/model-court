@@ -14,6 +14,7 @@ import { all, auditStatement, budgetSubjects, classifyConstraint, cond, GuardFai
 import type { Deps } from '../deps'
 import { ApiError, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
+import { kitNameOf } from '../../domain/kits/registry'
 import { importedCheckStatements } from './checks'
 import { configurationCapError, parseStoredDraft, samplesCapError } from './evaluations'
 import { dispatchOutbox, notifyRun, reconcileLeases } from './generation'
@@ -447,6 +448,8 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
     comparisonMode: snapshot.comparisonMode,
     providerRegistryVersion: snapshot.providerRegistryVersion,
     samplesPerAnswer: samplesPerAnswer(snapshot),
+    // Spec 03 (D-79): the kit's name only; no check data before or after unsealing (the record is the place).
+    kit: kitNameOf(snapshot),
     // Owner-only (D-57): which saved key each provider slot uses, so a retry can offer the current key.
     pinnedKeys: await loadPinnedKeys(db, run.id, now),
     configurations: snapshot.configurations.map((c) =>

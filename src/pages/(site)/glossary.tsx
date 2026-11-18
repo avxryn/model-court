@@ -14,7 +14,7 @@ const GROUPS: Array<{ id: string; title: string; keys: TermKey[] }> = [
   { id: 'people', title: 'People', keys: ['judge', 'juror', 'parties'] },
   { id: 'case', title: 'The case', keys: ['case', 'docket', 'question', 'exhibit', 'instructions'] },
   { id: 'proceedings', title: 'Proceedings', keys: ['hearing', 'testimony', 'summons', 'worksheet', 'file', 'unseal'] },
-  { id: 'outcome', title: 'The outcome', keys: ['findings', 'record', 'judgment', 'certified'] },
+  { id: 'outcome', title: 'The outcome', keys: ['findings', 'checks', 'record', 'judgment', 'certified'] },
 ]
 
 export default function GlossaryPage() {

@@ -9,6 +9,8 @@
 import { z } from 'zod'
 import { toHex } from '../../domain/canonical'
 import { saveRatingsSchema, type DraftRating } from '../../domain/contracts'
+import { jurorKitView, kitNameOf } from '../../domain/kits/registry'
+import type { KitJurorCaseView } from '../../domain/kits/types'
 import { LIMITS } from '../../domain/limits'
 import { draftRatingIssues, RUBRIC_VERSION, submissionIssues, type RubricVersion } from '../../domain/rubric'
 import { canRun, type RunStatus } from '../../domain/transitions'
@@ -172,6 +174,8 @@ export interface AnonymousReview {
   sessionStatus: SessionRow['status']
   runStatus: RunStatus
   rubricVersion: RubricVersion
+  /** Spec 03 (D-79): the hearing's task kit; null for general answers. */
+  kit: { version: string; name: string } | null
   closedNotice: string | null
   cases: Array<{
     caseKey: string
@@ -181,6 +185,8 @@ export interface AnonymousReview {
     expectedBehavior: string
     /** The conversation so far, identical for every party; empty when there is none. */
     messages: Array<{ role: 'user' | 'assistant'; content: string }>
+    /** Spec 03 (D-79): the kit facts of this question, identical for every party; never a check result. */
+    kitView: KitJurorCaseView | null
     responses: Array<{ responseId: string; label: 'A' | 'B' | 'C'; text: string }>
   }>
   ratings: DraftRating[]
@@ -220,6 +226,7 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
     sessionStatus: session.status,
     runStatus: access.run.status,
     rubricVersion: snapshot.rubricVersion ?? RUBRIC_VERSION,
+    kit: kitNameOf(snapshot),
     closedNotice: revealed && session.status !== 'submitted' ? 'Review closed before submission; your draft was not included.' : null,
     cases: assignment.map((item) => {
       const testCase = snapshot.cases.find((c) => c.key === item.caseKey)
@@ -231,6 +238,7 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
         reference: testCase.reference,
         expectedBehavior: testCase.expectedBehavior,
         messages: testCase.messages ?? [],
+        kitView: jurorKitView(snapshot, testCase),
         responses: item.responses.map((response) => ({
           responseId: response.responseId,
           label: response.label,

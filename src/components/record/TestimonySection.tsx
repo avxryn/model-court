@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { ConversationSoFar, SheetSection, Term } from '@/components/court/CaseFile'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import type { CheckResult } from '@/domain/kits/types'
 import { DIMENSIONS, rubricLines } from '@/domain/rubric'
+import { TestimonyChecks } from '@/components/record/TestimonyChecks'
 import type { ResultsView } from '@/lib/dto'
 import { ERROR_TEXT } from '@/lib/error-text'
 import { formatDuration } from '@/lib/format'
@@ -16,6 +18,7 @@ type Question = ResultsView['cases'][number]
  */
 export function TestimonySection({ data }: { data: ResultsView }) {
   const labels = Object.fromEntries(data.configurations.map((c) => [c.key, c.label]))
+  const checkLabels = Object.fromEntries((data.checks?.definitions ?? []).map((definition) => [definition.id, definition.label]))
   const [open, setOpen] = useState<string[]>(() => data.cases.slice(0, 1).map((c) => c.key))
   useEffect(() => {
     const follow = () => {
@@ -42,7 +45,7 @@ export function TestimonySection({ data }: { data: ResultsView }) {
               </span>
             </AccordionTrigger>
             <AccordionContent className="space-y-5 border-t border-paper-rule px-5 py-5">
-              <QuestionRecord testCase={testCase} labels={labels} rubricVersion={data.rubricVersion} />
+              <QuestionRecord testCase={testCase} labels={labels} checkLabels={checkLabels} rubricVersion={data.rubricVersion} />
             </AccordionContent>
           </AccordionItem>
         ))}
@@ -51,7 +54,7 @@ export function TestimonySection({ data }: { data: ResultsView }) {
   )
 }
 
-function QuestionRecord({ testCase, labels, rubricVersion }: { testCase: Question; labels: Record<string, string>; rubricVersion: string }) {
+function QuestionRecord({ testCase, labels, checkLabels, rubricVersion }: { testCase: Question; labels: Record<string, string>; checkLabels: Record<string, string>; rubricVersion: string }) {
   const lines = rubricLines(rubricVersion)
   return (
     <>
@@ -80,6 +83,7 @@ function QuestionRecord({ testCase, labels, rubricVersion }: { testCase: Questio
                 No accepted response ({response.status}). {response.errorCode ? ERROR_TEXT[response.errorCode] ?? response.errorCode : ''}
               </p>
             )}
+            {(response as { checks?: CheckResult[] | null }).checks && <TestimonyChecks results={(response as { checks: CheckResult[] }).checks} labels={checkLabels} party={labels[response.configurationKey]} />}
           </div>
         ))}
       </div>

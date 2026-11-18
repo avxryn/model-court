@@ -10,14 +10,17 @@ import { Fold } from '@/components/court/Fold'
 import { CaseImport } from '@/components/evaluations/CaseImport'
 import { ConversationEditor } from '@/components/evaluations/ConversationEditor'
 import { CountedField } from '@/components/evaluations/CountedField'
+import { QuestionKitFields } from '@/components/evaluations/QuestionKitFields'
 import type { FieldErrors } from '@/components/evaluations/DraftEditor'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { CaseInput } from '@/domain/contracts'
+import { GENERAL_V1 } from '@/domain/kits/general'
+import type { TaskKit } from '@/domain/kits/types'
 import { LIMITS } from '@/domain/limits'
 import { plural } from '@/lib/format'
 
-export function QuestionsEditor({ cases, onChange, errors, newId, disabled }: { cases: CaseInput[]; onChange: (next: CaseInput[]) => void; errors: FieldErrors; newId: () => string; disabled?: boolean }) {
+export function QuestionsEditor({ cases, onChange, errors, newId, disabled, kit = GENERAL_V1 as TaskKit<unknown, unknown>, kitSettings }: { cases: CaseInput[]; onChange: (next: CaseInput[]) => void; errors: FieldErrors; newId: () => string; disabled?: boolean; /** Spec 03 (D-79): the draft's task kit and its settings. */ kit?: TaskKit<unknown, unknown>; kitSettings?: unknown }) {
   const update = (index: number, patch: Partial<CaseInput>) => onChange(cases.map((c, i) => (i === index ? { ...c, ...patch } : c)))
   const move = (index: number, delta: number) => {
     const next = [...cases]
@@ -28,7 +31,7 @@ export function QuestionsEditor({ cases, onChange, errors, newId, disabled }: { 
   return (
     <fieldset disabled={disabled} className="space-y-4">
       <legend className="sr-only">Questions</legend>
-      <CaseImport currentCount={cases.length} newId={newId} onImport={onChange} disabled={disabled} />
+      <CaseImport currentCount={cases.length} newId={newId} onImport={onChange} disabled={disabled} kitVersion={kit.version} />
       {cases.map((testCase, index) => (
         <Card key={testCase.key} className="rounded-md bg-card ring-border">
           <CardHeader>
@@ -48,14 +51,14 @@ export function QuestionsEditor({ cases, onChange, errors, newId, disabled }: { 
             </CardAction>
           </CardHeader>
           <CardContent>
-            <QuestionFields testCase={testCase} index={index} errors={errors} onChange={(patch) => update(index, patch)} />
+            <QuestionFields testCase={testCase} index={index} errors={errors} kit={kit} kitSettings={kitSettings} onChange={(patch) => update(index, patch)} />
           </CardContent>
         </Card>
       ))}
       <Button
         variant="outline"
         disabled={cases.length >= LIMITS.maxCases}
-        onClick={() => onChange([...cases, { key: newId(), title: `Question ${cases.length + 1}`, input: '', reference: '', expectedBehavior: '' }])}
+        onClick={() => onChange([...cases, { key: newId(), title: `Question ${cases.length + 1}`, input: '', reference: '', expectedBehavior: kit.defaultJuryInstructions ?? '' }])}
       >
         <Plus aria-hidden /> Add a question ({cases.length}/{LIMITS.maxCases})
       </Button>
@@ -63,7 +66,8 @@ export function QuestionsEditor({ cases, onChange, errors, newId, disabled }: { 
   )
 }
 
-function QuestionFields({ testCase, index, errors, onChange }: { testCase: CaseInput; index: number; errors: FieldErrors; onChange: (patch: Partial<CaseInput>) => void }) {
+function QuestionFields({ testCase, index, errors, onChange, kit, kitSettings }: { testCase: CaseInput; index: number; errors: FieldErrors; onChange: (patch: Partial<CaseInput>) => void; kit: TaskKit<unknown, unknown>; kitSettings: unknown }) {
+  const takesConversation = kit.inputKinds.includes('conversation')
   const id = (field: string) => `case-${testCase.key}-${field}`
   const error = (field: string) => errors[`cases.${index}.${field}`]
   const messages = testCase.messages ?? []
@@ -75,7 +79,17 @@ function QuestionFields({ testCase, index, errors, onChange }: { testCase: CaseI
     <div className="grid gap-4 md:grid-cols-2">
       <CountedField className="md:col-span-2" id={id('title')} label="Short title" value={testCase.title} max={LIMITS.caseTitle.max} error={error('title')} onChange={(title) => onChange({ title })} />
       <CountedField id={id('input')} label="The question (sent to the models)" multiline rows={4} value={testCase.input} max={LIMITS.caseInput.max} error={error('input')} onChange={(input) => onChange({ input })} />
-      <CountedField id={id('reference')} label="Exhibit: reference evidence (sent to the models)" multiline rows={4} value={testCase.reference} max={LIMITS.caseReference.max} hint="May be empty to test abstention." error={error('reference')} onChange={(reference) => onChange({ reference })} />
+      <CountedField
+        id={id('reference')}
+        label={kit.family === 'summarization' ? 'Document (exhibit, sent to the models)' : kit.family === 'classification' ? 'Context (exhibit, sent to the models)' : 'Exhibit: reference evidence (sent to the models)'}
+        multiline
+        rows={4}
+        value={testCase.reference}
+        max={LIMITS.caseReference.max}
+        hint={kit.family === 'summarization' ? 'The text to summarize. Required to start a hearing.' : kit.family === 'classification' ? 'Optional, for example a routing policy.' : 'May be empty to test abstention.'}
+        error={error('reference')}
+        onChange={(reference) => onChange({ reference })}
+      />
       <CountedField
         className="md:col-span-2"
         id={id('expected')}
@@ -87,18 +101,19 @@ function QuestionFields({ testCase, index, errors, onChange }: { testCase: CaseI
         error={error('expectedBehavior')}
         onChange={(expectedBehavior) => onChange({ expectedBehavior })}
       />
+      <QuestionKitFields kit={kit} settings={kitSettings} testCase={testCase} index={index} errors={errors} onChange={onChange} />
       <Fold
         className="md:col-span-2"
         open={open || !!extrasError}
         onOpenChange={setOpen}
         summary={
           <span>
-            Earlier conversation and language <span className="text-xs">(optional{extras ? `: ${extras}` : ''})</span>
+            {takesConversation ? 'Earlier conversation and language' : 'Language'} <span className="text-xs">(optional{extras ? `: ${extras}` : ''})</span>
           </span>
         }
         contentClassName="space-y-4"
       >
-        <ConversationEditor caseKey={testCase.key} messages={messages} error={error('messages')} onChange={(next) => onChange({ messages: next.length > 0 ? next : undefined })} />
+        {takesConversation && <ConversationEditor caseKey={testCase.key} messages={messages} error={error('messages')} onChange={(next) => onChange({ messages: next.length > 0 ? next : undefined })} />}
         <CountedField
           className="md:max-w-xs"
           id={id('language')}

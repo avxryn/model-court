@@ -144,6 +144,12 @@ test.describe('public sample (F19/T19)', () => {
 // pages need an account and are checked by hand.
 test.describe('accessibility (axe, WCAG 2.2 AA)', () => {
   const axeSource = readFileSync(fileURLToPath(new URL('../node_modules/axe-core/axe.min.js', import.meta.url)), 'utf8')
+  test('the glossary explains automatic checks (D-79)', async ({ page }) => {
+    await page.goto('/glossary')
+    await expect(page.locator('#term-checks')).toContainText('Automatic checks')
+    await expect(page.locator('#term-checks')).toContainText('never mixed into them')
+  })
+
   for (const path of ['/', '/sample', '/glossary', '/join', '/privacy', '/terms', '/accessibility']) {
     for (const theme of ['light', 'dark']) {
       test(`${path} (${theme}) has no WCAG A/AA violations`, async ({ browser }) => {

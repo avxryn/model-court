@@ -7,8 +7,10 @@
 import { Plain } from '@/components/court/Paper'
 import type { ReactNode } from 'react'
 import { ConversationSoFar, Exhibit, JuryInstructions, Term, Testimony } from '@/components/court/CaseFile'
+import { KitFacts } from '@/components/review/KitFacts'
+import type { KitJurorCaseView } from '@/domain/kits/types'
 
-export function CaseMaterial({ title, input, reference, expectedBehavior, number, total, messages = [] }: { title: string; input: string; reference: string; expectedBehavior: string; number?: number; total?: number; messages?: ReadonlyArray<{ role: 'user' | 'assistant'; content: string }> }) {
+export function CaseMaterial({ title, input, reference, expectedBehavior, number, total, messages = [], kitView, kitName }: { title: string; input: string; reference: string; expectedBehavior: string; number?: number; total?: number; messages?: ReadonlyArray<{ role: 'user' | 'assistant'; content: string }>; /** Spec 03 (D-79): the question's kit facts, the same for every party. */ kitView?: KitJurorCaseView | null; kitName?: string }) {
   return (
     <section aria-label="Question presented" className="space-y-4">
       <div>
@@ -33,6 +35,7 @@ export function CaseMaterial({ title, input, reference, expectedBehavior, number
       </div>
       <Exhibit number={1}>{reference || <span className="text-muted-foreground italic">No exhibit was entered. Declining to answer may be correct.</span>}</Exhibit>
       <JuryInstructions>{expectedBehavior}</JuryInstructions>
+      {kitView && <KitFacts view={kitView} kitName={kitName ?? 'Task kit'} />}
     </section>
   )
 }

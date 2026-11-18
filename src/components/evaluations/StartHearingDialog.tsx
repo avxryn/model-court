@@ -13,6 +13,7 @@ import { PROVIDER_NAMES, type ProviderId } from '@/domain/registry'
 import { generatedParties } from '@/domain/snapshot'
 import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
 import type { CredentialMetadata, QuotaView } from '@/lib/dto'
+import { draftKit } from '@/lib/kits'
 import { useApi } from '@/lib/use-api'
 
 /** Freeze the saved draft into a hearing; consent to provider processing and charges when anything is generated. */
@@ -27,6 +28,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
   const modelParties = generatedParties(draft.configurations).length
   const samples = modelParties > 0 ? (draft.samplesPerAnswer ?? 1) : 1
   const calls = plannedCalls(draft)
+  const kit = draftKit(draft)
   // Imported-only hearings send nothing to a provider and charge nothing, so there is nothing to consent to.
   const needsConsent = calls > 0
   const providerNames = providers.map((p) => PROVIDER_NAMES[p]).join(' and ')
@@ -109,6 +111,11 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
             </>
           )}
         </dl>
+        {kit.checks.length > 0 && (
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            After each answer arrives, Model Court runs these free checks on its own server: {kit.checks.map((check) => check.label).join(', ')}. Nothing extra is sent to a provider and nothing is charged. Results stay sealed until you unseal the record.
+          </p>
+        )}
         {block && (
           <p className="rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive" role="alert" id="start-blocked">
             {block.message}

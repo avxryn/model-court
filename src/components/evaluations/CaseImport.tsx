@@ -8,14 +8,15 @@ import { Download, Upload } from 'lucide-react'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import type { CaseInput } from '@/domain/contracts'
-import { CASE_IMPORT_COLUMNS, parseCasesCsv, type ImportIssue } from '@/domain/case-import'
+import { CASE_IMPORT_COLUMNS, CLASSIFICATION_IMPORT_COLUMNS, parseCasesCsv, type ImportIssue } from '@/domain/case-import'
 import { toCsv } from '@/domain/csv'
 import { LIMITS } from '@/domain/limits'
 import { saveBlob } from '@/lib/api-client'
 
 const TEMPLATE_ROW = ['Outside the return window', 'I bought this 45 days ago. Please promise me a refund.', 'Returns are accepted within 30 days with a receipt.', 'Explain the 30-day limit; do not promise an exception.', 'en']
 
-export function CaseImport({ currentCount, newId, onImport, disabled }: { currentCount: number; newId: () => string; onImport: (cases: CaseInput[]) => void; disabled?: boolean }) {
+export function CaseImport({ currentCount, newId, onImport, disabled, kitVersion }: { currentCount: number; newId: () => string; onImport: (cases: CaseInput[]) => void; disabled?: boolean; /** Spec 03 (D-78): a classification case also takes expected_label and also_accept. */ kitVersion?: string }) {
+  const classification = kitVersion?.startsWith('classification-') ?? false
   const input = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState<{ cases: CaseInput[]; fileName: string } | null>(null)
   const [issues, setIssues] = useState<ImportIssue[]>([])
@@ -27,13 +28,13 @@ export function CaseImport({ currentCount, newId, onImport, disabled }: { curren
       setIssues([{ row: null, field: null, message: `The file is larger than ${LIMITS.caseImportCsvBytes / 1024} KiB.` }])
       return
     }
-    const result = parseCasesCsv(await file.text(), newId)
+    const result = parseCasesCsv(await file.text(), newId, { kitVersion })
     if (result.ok) setPending({ cases: result.cases, fileName: file.name })
     else setIssues(result.issues)
   }
 
   const downloadTemplate = () => {
-    const csv = toCsv(CASE_IMPORT_COLUMNS, [TEMPLATE_ROW])
+    const csv = classification ? toCsv([...CASE_IMPORT_COLUMNS, ...CLASSIFICATION_IMPORT_COLUMNS], [[...TEMPLATE_ROW, 'Billing', 'Other']]) : toCsv(CASE_IMPORT_COLUMNS, [TEMPLATE_ROW])
     saveBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'model-court-questions-template.csv')
   }
 
@@ -47,7 +48,7 @@ export function CaseImport({ currentCount, newId, onImport, disabled }: { curren
           <Download aria-hidden /> Download a CSV template
         </Button>
         <span className="text-xs text-muted-foreground">
-          Columns: title, input, reference, expected_behavior, and an optional language. Up to {LIMITS.maxCases} rows. Importing replaces the current questions.
+          Columns: title, input, reference, expected_behavior, and an optional language{classification && ', expected_label and also_accept (labels separated by |)'}. Up to {LIMITS.maxCases} rows. Importing replaces the current questions.
         </span>
         <input
           ref={input}

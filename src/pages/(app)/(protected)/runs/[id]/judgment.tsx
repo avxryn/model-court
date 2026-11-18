@@ -11,6 +11,7 @@ import { Caption, Sheet, Stamp } from '@/components/court/CaseFile'
 import { HearingFolder } from '@/components/court/HearingNav'
 import { Page } from '@/components/layout/Page'
 import { CertifiedRecord } from '@/components/record/CertifiedRecord'
+import { ChecksTable } from '@/components/record/ChecksSection'
 import { FindingsTable } from '@/components/record/FindingsTable'
 import { outcomeText, RecordGate, rubricName } from '@/components/record/RecordGate'
 import { EarlierRevisions, VerdictForm } from '@/components/record/Verdict'
@@ -81,6 +82,15 @@ function Judgment({ data, reload }: { data: ResultsView; reload: () => Promise<v
 
             <FindingsBlock title="The jury’s findings" cohort={data.cohorts.invited} data={data} />
             {data.cohorts.owner.byConfiguration && <FindingsBlock title="The judge’s own review (context-aware, not blind)" cohort={data.cohorts.owner} data={data} />}
+
+            {data.checks && (
+              <section className="print:break-inside-avoid">
+                <h2 className="court-label">Automatic checks (not part of the jury’s findings)</h2>
+                <div className="mt-2">
+                  <ChecksTable checks={data.checks} parties={data.configurations} print />
+                </div>
+              </section>
+            )}
 
             <p className="text-xs text-muted-foreground">
               {data.eligibleCaseKeys.length} of {data.plannedCaseCount} questions were eligible for scoring. Means are on a 0–2 scale. {data.disagreements.length > 0 && `Ratings disagreed by a point or more on ${plural(data.disagreements.length, 'judgment')}.`}

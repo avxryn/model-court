@@ -176,7 +176,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
 
             <WorksheetGrid
               columns={current.responses.length}
-              material={<CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={review.cases.length} messages={current.messages} />}
+              material={<CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={review.cases.length} messages={current.messages} kitView={current.kitView} kitName={review.kit?.name} />}
             >
               {current.responses.map((response) => (
                 <ResponseCard key={response.responseId} label={response.label} text={response.text}>

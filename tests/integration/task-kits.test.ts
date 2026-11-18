@@ -522,6 +522,13 @@ describe('a classification hearing (spec 03 tests 3 and 9)', () => {
     expect(await countRows()).toBe(10)
 
     await openDeliberation(h, runId)
+    // The worksheet carries the kit facts for every party alike, and no check fact (D-79).
+    const review = (await h.request('GET', `/runs/${runId}/review`, { as: OWNER })).json.data
+    expect(review.kit).toEqual({ version: 'classification-v1', name: 'Classification' })
+    expect(review.cases.map((c: any) => c.kitView.expectedLabel)).toEqual(EXPECTED)
+    expect(review.cases[0].kitView.labels).toEqual(CLASSIFY_SETTINGS.labels)
+    expect(JSON.stringify(review)).not.toMatch(/label-format|names no allowed label|predicted/)
+    expect((await runView(runId)).kit).toEqual({ version: 'classification-v1', name: 'Classification' })
     await submit(runId, OWNER, 1)
     await reveal(runId)
     const data = await results(runId)

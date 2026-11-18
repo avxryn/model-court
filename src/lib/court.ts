@@ -30,6 +30,7 @@ export const TERMS = {
   findings: { term: 'The jury’s findings', plain: 'invited reviewers’ scores', explain: 'Scores from jurors only. The judge’s own review is always reported separately.' },
   record: { term: 'The record', plain: 'results', explain: 'Everything the hearing produced: testimony, findings, failures, and disagreements.' },
   judgment: { term: 'Judgment', plain: 'your verdict', explain: 'Your recorded decision and reasons. It may disagree with the numbers; say why.' },
+  checks: { term: 'Automatic checks', plain: 'free tests on every answer', explain: 'Free tests Model Court runs on every answer, such as length or whether a label matches your answer key. Shown after unsealing, next to the jury’s findings and never mixed into them.' },
   certified: { term: 'Certified record', plain: 'download', explain: 'A downloadable copy of a hearing’s record, with a fingerprint so two copies can be compared. Only the judge can download it.' },
 } as const satisfies Record<string, CourtTerm>
 

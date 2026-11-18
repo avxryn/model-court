@@ -12,7 +12,7 @@ import type { CaseInput } from '../contracts'
 import { CLASSIFICATION_V1, classificationFieldsSchema, classificationSettingsSchema } from './classification'
 import { GENERAL_V1 } from './general'
 import { SUMMARIZATION_V1, summarizationFieldsSchema, summarizationSettingsSchema } from './summarization'
-import type { InputKind, KitReadinessIssue, TaskKit } from './types'
+import type { InputKind, KitJurorCaseView, KitReadinessIssue, TaskKit } from './types'
 
 export const KITS = {
   'general-v1': GENERAL_V1,
@@ -94,4 +94,20 @@ export function kitDraftIssues(draft: { kit?: { version: string; settings?: unkn
   })
   if (kit && draft.kit) issues.push(...(kit.draftIssues?.(draft.kit.settings, draft.cases) ?? []))
   return issues
+}
+
+/** The kit a hearing names, for pickers and headers; null for general-v1. Carries no check result. */
+export function kitNameOf(holder: { kit?: { version: string } | undefined }): { version: string; name: string } | null {
+  return holder.kit ? { version: holder.kit.version, name: kitFor(holder.kit.version).name } : null
+}
+
+/**
+ * What jurors see of a question's kit fields (spec 03 §4.3): identical for every party, read from
+ * the settings and the question only, never from a testimony. Null for general-v1.
+ */
+export function jurorKitView(holder: { kit?: { version: string; settings: unknown } | undefined }, testCase: Pick<CaseInput, 'kitFields'>): KitJurorCaseView | null {
+  if (!holder.kit) return null
+  const kit = kitFor(holder.kit.version)
+  const raw = testCase.kitFields as { kind?: string } | undefined
+  return kit.jurorCaseView?.(holder.kit.settings, raw && raw.kind === kit.family ? raw : undefined) ?? null
 }

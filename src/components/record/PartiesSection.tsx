@@ -31,7 +31,8 @@ export function PartiesSection({ data }: { data: ResultsView }) {
         ))}
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        {data.comparisonMode === 'model' ? 'Model comparison' : 'Configuration comparison — differences may come from instructions, not only the model'} · rubric {data.rubricVersion} · snapshot {data.snapshotHash.slice(0, 12)}…
+        {data.comparisonMode === 'model' ? 'Model comparison' : 'Configuration comparison — differences may come from instructions, not only the model'}
+        {data.kit && <> · Task kit: {data.kit.name} ({data.kit.version})</>} · rubric {data.rubricVersion} · snapshot {data.snapshotHash.slice(0, 12)}…
       </p>
     </SheetSection>
   )

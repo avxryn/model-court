@@ -9,6 +9,8 @@ import { ConfigurationsEditor } from '@/components/evaluations/DraftEditor'
 import { HearingList } from '@/components/evaluations/HearingList'
 import { ImportedAnswers } from '@/components/evaluations/ImportedAnswers'
 import { JurorCaseView } from '@/components/evaluations/JurorCaseView'
+import { KitPicker } from '@/components/evaluations/KitPicker'
+import { KitSettingsEditor } from '@/components/evaluations/KitSettingsEditor'
 import { MissingKeys, SavedKeys } from '@/components/evaluations/KeyStatus'
 import { QuestionsEditor } from '@/components/evaluations/QuestionsEditor'
 import { RepeatsPicker } from '@/components/evaluations/RepeatsPicker'
@@ -31,6 +33,7 @@ import { caseBlockers } from '@/lib/case-blockers'
 import { caseStep, docketNumber, recordStamp } from '@/lib/court'
 import type { CatalogView, CredentialMetadata, EvaluationView, OwnerEvaluationView } from '@/lib/dto'
 import { formatTime, plural } from '@/lib/format'
+import { draftKit, draftKitSettings } from '@/lib/kits'
 import { isActive } from '@/lib/status'
 import { useApi } from '@/lib/use-api'
 
@@ -143,8 +146,10 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                 </Alert>
               )}
               <TabsContent value="cases">
+                <KitPicker draft={draft} onChange={c.change} />
+                <KitSettingsEditor key={draftKit(draft).version} draft={draft} errors={c.errors} onChange={c.change} />
                 <RubricPicker value={draft.rubricVersion} onChange={(rubricVersion) => c.change({ ...draft, rubricVersion })} />
-                <QuestionsEditor cases={draft.cases} errors={c.errors} newId={newIntentKey} onChange={(cases) => c.change({ ...draft, cases })} />
+                <QuestionsEditor cases={draft.cases} errors={c.errors} newId={newIntentKey} kit={draftKit(draft)} kitSettings={draftKitSettings(draft)} onChange={(cases) => c.change({ ...draft, cases })} />
               </TabsContent>
               <TabsContent value="configurations">
                 {credentials.data && <MissingKeys missing={missingProviders} />}

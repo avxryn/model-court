@@ -177,7 +177,7 @@ export const SUMMARIZATION_V1: TaskKit<SummarizationSettings, SummarizationField
   version: 'summarization-v1',
   family: 'summarization',
   name: 'Summaries',
-  description: 'Summaries of a document for a stated reader, with length, format, required-point, phrase and number checks.',
+  description: 'Summaries of a document for a stated reader.',
   listed: true,
   inputKinds: ['text'],
   outputContract: { kind: 'text' },

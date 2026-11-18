@@ -137,7 +137,7 @@ export const CLASSIFICATION_V1: TaskKit<ClassificationSettings, ClassificationFi
   version: 'classification-v1',
   family: 'classification',
   name: 'Classification',
-  description: 'One label from a fixed set per item, with reasoning: label format, accuracy against your answer key, and reasoning length.',
+  description: 'One label from a fixed set per item, with its reasoning, scored against your answer key.',
   listed: true,
   inputKinds: ['text'],
   outputContract: { kind: 'label', format: 'first-line-v1' },
