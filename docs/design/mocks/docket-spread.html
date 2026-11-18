@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Court: docket spread (mock)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f6f3;--card:#fff;--sunken:#f2f1ed;--line:#e5e3dd;--line2:#d2cfc7;--ink:#15171c;--muted:#5c5f67;--faint:#8a8c93;--navy:#1e2a44;--navy-soft:#e9edf5;--stamp:#b3261e;--warn:#8a5a0b;--warn-soft:#fbf1de;--ok:#1f6b45;--ok-soft:#e5f2ea;--shadow:0 1px 2px rgb(20 22 28/.06),0 10px 24px -12px rgb(20 22 28/.22);--ease:cubic-bezier(.2,.8,.2,1)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.disp{font-family:Newsreader,Georgia,serif;font-weight:500;letter-spacing:-.02em}
+.wrap{max-width:1152px;margin:0 auto;padding:0 40px}
+.bar{position:sticky;top:0;z-index:9;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:12px 16px;background:#e4e3de;border-bottom:1px solid #d6d4ce;font:13px system-ui}
+.bar button{font:500 13px system-ui;padding:8px 14px;border-radius:999px;border:1px solid #b9b7b0;background:#f4f3ef;cursor:pointer;color:#222}
+.bar button[aria-pressed=true]{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.bar .sep{width:1px;height:20px;background:#c9c7c0;margin:0 4px}
+.bar label{display:flex;gap:6px;align-items:center;color:#333}
+header.top{border-bottom:1px solid var(--line)}
+header.top .wrap{display:flex;align-items:center;gap:28px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-size:20px}
+.brand .mark{width:28px;height:28px;border-radius:7px;background:var(--navy);display:grid;place-items:center;color:#fff}
+nav{display:flex;gap:22px;color:var(--muted)}
+.end{margin-left:auto;display:flex;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:6px;font:500 14px Inter;border:1px solid var(--line2);background:var(--card);color:var(--ink)}
+.btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
+.btn.sm{height:30px;font-size:13px;padding:0 10px}
+.hero .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:48px;align-items:center;padding-top:56px;padding-bottom:64px}
+.eyebrow{font:500 12px 'JetBrains Mono';letter-spacing:.08em;text-transform:uppercase;color:var(--stamp)}
+h1{font-size:58px;line-height:1.02;margin:16px 0 18px}
+h1 em{font-style:italic;color:var(--stamp)}
+.lede{font-size:17px;line-height:1.6;color:var(--muted);max-width:30em}
+.ctas{display:flex;gap:10px;margin:28px 0 12px}
+.fine{font-size:13px;color:var(--faint)}
+
+/* The stage: five docket sheets that start as one pile and spread out. */
+.stage{position:relative;height:540px}
+.sheet{position:absolute;left:50%;top:50%;width:240px;margin:-80px 0 0 -120px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:12px 14px;transform:translate(var(--x),var(--y)) rotate(var(--r));transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
+.sheet:hover{transform:translate(var(--x),calc(var(--y) - 6px)) rotate(var(--r));box-shadow:0 2px 4px rgb(20 22 28/.06),0 18px 34px -14px rgb(20 22 28/.28)}
+.play .sheet{animation:spread .75s var(--ease) backwards;animation-delay:calc(.15s + var(--i) * .11s)}
+@keyframes spread{from{transform:translate(var(--px),var(--py)) rotate(var(--pr));opacity:0}12%{opacity:1}to{transform:translate(var(--x),var(--y)) rotate(var(--r));opacity:1}}
+.sheet .k{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.tag{font:600 11px 'JetBrains Mono';letter-spacing:.06em;padding:2px 6px;border-radius:4px}
+.tag.dark{background:var(--ink);color:#fff}
+.tag.soft{background:var(--navy-soft);color:var(--navy)}
+.sheet .meta{font-size:11px;color:var(--faint)}
+.sheet p{font-size:12.5px;line-height:1.55;color:var(--ink)}
+.sheet .muted{color:var(--muted)}
+.q{font-family:Newsreader,Georgia,serif;font-size:17px;line-height:1.3}
+
+/* Pile positions (where every sheet starts), then two layouts. */
+.sheet{--px:0px;--py:30px;--pr:0deg}
+.s1{--pr:-3deg}.s2{--pr:2deg}.s3{--pr:-1deg}.s4{--pr:3deg}.s5{--pr:0deg}
+.spread .s1{--x:-140px;--y:-178px;--r:-4deg;z-index:1}
+.spread .s2{--x:150px;--y:-166px;--r:3deg;z-index:2}
+.spread .s3{--x:-135px;--y:178px;--r:-2.5deg;z-index:4}
+.spread .s4{--x:142px;--y:188px;--r:3deg;z-index:5}
+.spread .s5{--x:0px;--y:-14px;--r:0deg;z-index:3}
+.fan .sheet{transform-origin:50% 190%}
+.fan .s1{--x:-170px;--y:20px;--r:-16deg;z-index:1}
+.fan .s2{--x:-85px;--y:-12px;--r:-8deg;z-index:2}
+.fan .s3{--x:0px;--y:-22px;--r:0deg;z-index:3}
+.fan .s4{--x:85px;--y:-12px;--r:8deg;z-index:4}
+.fan .s5{--x:170px;--y:20px;--r:16deg;z-index:5}
+
+/* Worksheet: scores tick in after the spread. */
+.crit{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:12px;font-weight:500}
+.crit:last-child{border-bottom:0}
+.seg{margin-left:auto;display:inline-flex;border:1px solid var(--line2);border-radius:5px;overflow:hidden}
+.seg span{position:relative;width:24px;height:22px;display:grid;place-items:center;font-size:11.5px;color:var(--muted);border-right:1px solid var(--line2)}
+.seg span:last-child{border-right:0}
+.seg span b{position:absolute;inset:0;display:grid;place-items:center;background:var(--navy);color:#fff;font-weight:500;opacity:1}
+.play .seg span b{animation:tick .2s var(--ease) both;animation-delay:calc(1.25s + var(--t) * .18s)}
+@keyframes tick{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+
+/* The seal: pressed once the scores are in; swapped on the reveal. */
+.stamp{position:absolute;right:10px;top:10px;font:600 11px 'JetBrains Mono';letter-spacing:.14em;text-transform:uppercase;border:1.5px solid currentColor;border-radius:3px;padding:3px 7px;transform:rotate(-6deg)}
+.stamp.sealed{color:var(--stamp)}
+.stamp.unsealed{color:var(--navy);opacity:0}
+.play .stamp.sealed{animation:press .32s var(--ease) both;animation-delay:2.25s}
+@keyframes press{from{opacity:0;transform:rotate(-6deg) scale(1.8)}70%{opacity:1;transform:rotate(-6deg) scale(.94)}to{opacity:1;transform:rotate(-6deg) scale(1)}}
+
+/* The reveal (optional): labels turn into models, the seal lifts. */
+.who{position:relative;display:inline-grid}
+.who > *{grid-area:1/1}
+.who .model{opacity:0}
+.reveal.play .who .label{animation:out .3s var(--ease) both;animation-delay:4.1s}
+.reveal.play .who .model{animation:in .35s var(--ease) both;animation-delay:4.25s}
+.reveal.play .stamp.sealed{animation:press .32s var(--ease) 2.25s both,out .3s var(--ease) 3.9s forwards}
+.reveal.play .stamp.unsealed{animation:press .32s var(--ease) both;animation-delay:4.05s}
+@keyframes out{to{opacity:0;transform:translateY(-4px)}}
+@keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* Stage line under the spread, lit in step with the animation. */
+.steps{display:flex;justify-content:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+.step{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card)}
+.step i{width:6px;height:6px;border-radius:50%;background:var(--line2)}
+.play .step{animation:lit .3s var(--ease) both;animation-delay:var(--d)}
+.play .step i{animation:dot .3s var(--ease) both;animation-delay:var(--d)}
+@keyframes lit{to{color:var(--ink);border-color:var(--line2)}}
+@keyframes dot{to{background:var(--navy)}}
+.reveal .step.last{display:inline-flex}
+.step.last{display:none}
+
+.note{max-width:1152px;margin:0 auto 48px;padding:0 40px;color:var(--muted);font-size:13px}
+.note b{color:var(--ink);font-weight:600}
+
+@media (prefers-reduced-motion:reduce){.play .sheet,.play .seg span b,.play .stamp,.play .step,.play .step i,.reveal.play .who .label,.reveal.play .who .model{animation:none!important}.play .step{color:var(--ink)}.play .step i{background:var(--navy)}}
+@media (max-width:900px){.hero .wrap{grid-template-columns:1fr}.stage{height:540px;transform:scale(.62);transform-origin:50% 0;margin-bottom:-200px}h1{font-size:42px}nav{display:none}}
+</style>
+</head>
+<body>
+
+<div class="bar" role="group" aria-label="Mock controls">
+  <button type="button" data-layout="spread" aria-pressed="true">Spread (desk)</button>
+  <button type="button" data-layout="fan" aria-pressed="false">Fan (hand of cards)</button>
+  <span class="sep"></span>
+  <label><input type="checkbox" id="reveal" checked> End on the reveal</label>
+  <span class="sep"></span>
+  <button type="button" id="replay">Replay</button>
+</div>
+
+<header class="top"><div class="wrap">
+  <div class="brand"><span class="mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 4v15M6 8h12M6 8l-3 6h6zM18 8l-3 6h6zM8 20h8"/></svg></span><span class="disp">Model Court</span></div>
+  <nav><span>How it works</span><span>Sample case</span><span>Glossary</span></nav>
+  <div class="end"><span class="btn sm">Sign in</span><span class="btn primary sm">Try the sample</span></div>
+</div></header>
+
+<section class="hero"><div class="wrap">
+  <div>
+    <div class="eyebrow">Blind review for AI answers</div>
+    <h1 class="disp">Put AI on trial. <em>Let the record decide.</em></h1>
+    <p class="lede">Compare two AI setups on your own questions. Jurors score the answers without knowing which model wrote them, and the record unseals only when you say so.</p>
+    <div class="ctas"><span class="btn primary">Try the sample case →</span><span class="btn">Open your own case</span></div>
+    <p class="fine">No account needed for the sample. Live hearings use your own OpenAI or Anthropic key.</p>
+  </div>
+
+  <div>
+    <div id="stage" class="stage spread reveal play" aria-hidden="true">
+      <div class="sheet s1" style="--i:0">
+        <span class="stamp sealed">Sealed</span><span class="stamp unsealed">Unsealed</span>
+        <div class="k"><span class="mono meta">MC-0142</span></div>
+        <div class="disp" style="font-size:19px;line-height:1.15">Support policy answers</div>
+        <p class="muted" style="margin-top:6px">Which model answers return questions from the policy?</p>
+        <div class="meta" style="margin-top:8px">Stage 3 of 5 · Deliberate</div>
+      </div>
+      <div class="sheet s2" style="--i:1">
+        <div class="k"><span class="tag soft">EXHIBIT 1</span><span class="meta">reference evidence</span></div>
+        <p>Returns are accepted within 30 days with a receipt. Final-sale items cannot be returned.</p>
+      </div>
+      <div class="sheet s3" style="--i:2">
+        <div class="k"><span class="who"><span class="tag dark label">TESTIMONY A</span><span class="tag soft model">GPT-6 Luna</span></span><span class="meta">shuffled</span></div>
+        <p>Absolutely! You’re well within the window. Print a prepaid label and drop it off.</p>
+      </div>
+      <div class="sheet s4" style="--i:3">
+        <div class="k"><span class="who"><span class="tag dark label">TESTIMONY B</span><span class="tag soft model">Claude Haiku 5.5</span></span><span class="meta">shuffled</span></div>
+        <p>Yes. Regular items can be returned within 30 days with a receipt; day 12 qualifies.</p>
+      </div>
+      <div class="sheet s5" style="--i:4">
+        <div class="k"><span class="mono meta">QUESTION 1 OF 5</span></div>
+        <div class="q">I bought a regular item 12 days ago. Can I return it?</div>
+        <div style="margin-top:8px">
+          <div class="crit">A · Correctness<span class="seg"><span>0</span><span>1<b style="--t:0">1</b></span><span>2</span></span></div>
+          <div class="crit">A · Grounding<span class="seg"><span>0<b style="--t:1">0</b></span><span>1</span><span>2</span></span></div>
+          <div class="crit">B · Correctness<span class="seg"><span>0</span><span>1</span><span>2<b style="--t:2">2</b></span></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="steps" id="steps">
+      <span class="step" style="--d:.2s"><i></i>File the case</span>
+      <span class="step" style="--d:.65s"><i></i>Hear testimony</span>
+      <span class="step" style="--d:1.25s"><i></i>Deliberate blind</span>
+      <span class="step" style="--d:2.25s"><i></i>Seal the record</span>
+      <span class="step last" style="--d:4.05s"><i></i>Unseal</span>
+    </div>
+  </div>
+</div></section>
+
+<p class="note"><b>The sequence (about 4.5 s, plays once on load):</b> the five sheets of a case start as one pile and spread out (0.15–1.2 s); three scores tick into the worksheet (1.25–1.8 s); the record is stamped sealed (2.25 s); with "End on the reveal", the seal lifts and the A/B labels turn into the two models (4.1 s). Hovering a sheet lifts it. With reduced motion, the page shows the final arrangement and nothing moves. Built with CSS transforms and opacity only, so the real landing stays static and makes no requests.</p>
+
+<script>
+const stage = document.getElementById('stage'), steps = document.getElementById('steps')
+const replay = () => { for (const el of [stage, steps]) { el.classList.remove('play'); void el.offsetWidth; el.classList.add('play') } }
+steps.classList.add('play')
+document.querySelectorAll('[data-layout]').forEach((b) => b.addEventListener('click', () => {
+  stage.classList.remove('spread', 'fan'); stage.classList.add(b.dataset.layout)
+  document.querySelectorAll('[data-layout]').forEach((x) => x.setAttribute('aria-pressed', x === b))
+  replay()
+}))
+document.getElementById('reveal').addEventListener('change', (e) => { stage.classList.toggle('reveal', e.target.checked); steps.classList.toggle('reveal', e.target.checked); replay() })
+steps.classList.add('reveal')
+document.getElementById('replay').addEventListener('click', replay)
+</script>
+</body>
+</html>

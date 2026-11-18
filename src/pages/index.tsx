@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, EyeOff, KeyRound, Lock, Trash2, type LucideIcon } from 'lucide-react'
 import { BrandMark } from '@/components/BrandMark'
+import { DocketSpread } from '@/components/landing/DocketSpread'
 import { Seo } from '@/components/Seo'
 import { AccountChip } from '@/components/shell/AccountChip'
 import { readAccountHint, type AccountHint } from '@/lib/account-hint'
@@ -88,7 +89,7 @@ export default function Landing() {
             </div>
             <p className="mt-4 text-small text-muted-foreground">No account needed for the sample, and it sends nothing to any AI provider. Live hearings use your own OpenAI or Anthropic key.</p>
           </div>
-          <ProductShot />
+          <DocketSpread />
         </section>
 
         <section id="how" aria-labelledby="how-title" className="scroll-mt-6 border-t border-border">
@@ -154,76 +155,5 @@ export default function Landing() {
         </div>
       </footer>
     </div>
-  )
-}
-
-/**
- * A static picture of the blind worksheet from the illustrative sample: two
- * unlabeled answers to one question, each scored 0 to 2 on two criteria.
- * Exposed to assistive tech as a single image with a text description.
- */
-const SHOT_CASE = SAMPLE_CASES[0]
-const SHOT_CASE_NUMBER = 1
-const SHOT_CRITERIA = ['Correctness', 'Grounding'] as const
-const SHOT_SCORES: Record<'A' | 'B', [number, number]> = { A: [1, 0], B: [2, 2] }
-
-function ProductShot() {
-  return (
-    <div
-      role="img"
-      aria-label="Illustration of the blind worksheet from the sample: two unlabeled answers to one question, each scored 0, 1, or 2 on correctness and grounding, with the parties hidden until the record is unsealed."
-      className="min-w-0 rounded-xl border border-border bg-card p-4 text-card-foreground shadow-[var(--overlay-shadow)] sm:p-5"
-    >
-      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span className="font-mono text-xs tracking-[0.02em] text-muted-foreground">
-          Q{SHOT_CASE_NUMBER} of {SAMPLE_CASES.length}
-        </span>
-        <span className="font-display text-lg leading-tight font-medium tracking-[-0.01em]">{SHOT_CASE.title}</span>
-        <span className="ml-auto inline-flex h-5.5 items-center gap-1.5 rounded-full bg-warning/10 px-2 text-xs font-medium text-warning">
-          <span className="size-1.5 rounded-full bg-current" />
-          Deliberating
-        </span>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-        {SHOT_CASE.responses.map((response) => (
-          <div key={response.responseId} className="flex min-w-0 flex-col rounded-lg border border-border bg-card shadow-[var(--paper-shadow)]">
-            <div className="flex items-center gap-2.5 border-b border-border px-3.5 py-2.5">
-              <span className="rounded-[3px] bg-foreground px-2 py-0.5 font-mono text-xs font-semibold tracking-[0.08em] text-background">{response.label}</span>
-              <span className="text-xs text-muted-foreground">Testimony</span>
-            </div>
-            <div className="flex-1 px-3.5 py-3">
-              <p className="line-clamp-3 text-small leading-relaxed">{response.text}</p>
-            </div>
-            <div className="border-t border-border px-3.5 py-0.5">
-              {SHOT_CRITERIA.map((criterion, i) => (
-                <div key={criterion} className="flex items-center gap-3 border-b border-dashed border-border py-2 last:border-b-0">
-                  <span className="text-small font-medium">{criterion}</span>
-                  <ScoreSegments value={SHOT_SCORES[response.label][i]} />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/** The worksheet's 0/1/2 segmented control, drawn statically. */
-function ScoreSegments({ value }: { value: number }) {
-  return (
-    <span className="ml-auto inline-flex shrink-0 overflow-hidden rounded-md border border-input">
-      {[0, 1, 2].map((step) => (
-        <span
-          key={step}
-          className={cn(
-            'grid h-6 w-6.5 place-items-center border-r border-input text-xs font-medium last:border-r-0',
-            step === value ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground',
-          )}
-        >
-          {step}
-        </span>
-      ))}
-    </span>
   )
 }

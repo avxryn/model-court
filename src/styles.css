@@ -350,3 +350,69 @@
     }
   }
 }
+
+/*
+ * Landing hero: the docket spread (D-53). Five sheets of a case start as one
+ * pile, spread across the desk, three scores tick in, the record is sealed,
+ * then unsealed with the parties named. CSS only (the landing is static and
+ * prerendered); transforms and opacity only; nothing moves under reduced
+ * motion. Phones get a short stacked version.
+ */
+:root { --ds-ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
+.ds-stage { position: relative; height: 540px; }
+.ds-sheet {
+  position: absolute; left: 50%; top: 50%; width: 15rem; margin: -5rem 0 0 -7.5rem;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--card-foreground);
+  padding: 0.75rem 0.875rem;
+  box-shadow: 0 1px 2px rgb(20 22 28 / 0.06), 0 10px 24px -12px rgb(20 22 28 / 0.22);
+  --px: 0px; --py: 30px;
+  transform: translate(var(--x), var(--y)) rotate(var(--r));
+  transition: transform 0.25s var(--ds-ease), box-shadow 0.25s var(--ds-ease);
+  animation: ds-spread 0.75s var(--ds-ease) backwards;
+  animation-delay: calc(0.15s + var(--i) * 0.11s);
+}
+.ds-sheet:hover { transform: translate(var(--x), calc(var(--y) - 6px)) rotate(var(--r)); box-shadow: 0 2px 4px rgb(20 22 28 / 0.06), 0 18px 34px -14px rgb(20 22 28 / 0.28); }
+.ds-s1 { --pr: -3deg; --x: -140px; --y: -178px; --r: -4deg; z-index: 1; }
+.ds-s2 { --pr: 2deg; --x: 150px; --y: -166px; --r: 3deg; z-index: 2; }
+.ds-s5 { --pr: 0deg; --x: 0px; --y: -14px; --r: 0deg; z-index: 3; }
+.ds-s3 { --pr: -1deg; --x: -135px; --y: 178px; --r: -2.5deg; z-index: 4; }
+.ds-s4 { --pr: 3deg; --x: 142px; --y: 188px; --r: 3deg; z-index: 5; }
+@keyframes ds-spread {
+  from { transform: translate(var(--px), var(--py)) rotate(var(--pr)); opacity: 0; }
+  12% { opacity: 1; }
+  to { transform: translate(var(--x), var(--y)) rotate(var(--r)); opacity: 1; }
+}
+.ds-tick { position: absolute; inset: 0; display: grid; place-items: center; background: var(--primary); color: var(--primary-foreground); animation: ds-tick 0.2s var(--ds-ease) both; animation-delay: calc(1.25s + var(--t) * 0.18s); }
+@keyframes ds-tick { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+.ds-stamp { position: absolute; right: 0.625rem; top: 0.625rem; border: 1.5px solid currentColor; border-radius: 3px; padding: 0.125rem 0.4375rem; transform: rotate(-6deg); }
+.ds-sealed { color: var(--stamp); animation: ds-press 0.32s var(--ds-ease) 2.25s both, ds-out 0.3s var(--ds-ease) 3.9s forwards; }
+.ds-unsealed { color: var(--primary); opacity: 0; animation: ds-press 0.32s var(--ds-ease) 4.05s both; }
+@keyframes ds-press { from { opacity: 0; transform: rotate(-6deg) scale(1.8); } 70% { opacity: 1; transform: rotate(-6deg) scale(0.94); } to { opacity: 1; transform: rotate(-6deg) scale(1); } }
+.ds-who { display: inline-grid; }
+.ds-who > * { grid-area: 1 / 1; justify-self: start; }
+.ds-label { animation: ds-out 0.3s var(--ds-ease) 4.1s forwards; }
+.ds-party { opacity: 0; animation: ds-in 0.35s var(--ds-ease) 4.25s forwards; }
+@keyframes ds-out { to { opacity: 0; transform: translateY(-4px); } }
+@keyframes ds-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.ds-step { animation: ds-lit 0.3s var(--ds-ease) both; animation-delay: var(--d); }
+.ds-step > i { animation: ds-dot 0.3s var(--ds-ease) both; animation-delay: var(--d); }
+@keyframes ds-lit { from { color: var(--muted-foreground); } to { color: var(--foreground); border-color: var(--input); } }
+@keyframes ds-dot { from { background: var(--input); } to { background: var(--primary); } }
+@media (max-width: 639px) {
+  .ds-stage { height: auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; }
+  .ds-sheet { position: relative; left: auto; top: auto; width: auto; min-width: 0; margin: 0; transform: none; animation-name: ds-rise; }
+  .ds-sheet:hover { transform: none; }
+  .ds-s1, .ds-s5 { grid-column: 1 / -1; }
+  .ds-s2 { display: none; }
+  .ds-s5 { order: 2; }
+  .ds-s3 { order: 3; }
+  .ds-s4 { order: 4; }
+  @keyframes ds-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-sheet, .ds-tick, .ds-step, .ds-step > i, .ds-unsealed, .ds-party { animation: none !important; }
+  .ds-sealed, .ds-label { animation: none !important; display: none; }
+  .ds-unsealed, .ds-party { opacity: 1; }
+  .ds-step { color: var(--foreground); }
+  .ds-step > i { background: var(--primary); }
+}
