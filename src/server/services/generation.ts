@@ -8,7 +8,7 @@
  */
 
 import { LIMITS } from '../../domain/limits'
-import { buildConversation, MESSAGE_TEMPLATE_VERSION } from '../../domain/messages'
+import { buildKitRequest } from '../../domain/messages'
 import type { ProviderId } from '../../domain/registry'
 import { isImportedSnapshot, type RunSnapshot } from '../../domain/snapshot'
 import { all, auditStatement, cond, GuardFailed, releaseReservations, runGuarded } from '../db/sql'
@@ -183,10 +183,11 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
   if (!testCase || !configuration) {
     return finishAttempt(deps, { attemptId, fence, job, context, requestId }, { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }, true)
   }
-  const conversation = buildConversation(context.snapshot.messageTemplateVersion ?? MESSAGE_TEMPLATE_VERSION, configuration.systemPrompt, testCase)
+  // The hearing's recorded template (spec 03, D-75); reviewer-only fields never reach the request.
+  const conversation = buildKitRequest(context.snapshot, configuration.systemPrompt, testCase)
   // Dispatch by the adapter version this hearing recorded (D-39); refuse, unsent, if it cannot carry the messages.
-  const adapter = adapterFor(configuration.adapterVersion, context.provider, conversation.messages.length)
-  if (!adapter) {
+  const adapter = conversation ? adapterFor(configuration.adapterVersion, context.provider, conversation.messages.length) : null
+  if (!conversation || !adapter) {
     return finishAttempt(deps, { attemptId, fence, job, context, requestId }, { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }, true)
   }
   const timeout = AbortSignal.timeout(deps.config.providerTimeoutMs)

@@ -8,6 +8,7 @@
  */
 
 import type { CaseInput, TranscriptMessage } from './contracts'
+import type { RunSnapshot } from './snapshot'
 
 export const MESSAGE_TEMPLATE_VERSION = 'qa-v1' as const
 export const CHAT_TEMPLATE_VERSION = 'chat-v1' as const
@@ -50,4 +51,43 @@ export function buildConversation(template: MessageTemplateVersion, systemPrompt
 /** A hearing uses `chat-v1` only when some question carries a conversation. */
 export function templateFor(cases: ReadonlyArray<Pick<CaseInput, 'messages'>>): MessageTemplateVersion {
   return cases.some((testCase) => (testCase.messages?.length ?? 0) > 0) ? CHAT_TEMPLATE_VERSION : MESSAGE_TEMPLATE_VERSION
+}
+
+// ---------------------------------------------------------------------------
+// Template registry (spec 03 §3.5, D-75)
+// ---------------------------------------------------------------------------
+
+/** Only what a provider may receive: the type has no expectedBehavior and no kitFields. */
+export type PromptCase = Pick<CaseInput, 'reference' | 'input' | 'messages'>
+
+export interface TemplateInput {
+  systemPrompt: string
+  prompt: PromptCase
+  /** The hearing's frozen kit settings (undefined for general-v1). */
+  settings: unknown
+}
+
+/** `requestOptions` is reserved for item 4 (structured output); no v1 template sets it. */
+export type KitRequest = ProviderConversation & { requestOptions?: never }
+
+export const MESSAGE_TEMPLATES: Record<MessageTemplateVersion, { build(input: TemplateInput): KitRequest }> = {
+  'qa-v1': { build: ({ systemPrompt, prompt }) => buildConversation(MESSAGE_TEMPLATE_VERSION, systemPrompt, prompt) },
+  'chat-v1': { build: ({ systemPrompt, prompt }) => buildConversation(CHAT_TEMPLATE_VERSION, systemPrompt, prompt) },
+}
+
+/** The provider-facing part of a question, picked field by field so reviewer-only fields cannot follow. */
+export function promptCaseOf(testCase: PromptCase): PromptCase {
+  return { reference: testCase.reference, input: testCase.input, ...(testCase.messages !== undefined ? { messages: testCase.messages } : {}) }
+}
+
+/**
+ * The one entry point generation uses. Reviewer-only fields (expected behavior, kit answer keys)
+ * are dropped by construction. Null for a template this build does not know: the caller treats
+ * it as a definite, unsent failure. Snapshots from before D-39 have no template and used qa-v1.
+ */
+export function buildKitRequest(snapshot: Partial<Pick<RunSnapshot, 'messageTemplateVersion' | 'kit'>>, systemPrompt: string, testCase: PromptCase): KitRequest | null {
+  const version = snapshot.messageTemplateVersion ?? MESSAGE_TEMPLATE_VERSION
+  const template = Object.hasOwn(MESSAGE_TEMPLATES, version) ? MESSAGE_TEMPLATES[version] : undefined
+  if (!template) return null
+  return template.build({ systemPrompt, prompt: promptCaseOf(testCase), settings: snapshot.kit?.settings })
 }

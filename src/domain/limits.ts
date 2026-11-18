@@ -50,4 +50,22 @@ export const LIMITS = {
   providerTimeoutMs: 90_000,
   attemptLeaseMs: 120_000,
   receiptTtlMs: 24 * 60 * 60 * 1000,
+  /** Task kits and automatic checks (spec 03 §10, D-75). */
+  kits: {
+    labels: { min: 2, max: 20 },
+    label: { min: 1, max: 40 },
+    alsoAccept: 5,
+    requiredPoints: 6,
+    requiredPointText: { min: 1, max: 160 },
+    phrasesPerPoint: 4,
+    phrase: { min: 1, max: 60 },
+    mustNotMention: 8,
+    summaryMaxWords: 300,
+    summaryMaxCharacters: 2_000,
+    minReasoningWords: 50,
+    checksPerTestimony: 20,
+    checkReasonChars: 300,
+    checkDetailBytes: 1_024,
+    checkResultsJsonBytes: 16 * 1_024,
+  },
 } as const

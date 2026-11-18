@@ -5,9 +5,11 @@
 
 import { CANONICALIZATION_VERSION } from './canonical'
 import { isImported, type CaseInput, type ComparisonMode, type Configuration, type Draft, type ImportedConfiguration, type ModelConfiguration } from './contracts'
-import { templateFor, type MessageTemplateVersion } from './messages'
+import { kitFor, kitReadinessIssues } from './kits/registry'
+import type { KitReadinessIssue } from './kits/types'
+import type { MessageTemplateVersion } from './messages'
 import { findRoute, isRouteEnabled, PROVIDER_NAMES, PROVIDER_REGISTRY_VERSION, type ModelRoute, type ProviderId } from './registry'
-import { RUBRIC_VERSION, type RubricVersion } from './rubric'
+import type { RubricVersion } from './rubric'
 
 /** A generated party, frozen with its resolved route. Older snapshots have no `source` field. */
 export type GeneratedSnapshotConfiguration = ModelConfiguration & {
@@ -53,6 +55,8 @@ export interface RunSnapshot {
   createdAt: number
   /** D-65: present only when the judge asked for repeats (2 or 3); absent means once. Part of the hashed plan. */
   samplesPerAnswer?: 2 | 3
+  /** Spec 03 (D-75): the task kit and its frozen settings. Absent for general-v1, so pre-kit snapshots and their hashes are unchanged. */
+  kit?: { version: string; settings: unknown }
 }
 
 /** How many times each generated party answers each question. */
@@ -68,8 +72,9 @@ export type ReadinessIssue =
   | { kind: 'imported_requires_configuration_mode' }
   | { kind: 'imported_text_missing'; configurationKey: string; caseKey: string }
   | { kind: 'history_unverified'; configurationKey: string }
+  | KitReadinessIssue
 
-export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configurations'> & Partial<Pick<Draft, 'cases'>>, routes: readonly ModelRoute[]): ReadinessIssue[] {
+export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configurations'> & Partial<Pick<Draft, 'cases' | 'kit'>>, routes: readonly ModelRoute[]): ReadinessIssue[] {
   const issues: ReadinessIssue[] = []
   const models = generatedParties(draft.configurations)
   const hasHistory = (draft.cases ?? []).some((testCase) => (testCase.messages?.length ?? 0) > 0)
@@ -86,6 +91,7 @@ export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configura
     const modelKeys = new Set(models.map((configuration) => configuration.modelKey))
     if (modelKeys.size < models.length) issues.push({ kind: 'model_mode_same_model' })
   }
+  issues.push(...kitReadinessIssues(draft))
   return issues
 }
 
@@ -97,7 +103,13 @@ export function importCoverageIssues(draft: Pick<Draft, 'cases' | 'configuration
   )
 }
 
-export function describeIssue(issue: ReadinessIssue): string {
+/** "Q2" for a question's position, or "a question" when the list is not at hand. */
+function questionName(caseKey: string, cases?: ReadonlyArray<Pick<CaseInput, 'key'>>): string {
+  const index = cases?.findIndex((testCase) => testCase.key === caseKey) ?? -1
+  return index >= 0 ? `Q${index + 1}` : 'a question'
+}
+
+export function describeIssue(issue: ReadinessIssue, cases?: ReadonlyArray<Pick<CaseInput, 'key'>>): string {
   switch (issue.kind) {
     case 'unknown_model':
       return 'A configuration uses a model that is not in the catalog.'
@@ -115,6 +127,15 @@ export function describeIssue(issue: ReadinessIssue): string {
       return 'An imported party is missing an answer for at least one question. Add every answer and save it.'
     case 'history_unverified':
       return 'A question has a conversation, but a selected model has not yet passed a live multi-message check. Remove the conversation or wait for that check.'
+    case 'kit_input_unsupported': {
+      const name = kitFor(issue.kitVersion).name
+      const what = issue.inputKind === 'conversation' ? 'a conversation' : `${issue.inputKind} input`
+      return `${name} questions can't carry ${what} yet. Remove it from ${questionName(issue.caseKey, cases)} or switch the task kit to General answers.`
+    }
+    case 'kit_document_missing':
+      return `${kitFor(issue.kitVersion).name} needs a document in the exhibit of every question. Add one to ${questionName(issue.caseKey, cases)}.`
+    case 'kit_unknown':
+      return 'This case uses a task kit this version of Model Court does not know. Choose another task kit.'
   }
 }
 
@@ -129,6 +150,7 @@ export function requiredProviders(configurations: readonly Configuration[], rout
 }
 
 export function buildSnapshot(draft: Draft, routes: readonly ModelRoute[], appCommit: string, createdAt: number, imports: readonly ImportMeta[] = []): RunSnapshot {
+  const kit = draft.kit as { version: string; settings: unknown } | undefined
   return {
     schemaVersion: 1,
     canonicalizationVersion: CANONICALIZATION_VERSION,
@@ -150,11 +172,12 @@ export function buildSnapshot(draft: Draft, routes: readonly ModelRoute[], appCo
       if (!route) throw new Error('buildSnapshot requires validated routes')
       return { ...configuration, provider: route.provider, modelId: route.modelId, adapterVersion: route.adapterVersion }
     }),
-    rubricVersion: draft.rubricVersion ?? RUBRIC_VERSION,
-    messageTemplateVersion: templateFor(draft.cases),
+    rubricVersion: draft.rubricVersion ?? kitFor(kit?.version).defaultRubricVersion,
+    messageTemplateVersion: kitFor(kit?.version).selectTemplate(draft.cases),
     providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
     appCommit,
     createdAt,
     ...(draft.samplesPerAnswer ? { samplesPerAnswer: draft.samplesPerAnswer } : {}),
+    ...(kit ? { kit: { version: kit.version, settings: kit.settings } } : {}),
   }
 }

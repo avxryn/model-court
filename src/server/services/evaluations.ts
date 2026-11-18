@@ -152,6 +152,8 @@ export function parseStoredDraft(row: Pick<EvaluationRow, 'draft_json'>): Draft 
     cases: raw.cases,
     configurations: raw.configurations,
     ...(raw.samplesPerAnswer !== undefined ? { samplesPerAnswer: raw.samplesPerAnswer } : {}),
+    // Spec 03 (D-75): the task kit; each case keeps its own kitFields as part of `cases`.
+    ...(raw.kit !== undefined ? { kit: raw.kit } : {}),
   })
   if (!parsed.success) throw new ApiError(500, 'INTERNAL', 'Stored draft failed validation.')
   return { schemaVersion: 1, ...parsed.data }

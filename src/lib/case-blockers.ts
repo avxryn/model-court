@@ -8,8 +8,8 @@ export function caseBlockers({ draft, routes, imports, dirty, hasErrors, missing
   return [
     ...(dirty ? ['Save the draft first — a hearing uses the saved version.'] : []),
     ...(hasErrors ? ['Fix the highlighted fields.'] : []),
-    ...(routes ? readinessIssues(draft, routes).map(describeIssue) : []),
-    ...new Set(importCoverageIssues(draft, imports).map(describeIssue)),
+    ...(routes ? readinessIssues(draft, routes).map((issue) => describeIssue(issue, draft.cases)) : []),
+    ...new Set(importCoverageIssues(draft, imports).map((issue) => describeIssue(issue))),
     ...missingProviders.map((provider) => `Add your ${PROVIDER_NAMES[provider]} key in Settings.`),
     ...(hasActiveHearing ? ['This case already has an unfinished hearing.'] : []),
     ...(generationDisabled ? ['Live generation is disabled on this deployment.'] : []),

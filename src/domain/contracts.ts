@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod'
+import { kitChoiceSchema, kitDraftIssues, kitFieldsSchema } from './kits/registry'
 import { LIMITS } from './limits'
 import { PROVIDERS } from './registry'
 import { RUBRIC_VERSIONS } from './rubric'
@@ -60,6 +61,11 @@ export const caseInputSchema = z.strictObject({
     .optional(),
   /** Optional language tag for per-language results (D-36), e.g. "en" or "Spanish". */
   language: z.string().trim().min(1, 'Language cannot be blank').max(LIMITS.caseLanguage.max, `Language is at most ${LIMITS.caseLanguage.max} characters`).optional(),
+  /**
+   * Task-kit fields of this question (spec 03, D-75): answer keys and limits a check reads.
+   * Reviewer-only: never sent to a provider. Absent for general-v1, so older drafts keep their hash.
+   */
+  kitFields: kitFieldsSchema.optional(),
 })
 export type CaseInput = z.infer<typeof caseInputSchema>
 
@@ -135,6 +141,8 @@ export const draftInputSchema = z
      * so older drafts and snapshots keep their hashes. Jurors still score one answer per party.
      */
     samplesPerAnswer: z.union([z.literal(2), z.literal(3)]).optional(),
+    /** The task kit and its settings (spec 03, D-75). Absent means general-v1, so older drafts and snapshots keep their hashes. */
+    kit: kitChoiceSchema.optional(),
   })
   .refine((draft) => utf8ByteLength(JSON.stringify(draft)) <= LIMITS.draftJsonBytes, {
     message: 'Draft exceeds 96 KiB',
@@ -142,6 +150,9 @@ export const draftInputSchema = z
   .refine((draft) => draft.samplesPerAnswer === undefined || draft.configurations.some((configuration) => !isImported(configuration)), {
     message: 'Imported answers are used once; repeats need at least one generated party',
     path: ['samplesPerAnswer'],
+  })
+  .superRefine((draft, ctx) => {
+    for (const issue of kitDraftIssues(draft)) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message })
   })
 export type DraftInput = z.infer<typeof draftInputSchema>
 export type Draft = DraftInput & { schemaVersion: 1 }
