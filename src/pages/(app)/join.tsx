@@ -112,7 +112,7 @@ export default function JoinPage() {
       <Card className="w-full max-w-md py-7">
         <CardHeader>
           <div className="typewriter mb-2 text-xs font-medium text-muted-foreground">JURY SUMMONS · MODEL COURT</div>
-          <CardTitle className="font-display text-2xl font-medium tracking-tight"><h1>You are summoned to serve as a juror</h1></CardTitle>
+          <CardTitle className="text-2xl font-medium tracking-tight"><h1 className="font-display">You are summoned to serve as a juror</h1></CardTitle>
           <CardDescription className="leading-relaxed">
             You were invited to review blind. You will score anonymous AI answers against a short rubric. You don’t need an API key, and you won’t see which models gave the answers — or anyone else’s ratings — until the judge unseals the record.
           </CardDescription>
@@ -125,7 +125,14 @@ export default function JoinPage() {
             </a>{' '}
             in a new tab: about two minutes, and nothing you do there is saved or sent.
           </p>
-          {status === 'missing' && !pendingResume && !guest && <p className="text-sm text-destructive">This page needs an invitation link. Ask the judge for a new one.</p>}
+          {status === 'missing' && !pendingResume && !guest && (
+            <div className="space-y-3">
+              <p className="text-sm text-destructive">This page needs an invitation link. Open the link the judge sent you, or ask them for a new one.</p>
+              <Button variant="outline" className="w-full" onClick={() => navigate('/')}>
+                Back to Model Court
+              </Button>
+            </div>
+          )}
           {status === 'error' && (
             <p role="alert" className="text-sm text-destructive">
               {message}

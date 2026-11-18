@@ -381,7 +381,13 @@ describe('review fix: reviewer evaluation list shows only joined runs', () => {
     const { runId, setup } = await readyRun()
     await openAndInvite(runId)
     await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token: await invite(runId) } })
+    // The judge's row counts seated and filed jurors, so the docket can say "Waiting on jurors" instead of "Unseal".
+    const before = (await h.request('GET', '/evaluations', { as: OWNER })).json.data.items
+    expect(before[0].jurors).toEqual({ joined: 1, filed: 0 })
+    expect(before[0].viewerFiled).toBe(false)
+    expect((await h.request('GET', '/evaluations', { as: REVIEWER })).json.data.items[0].viewerFiled).toBe(false)
     await reviewAndSubmit(runId, REVIEWER)
+    expect((await h.request('GET', '/evaluations', { as: OWNER })).json.data.items[0].jurors).toEqual({ joined: 1, filed: 1 })
     const view = await runView(runId)
     await h.request('POST', `/runs/${runId}/reveal`, { as: OWNER, ifMatch: view.revision, body: { acknowledgePendingCount: 1 } })
     h.advance(61_000)
@@ -391,10 +397,14 @@ describe('review fix: reviewer evaluation list shows only joined runs', () => {
     expect(list[0].latestRunStatus).toBe('revealed')
     // The juror's link points at the hearing they sat on, never the later one they were not invited to.
     expect(list[0].latestRunId).toBe(runId)
+    // A juror's row says only whether they filed, never how other jurors are doing.
+    expect(list[0].viewerFiled).toBe(true)
+    expect(list[0].jurors).toBeNull()
     const owners = (await h.request('GET', '/evaluations', { as: OWNER })).json.data.items
     expect(owners[0].latestRunStatus).toBe('generating')
     expect(owners[0].latestRunId).toEqual(expect.any(String))
     expect(owners[0].latestRunId).not.toBe(runId)
+    expect(owners[0].jurors).toEqual({ joined: 0, filed: 0 })
   })
 
   it('treats a non-numeric limit as the default instead of failing', async () => {

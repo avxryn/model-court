@@ -1,8 +1,9 @@
 /**
  * What the "Your cases" page can honestly say from the case list alone.
- * EvaluationSummary carries only the case, the viewer's role, the latest
- * hearing's status and the last activity time, so every count and next step
- * here is derived from those four fields and nothing else.
+ * EvaluationSummary carries the case, the viewer's role, the latest hearing's
+ * status, juror progress on it (judge's rows only), whether the viewer has
+ * filed, and the last activity time; every count and next step here is
+ * derived from those fields and nothing else.
  */
 
 import type { EvaluationSummary } from '@/lib/dto'
@@ -10,8 +11,16 @@ import { plural } from '@/lib/format'
 
 export type ChipTone = 'muted' | 'open' | 'seal' | 'delib' | 'done'
 
+type ChipInput = Pick<EvaluationSummary, 'latestRunStatus' | 'role' | 'jurors' | 'viewerFiled'>
+
 /** The docket's chip for a case, from its latest hearing (the mock's dot chips). */
-export function caseChip(status: EvaluationSummary['latestRunStatus']): { label: string; tone: ChipTone } {
+export function caseChip(item: ChipInput): { label: string; tone: ChipTone } {
+  const status = item.latestRunStatus
+  if (status === 'reviewing') {
+    if (item.role === 'reviewer' && item.viewerFiled) return { label: 'Filed', tone: 'done' }
+    const jurors = item.jurors
+    if (jurors && jurors.joined > 0) return jurors.filed === 0 ? { label: 'Waiting on jurors', tone: 'delib' } : { label: `${jurors.filed} of ${jurors.joined} filed`, tone: 'delib' }
+  }
   switch (status) {
     case null:
       return { label: 'No hearings', tone: 'muted' }
@@ -32,7 +41,7 @@ export function caseChip(status: EvaluationSummary['latestRunStatus']): { label:
   }
 }
 
-export type WaitingKind = 'judgment' | 'unseal' | 'open' | 'score'
+export type WaitingKind = 'judgment' | 'unseal' | 'open' | 'review' | 'score'
 
 export interface WaitingItem {
   kind: WaitingKind
@@ -40,21 +49,26 @@ export interface WaitingItem {
 }
 
 /** Most decisive first: a verdict to record, then a record to unseal, then deliberation to open, then a worksheet. */
-const ORDER: WaitingKind[] = ['judgment', 'unseal', 'open', 'score']
+const ORDER: WaitingKind[] = ['judgment', 'unseal', 'open', 'review', 'score']
 
 /**
  * The next step a case is waiting on from this viewer, if any. Judges move the
  * hearing along (open deliberation, unseal, enter judgment); jurors score while
- * deliberation is open. The summary can't say whether jurors have filed or the
- * viewer already scored, so a deliberating hearing still counts as waiting.
+ * deliberation is open. A deliberating hearing waits on the judge only once
+ * there is something to unseal: a filed juror worksheet or the judge's own
+ * review. With no jurors seated, the judge's own review is the next step;
+ * with jurors seated and none filed, it waits on them, not on the judge.
  */
 export function waitingKind(item: EvaluationSummary): WaitingKind | null {
-  if (item.role === 'reviewer') return item.latestRunStatus === 'reviewing' ? 'score' : null
+  if (item.role === 'reviewer') return item.latestRunStatus === 'reviewing' && !item.viewerFiled ? 'score' : null
   switch (item.latestRunStatus) {
     case 'revealed':
       return 'judgment'
-    case 'reviewing':
-      return 'unseal'
+    case 'reviewing': {
+      const jurors = item.jurors ?? { joined: 0, filed: 0 }
+      if (jurors.filed > 0 || item.viewerFiled) return 'unseal'
+      return jurors.joined === 0 ? 'review' : null
+    }
     case 'ready':
       return 'open'
     default:
@@ -69,6 +83,7 @@ export function waitingHref(item: WaitingItem): string {
   switch (item.kind) {
     case 'judgment':
       return `/runs/${runId}/judgment`
+    case 'review':
     case 'score':
       return `/runs/${runId}/review`
     default:
@@ -131,6 +146,7 @@ export function docketStats(items: EvaluationSummary[], waiting: WaitingItem[]):
           part(byKind.get('judgment'), (n) => `${plural(n, 'judgment')} to enter`),
           part(byKind.get('unseal'), (n) => `${n} to unseal`),
           part(byKind.get('open'), (n) => `${n} to open`),
+          part(byKind.get('review'), (n) => `${plural(n, 'review')} to write`),
           part(byKind.get('score'), (n) => `${n} to score`),
         ],
         'Nothing needs you right now',

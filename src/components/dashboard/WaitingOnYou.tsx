@@ -4,14 +4,12 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { waitingHref, type WaitingItem, type WaitingKind } from './docket'
 
-/**
- * Each next step links to the case page: the summary has no hearing id, so the
- * case page (which lists its hearings and opens the latest) is the honest target.
- */
+/** Each next step links to the hearing page that has its action (see waitingHref). */
 const STEP: Record<WaitingKind, { title: string; note: string; action: string; icon: LucideIcon; tile: string }> = {
   judgment: { title: 'Enter judgment', note: 'record unsealed', action: 'Enter', icon: Gavel, tile: 'bg-success/10 text-success' },
   unseal: { title: 'Unseal the record', note: 'deliberation open', action: 'Continue', icon: LockOpen, tile: 'bg-stamp/10 text-stamp' },
   open: { title: 'Open deliberation', note: 'testimony is in', action: 'Open', icon: Scale, tile: 'bg-accent text-accent-foreground' },
+  review: { title: 'Write your review', note: 'no jurors seated', action: 'Continue', icon: PenLine, tile: 'bg-warning/10 text-warning' },
   score: { title: 'Score the testimony', note: 'jury duty, deliberation open', action: 'Continue', icon: PenLine, tile: 'bg-warning/10 text-warning' },
 }
 

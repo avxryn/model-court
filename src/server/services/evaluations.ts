@@ -22,6 +22,13 @@ export interface EvaluationSummary {
   latestRunStatus: RunStatus | null
   /** The hearing that status belongs to, so a list can link straight to its next step. */
   latestRunId: string | null
+  /**
+   * Juror progress on the latest hearing, for the judge's row only (null for jurors' rows and cases
+   * without a hearing): invited jurors seated, and how many of them have filed.
+   */
+  jurors: { joined: number; filed: number } | null
+  /** Whether the viewer has filed their own worksheet on the latest hearing. */
+  viewerFiled: boolean
   updatedAt: number
 }
 
@@ -84,12 +91,16 @@ export async function listEvaluations(deps: Deps, userId: string, cursor: string
          WHERE s.reviewer_user_id = ?1 AND s.context_type = 'invited' AND s.status <> 'revoked' AND e.deleted_at IS NULL AND e.owner_user_id <> ?1
          GROUP BY e.id
        )
-       SELECT * FROM visible v
+       SELECT v.*,
+         (SELECT COUNT(*) FROM review_sessions j WHERE j.run_id = v.latest_run_id AND j.context_type = 'invited' AND j.status <> 'revoked') AS jurors_joined,
+         (SELECT COUNT(*) FROM review_sessions j WHERE j.run_id = v.latest_run_id AND j.context_type = 'invited' AND j.status <> 'revoked' AND j.submitted_at IS NOT NULL) AS jurors_filed,
+         (SELECT COUNT(*) FROM review_sessions m WHERE m.run_id = v.latest_run_id AND m.reviewer_user_id = ?1 AND m.submitted_at IS NOT NULL) AS viewer_filed
+       FROM visible v
        WHERE (?2 IS NULL OR v.updated_at < ?2 OR (v.updated_at = ?2 AND v.id < ?3))
        ORDER BY v.updated_at DESC, v.id DESC LIMIT ?4`,
     )
     .bind(userId, after?.[0] ?? null, after?.[1] ?? null, pageSize + 1)
-    .all<{ id: string; title: string; role: 'owner' | 'reviewer'; updated_at: number; latest_run_status: RunStatus | null; latest_run_id: string | null }>()
+    .all<{ id: string; title: string; role: 'owner' | 'reviewer'; updated_at: number; latest_run_status: RunStatus | null; latest_run_id: string | null; jurors_joined: number; jurors_filed: number; viewer_filed: number }>()
   const page = rows.results.slice(0, pageSize)
   const items: EvaluationSummary[] = page.map((row) => ({
     id: row.id,
@@ -97,6 +108,8 @@ export async function listEvaluations(deps: Deps, userId: string, cursor: string
     role: row.role,
     latestRunStatus: row.latest_run_status,
     latestRunId: row.latest_run_id,
+    jurors: row.role === 'owner' && row.latest_run_id ? { joined: Number(row.jurors_joined), filed: Number(row.jurors_filed) } : null,
+    viewerFiled: Number(row.viewer_filed) > 0,
     updatedAt: row.updated_at,
   }))
   const last = page.at(-1)

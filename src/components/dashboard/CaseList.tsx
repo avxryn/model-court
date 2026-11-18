@@ -17,8 +17,8 @@ const CHIP: Record<ChipTone, string> = {
 }
 
 /** A rounded status chip with a dot; the label carries the meaning, the color only echoes it. */
-export function CaseChip({ status }: { status: EvaluationSummary['latestRunStatus'] }) {
-  const { label, tone } = caseChip(status)
+export function CaseChip({ item }: { item: Parameters<typeof caseChip>[0] }) {
+  const { label, tone } = caseChip(item)
   return (
     <span className={cn('inline-flex h-5.5 items-center gap-1.5 rounded-full px-2 text-xs font-medium whitespace-nowrap', CHIP[tone])}>
       <span aria-hidden className="size-1.5 rounded-full bg-current" />
@@ -64,7 +64,7 @@ export function CaseList({ items, hasMore, onLoadMore, loadingMore, moreError }:
                   </span>
                 </span>
               </span>
-              <CaseChip status={item.latestRunStatus} />
+              <CaseChip item={item} />
               <span className="hidden text-right text-small text-muted-foreground tabular-nums sm:block">
                 <Age ms={item.updatedAt} now={now} />
               </span>
