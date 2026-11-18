@@ -31,6 +31,8 @@ import { caseBlockers } from '@/lib/case-blockers'
 import { caseStep, docketNumber, recordStamp } from '@/lib/court'
 import type { CatalogView, CredentialMetadata, EvaluationView, OwnerEvaluationView } from '@/lib/dto'
 import { formatTime, plural } from '@/lib/format'
+import { useDraftScenarioHash } from '@/lib/scenario-draft'
+import { catalogModelName } from '@/lib/scenario-words'
 import { isActive } from '@/lib/status'
 import { useApi } from '@/lib/use-api'
 
@@ -54,6 +56,10 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
   const [tab, setTab] = useState<string>(evaluation.runs.length > 0 ? 'runs' : 'cases')
 
   const routes: ModelRoute[] | null = useMemo(() => (catalog.data ? catalog.data.models.map((m) => ({ ...m, adapterVersion: '' })) : null), [catalog.data])
+  const workingScenario = useDraftScenarioHash(draft)
+  // Where the working draft stands (D-68): computed here so it follows edits and saves without a reload.
+  const workingVersion = evaluation.runs.find((run) => run.scenarioHash === workingScenario)?.scenarioVersion ?? null
+  const draftStanding = { draftScenarioVersion: workingVersion, nextScenarioVersion: evaluation.nextScenarioVersion, draftDiff: workingScenario === evaluation.draftScenarioHash ? evaluation.draftDiff : null }
   const providers = requiredProviders(draft.configurations, routes ?? [])
   const keys = credentials.data?.items ?? []
   const missingProviders = providers.filter((provider) => !keys.some((key) => key.provider === provider))
@@ -171,7 +177,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                 <SavedKeys providers={providers} keys={keys} />
               </TabsContent>
               <TabsContent value="runs">
-                <HearingList runs={evaluation.runs} to={(run) => `/runs/${run.id}`} />
+                <HearingList runs={evaluation.runs} to={(run) => `/runs/${run.id}`} versions={{ rows: evaluation.runs, draft: draftStanding, modelName: catalogModelName(catalog.data?.models) }} />
               </TabsContent>
             </div>
             <CaseActionBar

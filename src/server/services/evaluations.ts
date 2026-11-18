@@ -14,6 +14,7 @@ import { loadEvaluationAccess, requireOwner, type EvaluationRow } from '../acces
 import { auditStatement, cond, GuardFailed, releaseReservations, runGuarded } from '../db/sql'
 import type { Deps } from '../deps'
 import { ApiError, revisionConflict } from '../http'
+import { caseVersions } from './scenarios'
 
 export interface EvaluationSummary {
   id: string
@@ -161,23 +162,30 @@ export async function getEvaluation(deps: Deps, userId: string, evaluationId: st
   const { evaluation, role } = await loadEvaluationAccess(deps.db, evaluationId, userId)
   if (role === 'owner') {
     const runs = await deps.db
-      .prepare('SELECT id, status, revision, created_at FROM runs WHERE evaluation_id = ? ORDER BY created_at DESC, id DESC')
+      .prepare('SELECT id, status, revision, created_at, snapshot_json FROM runs WHERE evaluation_id = ? ORDER BY created_at DESC, id DESC')
       .bind(evaluationId)
-      .all<{ id: string; status: RunStatus; revision: number; created_at: number }>()
+      .all<{ id: string; status: RunStatus; revision: number; created_at: number; snapshot_json: string }>()
+    const draft = parseStoredDraft(evaluation)
+    // Scenario versions (D-68): computed from the frozen snapshots, owner only.
+    const versions = await caseVersions(runs.results, draft)
     return {
       id: evaluation.id,
       role,
       title: evaluation.title,
       taskDescription: evaluation.task_description,
       revision: evaluation.revision,
-      draft: parseStoredDraft(evaluation),
+      draft,
+      draftScenarioHash: versions.draftScenarioHash,
+      draftScenarioVersion: versions.draftScenarioVersion,
+      nextScenarioVersion: versions.nextScenarioVersion,
+      draftDiff: versions.draftDiff,
       imports: (
         await deps.db
           .prepare('SELECT configuration_key, case_key, text, text_sha256, byte_length, updated_at FROM evaluation_imports WHERE evaluation_id = ? ORDER BY configuration_key, case_key')
           .bind(evaluationId)
           .all<{ configuration_key: string; case_key: string; text: string; text_sha256: string; byte_length: number; updated_at: number }>()
       ).results.map((row) => ({ configurationKey: row.configuration_key, caseKey: row.case_key, text: row.text, sha256: row.text_sha256, byteLength: row.byte_length, updatedAt: row.updated_at })),
-      runs: runs.results.map((run) => ({ id: run.id, status: run.status, revision: run.revision, createdAt: run.created_at })),
+      runs: runs.results.map((run) => ({ id: run.id, status: run.status, revision: run.revision, createdAt: run.created_at, ...versions.byRun.get(run.id)! })),
       updatedAt: evaluation.updated_at,
     }
   }
