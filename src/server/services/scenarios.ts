@@ -4,10 +4,16 @@
  * immutable `snapshot_json`, so nothing is stored or backfilled.
  */
 
-import type { Draft } from '../../domain/contracts'
+import type { z } from 'zod'
+import { draftInputSchema, isImported, type Configuration, type Draft, type restoreDraftSchema } from '../../domain/contracts'
 import { diffIsEmpty, diffParties, diffScenarios, partyFingerprint, questionHashes, scenarioHash, scenarioSourceOfDraft, scenarioSourceOfSnapshot, type PartyChange, type ScenarioDiff } from '../../domain/scenario'
-import { isImportedSnapshot, type RunSnapshot } from '../../domain/snapshot'
+import { isImportedSnapshot, type RunSnapshot, type SnapshotConfiguration } from '../../domain/snapshot'
 import type { RunStatus } from '../../domain/transitions'
+import { loadEvaluationAccess } from '../access'
+import { auditStatement, cond, GuardFailed, runGuarded } from '../db/sql'
+import type { Deps } from '../deps'
+import { ApiError, notFound, revisionConflict } from '../http'
+import { configurationCapError, parseStoredDraft, samplesCapError } from './evaluations'
 import { parseSnapshot } from './runs'
 
 export interface HearingPartyView {
@@ -90,3 +96,98 @@ export async function caseVersions(runs: readonly VersionRunInput[], draft: Draf
   return { byRun, draftScenarioHash, draftScenarioVersion, nextScenarioVersion: versionByHash.size + 1, draftDiff }
 }
 
+// ---------------------------------------------------------------------------
+// Restore a hearing's questions and/or parties into the draft (D-69)
+// ---------------------------------------------------------------------------
+
+/** Owner-only routes of spec 02 answer 404 to jurors too, like any resource they cannot see. */
+export async function loadOwnedEvaluation(db: D1Database, evaluationId: string, userId: string) {
+  const access = await loadEvaluationAccess(db, evaluationId, userId)
+  if (access.role !== 'owner') throw notFound()
+  return access.evaluation
+}
+
+export async function loadCaseRun(db: D1Database, evaluationId: string, runId: string) {
+  const run = await db.prepare('SELECT id, status, snapshot_json, created_at FROM runs WHERE id = ? AND evaluation_id = ?').bind(runId, evaluationId).first<{ id: string; status: RunStatus; snapshot_json: string; created_at: number }>()
+  if (!run) throw notFound()
+  return run
+}
+
+/** A frozen party back to a draft party: drop the resolved route, adapter version, source and import hashes. */
+export function draftConfiguration(configuration: SnapshotConfiguration): Configuration {
+  if (isImportedSnapshot(configuration)) return { kind: 'imported', key: configuration.key, label: configuration.label, provenance: configuration.provenance }
+  return { ...(configuration.kind ? { kind: configuration.kind } : {}), key: configuration.key, label: configuration.label, modelKey: configuration.modelKey, systemPrompt: configuration.systemPrompt, maxOutputTokens: configuration.maxOutputTokens }
+}
+
+/**
+ * The draft after restoring from a snapshot. Questions bring the rubric (and a kit, once item 3
+ * freezes one); parties bring the comparison mode and repeats.
+ */
+export function restoredDraftInput(current: Draft, snapshot: RunSnapshot, parts: { questions: boolean; parties: boolean }): Record<string, unknown> {
+  const { schemaVersion: _version, ...next } = current as Draft & Record<string, unknown>
+  if (parts.questions) {
+    next.cases = snapshot.cases
+    next.rubricVersion = snapshot.rubricVersion
+    const kit = (snapshot as unknown as Record<string, unknown>).kit
+    if (kit !== undefined) next.kit = kit
+    else delete next.kit
+  }
+  if (parts.parties) {
+    next.comparisonMode = snapshot.comparisonMode
+    next.configurations = snapshot.configurations.map(draftConfiguration)
+    if (snapshot.samplesPerAnswer) next.samplesPerAnswer = snapshot.samplesPerAnswer
+    else delete next.samplesPerAnswer
+  }
+  // Repeats need a generated party (draft rule); a restore that leaves none drops them.
+  if (next.samplesPerAnswer && (next.configurations as Configuration[]).every(isImported)) delete next.samplesPerAnswer
+  return next
+}
+
+export async function restoreDraft(deps: Deps, userId: string, evaluationId: string, input: z.output<typeof restoreDraftSchema>, ifMatch: number, requestId: string) {
+  const evaluation = await loadOwnedEvaluation(deps.db, evaluationId, userId)
+  const run = await loadCaseRun(deps.db, evaluationId, input.fromRunId)
+  if (evaluation.revision !== ifMatch) throw revisionConflict()
+  const snapshot = parseSnapshot(run.snapshot_json)
+  const parsed = draftInputSchema.safeParse(restoredDraftInput(parseStoredDraft(evaluation), snapshot, input))
+  if (!parsed.success) {
+    throw new ApiError(422, 'VALIDATION_FAILED', 'This hearing’s setup cannot be restored into a draft as it is.', { fields: parsed.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })) })
+  }
+  const capError = configurationCapError(deps, parsed.data.configurations.length) ?? samplesCapError(deps, parsed.data.samplesPerAnswer)
+  if (capError) throw capError
+  const draft: Draft = { schemaVersion: 1, ...parsed.data }
+  const db = deps.db
+  const now = deps.now()
+  const caseKeys = draft.cases.map((testCase) => testCase.key)
+  // Imported parties keep their exact frozen answers, copied byte for byte from the hearing.
+  const restoredImported = input.parties ? snapshot.configurations.filter(isImportedSnapshot).map((configuration) => configuration.key) : []
+  const statements: D1PreparedStatement[] = [
+    db.prepare('UPDATE evaluations SET draft_json = ?, revision = revision + 1, updated_at = ? WHERE id = ?').bind(JSON.stringify(draft), now, evaluationId),
+    ...restoredImported.flatMap((configurationKey) => [
+      db.prepare('DELETE FROM evaluation_imports WHERE evaluation_id = ? AND configuration_key = ?').bind(evaluationId, configurationKey),
+      db
+        .prepare(
+          `INSERT INTO evaluation_imports (evaluation_id, configuration_key, case_key, text, text_sha256, byte_length, created_at, updated_at)
+           SELECT ?, configuration_key, case_key, text, text_sha256, byte_length, ?, ? FROM run_imported_outputs
+           WHERE run_id = ? AND configuration_key = ? AND case_key IN (${caseKeys.map(() => '?').join(',')})`,
+        )
+        .bind(evaluationId, now, now, run.id, configurationKey, ...caseKeys),
+    ]),
+    auditStatement(db, { eventType: 'evaluation.restore', requestId, outcome: 'ok', actorUserId: userId, evaluationId, runId: run.id, metadata: { fromRunId: run.id, questions: input.questions, parties: input.parties } }, now),
+  ]
+  try {
+    await runGuarded(db, 'evaluation.restore', cond('EXISTS (SELECT 1 FROM evaluations WHERE id = ? AND owner_user_id = ? AND revision = ? AND deleted_at IS NULL)', evaluationId, userId, ifMatch), statements)
+  } catch (error) {
+    if (error instanceof GuardFailed) throw revisionConflict()
+    throw error
+  }
+  return { revision: ifMatch + 1, draft, imports: await loadDraftImports(db, evaluationId) }
+}
+
+export async function loadDraftImports(db: D1Database, evaluationId: string) {
+  return (
+    await db
+      .prepare('SELECT configuration_key, case_key, text, text_sha256, byte_length, updated_at FROM evaluation_imports WHERE evaluation_id = ? ORDER BY configuration_key, case_key')
+      .bind(evaluationId)
+      .all<{ configuration_key: string; case_key: string; text: string; text_sha256: string; byte_length: number; updated_at: number }>()
+  ).results.map((row) => ({ configurationKey: row.configuration_key, caseKey: row.case_key, text: row.text, sha256: row.text_sha256, byteLength: row.byte_length, updatedAt: row.updated_at }))
+}

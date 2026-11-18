@@ -17,6 +17,7 @@ import {
   retrySchema,
   revealSchema,
   saveRatingsSchema,
+  restoreDraftSchema,
   startRunSchema,
   startSpecialMasterSchema,
   verdictSchema,
@@ -33,6 +34,7 @@ import { getResults, recordVerdict } from './services/results'
 import { createInvite, fileAndUnseal, getReview, redeemInvite, reveal, revokeInvite, revokeSession, saveReview, submitReview } from './services/reviews'
 import { getQuota } from './services/quota'
 import { cancelRun, getRun, openReview, retryGenerations, startRun } from './services/runs'
+import { restoreDraft } from './services/scenarios'
 import { cancelSpecialMaster, getSpecialMaster, startSpecialMaster } from './services/special-master'
 import {
   GUEST_COOKIE_PREFIX,
@@ -238,6 +240,12 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
   api.delete('/evaluations/:id/imports/:configurationKey', async (c) => {
     const ifMatch = ifMatchRevision(c)
     return ok(c, await deleteImports(deps(c), user(c), pathId(c, 'id'), pathId(c, 'configurationKey'), ifMatch, rid(c)))
+  })
+  // Spec 02 (D-69): restore a hearing's questions and/or parties into the draft. No provider call.
+  api.post('/evaluations/:id/draft/restore', async (c) => {
+    const ifMatch = ifMatchRevision(c)
+    const input = await readBody(c, restoreDraftSchema)
+    return ok(c, await restoreDraft(deps(c), user(c), pathId(c, 'id'), input, ifMatch, rid(c)))
   })
   api.delete('/evaluations/:id', async (c) => {
     const ifMatch = ifMatchRevision(c)

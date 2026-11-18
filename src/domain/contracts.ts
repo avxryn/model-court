@@ -164,7 +164,17 @@ export const startRunSchema = z.strictObject({
   credentialIdsByProvider: z.partialRecord(providerSchema, uuid),
   consentToProviderProcessing: z.literal(true),
   acknowledgeProviderCharges: z.literal(true),
+  /**
+   * Spec 02 (D-69): the scenario the judge means to start. A draft whose questions
+   * changed since (another tab) is refused with 409 instead of silently starting a different scenario.
+   */
+  expectedScenarioHash: z.string().regex(/^[0-9a-f]{64}$/, 'Invalid scenario hash').optional(),
 })
+
+/** Re-hear (D-69): copy a hearing's frozen questions and/or parties back into the draft. */
+export const restoreDraftSchema = z
+  .strictObject({ fromRunId: uuid, questions: z.boolean(), parties: z.boolean() })
+  .refine((value) => value.questions || value.parties, { message: 'Restore the questions, the parties, or both', path: ['questions'] })
 
 /** Start the special master (D-40): the judge's own key for the grader's provider, with plain-words consent. */
 export const startSpecialMasterSchema = z.strictObject({

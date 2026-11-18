@@ -7,6 +7,7 @@ import { canonicalJson, sha256Hex } from '../../domain/canonical'
 import { cancelRunSchema, retrySchema, startRunSchema } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
 import { PROVIDER_NAMES, type ProviderId } from '../../domain/registry'
+import { scenarioHash, scenarioSourceOfSnapshot } from '../../domain/scenario'
 import { buildSnapshot, describeIssue, generatedParties, importCoverageIssues, isImportedSnapshot, readinessIssues, requiredProviders, samplesPerAnswer, type ImportMeta, type RunSnapshot } from '../../domain/snapshot'
 import { canRun, isRetryable, type GenerationStatus, type RunStatus } from '../../domain/transitions'
 import { loadEvaluationAccess, loadRunAccess, requireOwner, type RunAccess } from '../access'
@@ -155,6 +156,11 @@ function requireGenerationEnabled(deps: Deps): void {
   }
 }
 
+/** Spec 02 (D-69, Q2). */
+function hearingCapError(): ApiError {
+  return new ApiError(429, 'QUOTA_EXHAUSTED', `This case has ${LIMITS.hearingsPerEvaluation} hearings, the most it can hold. Duplicate the case to keep going.`)
+}
+
 function quotaError(): ApiError {
   return new ApiError(429, 'QUOTA_EXHAUSTED', 'The provider-call limit for today (or for this deployment) has been reached. Existing work is preserved.', {
     retryAfterSeconds: Math.ceil((86_400_000 - (Date.now() % 86_400_000)) / 1000),
@@ -210,6 +216,11 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
       throw new ApiError(422, 'VALIDATION_FAILED', 'The run snapshot exceeds 96 KiB.')
     }
     const snapshotHash = await sha256Hex(canonicalJson(snapshot))
+    // Spec 02 (D-69): refuse, before any write, a draft that is not the scenario the judge meant to start.
+    const scenario = await scenarioHash(scenarioSourceOfSnapshot(snapshot))
+    if (input.expectedScenarioHash !== undefined && input.expectedScenarioHash !== scenario) {
+      throw stateConflict('The draft’s questions changed since you opened this. Review them, then start again.', { scenarioChanged: true, scenarioHash: scenario })
+    }
     const subjects = budgetSubjects(userId, now)
 
     // D-65: one generation per (question, party, sample). Sample k is first dispatched (k − 1) minutes
@@ -223,7 +234,7 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
     const imported = snapshot.configurations.filter(isImportedSnapshot).flatMap((configuration) => configuration.imports.map((item) => ({ id: deps.newId(), configurationKey: configuration.key, ...item })))
     // With nothing to generate, the hearing is ready for review at once and touches no budget.
     const initialStatus: RunStatus = generations.length > 0 ? 'generating' : 'ready'
-    const response = { status: 202 as const, data: { runId, status: initialStatus, revision: 1, plannedCalls: generations.length } }
+    const response = { status: 202 as const, data: { runId, status: initialStatus, revision: 1, plannedCalls: generations.length, scenarioHash: scenario } }
 
     const credentialChecks = providers.map((provider) =>
       cond(
@@ -284,6 +295,7 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
         'run.start',
         all(
           cond('EXISTS (SELECT 1 FROM evaluations WHERE id = ? AND owner_user_id = ? AND revision = ? AND deleted_at IS NULL)', evaluationId, userId, input.draftRevision),
+          cond('(SELECT COUNT(*) FROM runs WHERE evaluation_id = ?) < ?', evaluationId, LIMITS.hearingsPerEvaluation),
           ...credentialChecks,
           ...(generations.length > 0 ? [capacity(userId, null)] : []),
           ...imported.map((item) =>
@@ -315,6 +327,8 @@ async function explainAdmissionFailure(deps: Deps, userId: string, evaluationId:
   if (!evaluation || evaluation.revision !== input.draftRevision) return revisionConflict()
   const active = await deps.db.prepare(`SELECT 1 AS ok FROM runs WHERE evaluation_id = ? AND status IN ('generating','ready','reviewing')`).bind(evaluationId).first()
   if (active) return new ApiError(409, 'ACTIVE_RUN_EXISTS', 'This evaluation already has an unfinished run. Finish or cancel it first.')
+  const hearings = await deps.db.prepare('SELECT COUNT(*) AS n FROM runs WHERE evaluation_id = ?').bind(evaluationId).first<{ n: number }>()
+  if (Number(hearings?.n ?? 0) >= LIMITS.hearingsPerEvaluation) return hearingCapError()
   for (const [provider, id] of Object.entries(input.credentialIdsByProvider)) {
     const row = await deps.db
       .prepare(`SELECT 1 AS ok FROM provider_credentials WHERE id = ? AND owner_user_id = ? AND provider = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)`)

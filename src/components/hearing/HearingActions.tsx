@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Ban, MoreHorizontal } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Ban, MoreHorizontal, Repeat } from 'lucide-react'
 import type { Act } from '@/components/hearing/use-hearing-action'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,22 @@ import type { OwnerRunView } from '@/lib/dto'
 /** The hearing's ⋯ menu beside the breadcrumbs. Cancelling is only possible before deliberation opens. */
 export function HearingActions({ run, busy, act }: { run: OwnerRunView; busy: boolean; act: Act }) {
   const [canceling, setCanceling] = useState(false)
+  const navigate = useNavigate()
+  // Re-hear (D-69): from an unsealed or canceled hearing, on the case page, where the draft lives.
+  if (run.status === 'revealed' || run.status === 'decided' || run.status === 'canceled') {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="-mt-1 shrink-0" aria-label="Hearing actions" />}>
+          <MoreHorizontal aria-hidden />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuItem onClick={() => navigate(`/evaluations/${run.evaluationId}?rehear=${run.runId}`)}>
+            <Repeat aria-hidden /> Re-hear with different parties…
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
   if (run.status !== 'generating' && run.status !== 'ready') return null
   return (
     <>

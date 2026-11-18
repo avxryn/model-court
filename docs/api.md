@@ -36,8 +36,9 @@ Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **ju
 | GET/POST `/evaluations` | own/joined | Cursor pagination `?cursor&limit≤50`; POST seeds the example draft |
 | GET `/evaluations/:id` | owner / joined reviewer | Owner: draft + runs; reviewer: title + joined runs |
 | PUT `/evaluations/:id/draft` | owner | `{comparisonMode,cases,configurations,rubricVersion?,samplesPerAnswer?}` full replacement |
+| POST `/evaluations/:id/draft/restore` | owner (jurors and strangers 404) | If-Match. `{fromRunId, questions: boolean, parties: boolean}` (at least one true). Copies that hearing's frozen questions and rubric and/or its parties, comparison mode and repeats into the draft; imported parties get their exact frozen answers back. 404 for a hearing of another case; 422 when the result is not a valid draft for this deployment. → `{revision, draft, imports}`. No provider call, no budget (D-69) |
 | DELETE `/evaluations/:id` | owner | `{confirmTitle}` → 202 tombstone |
-| POST `/evaluations/:id/runs` | owner | `{draftRevision,credentialIdsByProvider,consentToProviderProcessing:true,acknowledgeProviderCharges:true}` → 202 |
+| POST `/evaluations/:id/runs` | owner | `{draftRevision,credentialIdsByProvider,consentToProviderProcessing:true,acknowledgeProviderCharges:true,expectedScenarioHash?}` → 202 `{runId,status,revision,plannedCalls,scenarioHash}`. A different `expectedScenarioHash` → 409 `STATE_CONFLICT` `details: {scenarioChanged: true, scenarioHash}` before anything is written; the 21st hearing of a case → 429 `QUOTA_EXHAUSTED` (D-69) |
 | GET `/runs/:id` | owner / reviewer | Role-specific projection; owner read reconciles expired leases |
 | POST `/runs/:id/retries` | owner | `{generationIds (≤ 45, one per sample),acknowledgePossiblePriorCharge:true}` → 202 |
 | POST `/runs/:id/cancel` | owner | `{reason?}` |
