@@ -302,7 +302,7 @@ describe('T18 budget ceilings', () => {
 })
 
 describe('T33 credential revocation fences work', () => {
-  it('revoking a key while queued sends nothing, releases reservations, and requires a new run', async () => {
+  it('revoking a key while queued sends nothing, releases reservations, and requires a current key to retry', async () => {
     const setup = await setupOwner(h)
     const runId = (await startRun(h, setup)).json.data.runId
     expect((await h.request('DELETE', `/credentials/${setup.openaiKeyId}`, { as: OWNER, ifMatch: 1 })).status).toBe(204)
@@ -315,7 +315,9 @@ describe('T33 credential revocation fences work', () => {
     const failed = view.generations.find((g: any) => g.errorCode === 'CREDENTIAL_REVOKED')
     const retry = await h.request('POST', `/runs/${runId}/retries`, { as: OWNER, ifMatch: view.revision, body: { generationIds: [failed.id], acknowledgePossiblePriorCharge: true } })
     expect(retry.status).toBe(409)
-    expect(retry.json.error.message).toMatch(/new one/)
+    // D-57: no longer a dead end; the retry can re-pin to the judge's current key (keys-and-quota.test.ts).
+    expect(retry.json.error.code).toBe('CREDENTIAL_MISSING')
+    expect(retry.json.error.details).toEqual({ provider: 'openai', repinRequired: true })
     // Accepted evidence survives removal.
     expect(view.counts.succeeded).toBe(5)
   })

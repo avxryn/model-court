@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { canonicalJson, sha256Hex } from '../../domain/canonical'
 import { cancelRunSchema, retrySchema, startRunSchema } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
-import type { ProviderId } from '../../domain/registry'
+import { PROVIDER_NAMES, type ProviderId } from '../../domain/registry'
 import { buildSnapshot, describeIssue, generatedParties, importCoverageIssues, isImportedSnapshot, readinessIssues, requiredProviders, type ImportMeta, type RunSnapshot } from '../../domain/snapshot'
 import { canRun, isRetryable, type GenerationStatus, type RunStatus } from '../../domain/transitions'
 import { loadEvaluationAccess, loadRunAccess, requireOwner, type RunAccess } from '../access'
@@ -48,6 +48,83 @@ function credentialActive(runId: string, provider: ProviderId, now: number): Con
     provider,
     now,
   )
+}
+
+// ---------------------------------------------------------------------------
+// Key pins (D-57): a hearing whose pinned key was removed or expired can be
+// re-pinned, on retry, to the judge's current key for the same provider.
+// ---------------------------------------------------------------------------
+
+export interface PinnedKey {
+  provider: ProviderId
+  credentialId: string
+  /** Active and unexpired: generation can use it. */
+  usable: boolean
+}
+
+export async function loadPinnedKeys(db: D1Database, runId: string, now: number): Promise<PinnedKey[]> {
+  const rows = (
+    await db
+      .prepare(
+        `SELECT rc.provider, rc.credential_id, CASE WHEN c.status = 'active' AND (c.expires_at IS NULL OR c.expires_at > ?) THEN 1 ELSE 0 END AS usable
+         FROM run_credentials rc JOIN provider_credentials c ON c.id = rc.credential_id WHERE rc.run_id = ? ORDER BY rc.provider`,
+      )
+      .bind(now, runId)
+      .all<{ provider: ProviderId; credential_id: string; usable: number }>()
+  ).results
+  return rows.map((row) => ({ provider: row.provider, credentialId: row.credential_id, usable: row.usable === 1 }))
+}
+
+interface Repin {
+  provider: ProviderId
+  from: string
+  to: string
+}
+
+function repinRequired(provider: ProviderId): ApiError {
+  const name = PROVIDER_NAMES[provider]
+  return new ApiError(409, 'CREDENTIAL_MISSING', `The ${name} key pinned to this hearing was removed or expired. Retry with your current ${name} key, or add one in Settings first.`, {
+    details: { provider, repinRequired: true },
+  })
+}
+
+/** Which providers move to the offered key. A usable pin is kept even when another key is offered. */
+export function planRepins(pins: readonly PinnedKey[], providers: readonly ProviderId[], offered: Partial<Record<ProviderId, string>>): Repin[] {
+  return providers.flatMap((provider) => {
+    const pin = pins.find((candidate) => candidate.provider === provider)
+    if (!pin) throw new ApiError(409, 'CREDENTIAL_MISSING', 'This hearing has no key recorded for that provider.')
+    if (pin.usable) return []
+    const to = offered[provider]
+    if (!to) throw repinRequired(provider)
+    return to === pin.credentialId ? [] : [{ provider, from: pin.credentialId, to }]
+  })
+}
+
+/** Commit-time check: the old pin is still in place and unusable, and the new key is the owner's, active and unexpired. */
+function repinAllowed(runId: string, ownerUserId: string, repin: Repin, now: number): Condition {
+  return all(
+    cond(
+      `EXISTS (SELECT 1 FROM run_credentials rc JOIN provider_credentials c ON c.id = rc.credential_id
+        WHERE rc.run_id = ? AND rc.provider = ? AND rc.credential_id = ? AND (c.status <> 'active' OR (c.expires_at IS NOT NULL AND c.expires_at <= ?)))`,
+      runId,
+      repin.provider,
+      repin.from,
+      now,
+    ),
+    cond(`EXISTS (SELECT 1 FROM provider_credentials WHERE id = ? AND owner_user_id = ? AND provider = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > ?))`, repin.to, ownerUserId, repin.provider, now),
+  )
+}
+
+function repinStatements(db: D1Database, args: Repin & { runId: string; evaluationId: string; userId: string; requestId: string; now: number }): D1PreparedStatement[] {
+  return [
+    db.prepare('UPDATE run_credentials SET credential_id = ? WHERE run_id = ? AND provider = ? AND credential_id = ?').bind(args.to, args.runId, args.provider, args.from),
+    // Key ids only, never key material.
+    auditStatement(
+      db,
+      { eventType: 'run.credential_repin', requestId: args.requestId, outcome: 'ok', actorUserId: args.userId, runId: args.runId, evaluationId: args.evaluationId, metadata: { provider: args.provider, fromCredentialId: args.from, toCredentialId: args.to } },
+      args.now,
+    ),
+  ]
 }
 
 function capacity(ownerUserId: string, excludeRunId: string | null): Condition {
@@ -339,6 +416,8 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
     snapshotHash: run.snapshot_hash,
     comparisonMode: snapshot.comparisonMode,
     providerRegistryVersion: snapshot.providerRegistryVersion,
+    // Owner-only (D-57): which saved key each provider slot uses, so a retry can offer the current key.
+    pinnedKeys: await loadPinnedKeys(db, run.id, now),
     configurations: snapshot.configurations.map((c) =>
       isImportedSnapshot(c)
         ? { key: c.key, label: c.label, source: 'imported' as const, provider: null, modelId: null, provenance: c.provenance }
@@ -424,10 +503,12 @@ export async function retryGenerations(deps: Deps, userId: string, runId: string
     const now = deps.now()
     const subjects = budgetSubjects(userId, now)
     const providers = [...new Set(targets.map((generation) => generation.provider))]
-    const response = { status: 202 as const, data: { runId, status: 'generating' as RunStatus, retried: targets.length } }
+    const repins = planRepins(await loadPinnedKeys(db, runId, now), providers, input.credentialIdsByProvider ?? {})
+    const response = { status: 202 as const, data: { runId, status: 'generating' as RunStatus, retried: targets.length, repinned: repins.map((repin) => repin.provider) } }
     const outboxIds: string[] = []
     const statements: D1PreparedStatement[] = [
       receipt(response, runId),
+      ...repins.flatMap((repin) => repinStatements(db, { runId, evaluationId: access.run.evaluation_id, userId, requestId, now, ...repin })),
       ...reserveBudget(db, subjects, targets.length, deps.config.limits, now),
       ...targets.flatMap((generation) => {
         const attemptNo = generation.attempt_count + 1
@@ -456,7 +537,10 @@ export async function retryGenerations(deps: Deps, userId: string, runId: string
           ...targets.map((generation) =>
             cond(`EXISTS (SELECT 1 FROM generations WHERE id = ? AND run_id = ? AND status IN ('failed','uncertain') AND attempt_count = ? AND attempt_count < ?)`, generation.id, runId, generation.attempt_count, LIMITS.maxAttemptsPerGeneration),
           ),
-          ...providers.map((provider) => credentialActive(runId, provider, now)),
+          ...providers.map((provider) => {
+            const repin = repins.find((candidate) => candidate.provider === provider)
+            return repin ? repinAllowed(runId, userId, repin, now) : credentialActive(runId, provider, now)
+          }),
           capacity(userId, runId),
         ),
         statements,
@@ -465,12 +549,18 @@ export async function retryGenerations(deps: Deps, userId: string, runId: string
       if (error instanceof GuardFailed) {
         const current = await loadRunAccess(db, runId, userId)
         if (current.run.revision !== ifMatch) throw revisionConflict()
+        const pins = await loadPinnedKeys(db, runId, deps.now())
         for (const provider of providers) {
-          const ok = await db
-            .prepare(`SELECT 1 AS ok FROM run_credentials rc JOIN provider_credentials c ON c.id = rc.credential_id WHERE rc.run_id = ? AND rc.provider = ? AND c.status = 'active'`)
-            .bind(runId, provider)
-            .first()
-          if (!ok) throw new ApiError(409, 'STATE_CONFLICT', 'The key pinned to this run was removed. Cancel this run and start a new one with your current key.')
+          const repin = repins.find((candidate) => candidate.provider === provider)
+          if (repin) {
+            const chosen = await db
+              .prepare(`SELECT 1 AS ok FROM provider_credentials WHERE id = ? AND owner_user_id = ? AND provider = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > ?)`)
+              .bind(repin.to, userId, provider, deps.now())
+              .first()
+            if (!chosen) throw new ApiError(409, 'CREDENTIAL_MISSING', `The ${PROVIDER_NAMES[provider]} key you chose was removed or expired. Reload the page and try again.`, { details: { provider } })
+          } else if (!pins.find((pin) => pin.provider === provider)?.usable) {
+            throw repinRequired(provider)
+          }
         }
         throw new ApiError(429, 'RATE_LIMITED', 'Another comparison is already generating. Try again when it finishes.', { retryable: true })
       }

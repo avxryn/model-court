@@ -1,8 +1,9 @@
 /**
  * Personal provider credentials (F26–F28, spec §6.6, §9.6).
  *
- * Plaintext keys exist only inside `saveCredential` (to encrypt) and
- * `withRunCredential` (to authorize one provider request). They are never
+ * Plaintext keys exist only inside `saveCredential` (to encrypt),
+ * `withRunCredential` (to authorize one provider request) and `checkCredential`
+ * (one free list-models request, D-57). They are never
  * logged, stored unencrypted, returned, or placed in receipts or jobs.
  */
 
@@ -14,6 +15,7 @@ import { CredentialCryptoError, hmacHex, openCredential, sealCredential } from '
 import { all, auditStatement, classifyConstraint, cond, GuardFailed, hitRateLimit, releaseReservations, runGuarded } from '../db/sql'
 import type { Deps } from '../deps'
 import { ApiError, notFound, revisionConflict } from '../http'
+import { checkProviderKey, type KeyCheckOutcome, type KeyCheckResult } from '../providers/key-check'
 import { idempotent } from '../receipts'
 
 export interface CredentialMetadata {
@@ -29,6 +31,9 @@ export interface CredentialMetadata {
   lastUsedAt: number | null
   /** The owner's run that last used it (owner-only metadata). */
   lastUsedRunId: string | null
+  /** Last "Check key" (D-57): a free list-models call made server-side with this key. */
+  lastCheckedAt: number | null
+  lastCheckResult: KeyCheckResult | null
 }
 
 interface CredentialRow {
@@ -46,11 +51,13 @@ interface CredentialRow {
   expires_at: number | null
   last_used_at: number | null
   last_used_run_id: string | null
+  last_checked_at: number | null
+  last_check_result: KeyCheckResult | null
 }
 
-const SAFE_COLUMNS = 'id, provider, label, status, revision, created_at, expires_at, last_used_at, last_used_run_id'
+const SAFE_COLUMNS = 'id, provider, label, status, revision, created_at, expires_at, last_used_at, last_used_run_id, last_checked_at, last_check_result'
 
-type SafeRow = Pick<CredentialRow, 'id' | 'provider' | 'label' | 'status' | 'revision' | 'created_at' | 'expires_at' | 'last_used_at' | 'last_used_run_id'>
+type SafeRow = Pick<CredentialRow, 'id' | 'provider' | 'label' | 'status' | 'revision' | 'created_at' | 'expires_at' | 'last_used_at' | 'last_used_run_id' | 'last_checked_at' | 'last_check_result'>
 
 function toMetadata(row: SafeRow): CredentialMetadata {
   return {
@@ -63,6 +70,8 @@ function toMetadata(row: SafeRow): CredentialMetadata {
     expiresAt: row.expires_at,
     lastUsedAt: row.last_used_at,
     lastUsedRunId: row.last_used_run_id,
+    lastCheckedAt: row.last_checked_at,
+    lastCheckResult: row.last_check_result,
   }
 }
 
@@ -144,7 +153,7 @@ export async function saveCredential(
     const credentialId = deps.newId()
     const sealed = await sealCredential(rootKey, { appId: config.appId, credentialId, ownerUserId: userId, provider: input.provider, keyVersion }, input.apiKey)
     const expiresAt = now + config.credentialTtlMs
-    const metadata: CredentialMetadata = { id: credentialId, provider: input.provider, label: input.label, status: 'active', revision: 1, createdAt: now, expiresAt, lastUsedAt: null, lastUsedRunId: null }
+    const metadata: CredentialMetadata = { id: credentialId, provider: input.provider, label: input.label, status: 'active', revision: 1, createdAt: now, expiresAt, lastUsedAt: null, lastUsedRunId: null, lastCheckedAt: null, lastCheckResult: null }
     const insert = deps.db
       .prepare(
         `INSERT INTO provider_credentials (id, owner_user_id, provider, label, ciphertext, nonce, encryption_key_version, status, revision, created_at, expires_at)
@@ -352,15 +361,25 @@ export async function withGraderCredential<T>(deps: Deps, graderRunId: string, p
 
 async function decryptAndSend<T>(deps: Deps, row: CredentialRow | null, provider: ProviderId, lastUsedRunId: string, requestId: string, send: (apiKey: string) => Promise<T>): Promise<T> {
   const runId = lastUsedRunId
+  const apiKey = await openUsableKey(deps, row, provider, requestId)
+  // Visible to the owner in Settings so unexpected use stands out. Metadata only.
+  await deps.db
+    .prepare(`UPDATE provider_credentials SET last_used_at = ?, last_used_run_id = ? WHERE id = ? AND status = 'active'`)
+    .bind(deps.now(), runId, row!.id)
+    .run()
+  return send(apiKey)
+}
+
+/** Decrypt an active, unexpired key; the one place a stored key is opened. */
+async function openUsableKey(deps: Deps, row: CredentialRow | null, provider: ProviderId, requestId: string): Promise<string> {
   if (!row) throw new CredentialUnusable('CREDENTIAL_UNAVAILABLE')
   if (row.status !== 'active' || !row.ciphertext || !row.nonce || !row.encryption_key_version) throw new CredentialUnusable('CREDENTIAL_REVOKED')
   // Expiry is enforced here too, so a key past its time is never decrypted even before the cron revokes it.
   if (row.expires_at !== null && row.expires_at <= deps.now()) throw new CredentialUnusable('CREDENTIAL_EXPIRED')
   const rootKey = deps.config.encryptionKeys.get(row.encryption_key_version)
   if (!rootKey) throw new CredentialUnusable('CREDENTIAL_UNAVAILABLE')
-  let apiKey: string
   try {
-    apiKey = await openCredential(
+    return await openCredential(
       rootKey,
       { appId: deps.config.appId, credentialId: row.id, ownerUserId: row.owner_user_id, provider: row.provider, keyVersion: row.encryption_key_version },
       { ciphertext: row.ciphertext, nonce: row.nonce },
@@ -375,12 +394,49 @@ async function decryptAndSend<T>(deps: Deps, row: CredentialRow | null, provider
     }
     throw error
   }
-  // Visible to the owner in Settings so unexpected use stands out. Metadata only.
-  await deps.db
-    .prepare(`UPDATE provider_credentials SET last_used_at = ?, last_used_run_id = ? WHERE id = ? AND status = 'active'`)
-    .bind(deps.now(), runId, row.id)
-    .run()
-  return send(apiKey)
+}
+
+export interface KeyCheckView {
+  result: KeyCheckResult
+  reason: KeyCheckOutcome['reason']
+  checkedAt: number
+  credential: CredentialMetadata
+}
+
+/**
+ * "Check key" (D-57): decrypt the owner's active key server-side and make the
+ * provider's free list-models request with it. Records only the time and the
+ * result. The key and any provider or transport text never leave this function.
+ */
+export async function checkCredential(deps: Deps, userId: string, credentialId: string, requestId: string): Promise<KeyCheckView> {
+  const now = deps.now()
+  const rate = await hitRateLimit(deps.db, `credcheck:${userId}`, 6, now)
+  if (!rate.allowed) throw new ApiError(429, 'RATE_LIMITED', 'Too many key checks. Try again in a minute.', { retryAfterSeconds: rate.retryAfterSeconds })
+  const row = await deps.db
+    .prepare(`SELECT id, owner_user_id, provider, status, ciphertext, nonce, encryption_key_version, expires_at FROM provider_credentials WHERE id = ?`)
+    .bind(credentialId)
+    .first<CredentialRow>()
+  if (!row || row.owner_user_id !== userId) throw notFound()
+  let apiKey: string
+  try {
+    apiKey = await openUsableKey(deps, row, row.provider, requestId)
+  } catch (error) {
+    if (error instanceof CredentialUnusable) {
+      const message = error.code === 'CREDENTIAL_UNAVAILABLE' ? 'This saved key could not be opened. Remove it and save it again.' : 'This key has expired or was removed. Save a new key instead.'
+      throw new ApiError(409, 'STATE_CONFLICT', message)
+    }
+    throw error
+  }
+  const outcome = await checkProviderKey(deps.providerFetch, row.provider, apiKey)
+  const checkedAt = deps.now()
+  await deps.db.batch([
+    deps.db.prepare(`UPDATE provider_credentials SET last_checked_at = ?, last_check_result = ? WHERE id = ? AND status = 'active'`).bind(checkedAt, outcome.result, row.id),
+    auditStatement(deps.db, { eventType: 'credential.check', requestId, outcome: outcome.result, actorUserId: userId, metadata: { provider: row.provider, credentialId: row.id, reason: outcome.reason } }, checkedAt),
+  ])
+  deps.log({ event: 'credential.check', provider: row.provider, result: outcome.result, reason: outcome.reason, httpStatus: outcome.httpStatus, requestId })
+  const current = await deps.db.prepare(`SELECT ${SAFE_COLUMNS} FROM provider_credentials WHERE id = ?`).bind(row.id).first<CredentialRow>()
+  if (!current) throw notFound()
+  return { result: outcome.result, reason: outcome.reason, checkedAt, credential: toMetadata(current) }
 }
 
 /**

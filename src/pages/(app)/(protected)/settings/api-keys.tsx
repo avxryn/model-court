@@ -6,14 +6,16 @@ import { Slip } from '@/components/court/Paper'
 import { ErrorPanel } from '@/components/feedback/ErrorPanel'
 import { PageSkeleton } from '@/components/feedback/PageSkeleton'
 import { Page, PageHeader } from '@/components/layout/Page'
+import { DailyAllowance } from '@/components/settings/CallAllowance'
 import { ProviderKeyCard } from '@/components/settings/ProviderKeyCard'
 import { PROVIDERS } from '@/domain/registry'
-import type { CatalogView, CredentialMetadata } from '@/lib/dto'
+import type { CatalogView, CredentialMetadata, QuotaView } from '@/lib/dto'
 import { useApi } from '@/lib/use-api'
 
 export default function ApiKeysPage() {
   const credentials = useApi<{ items: CredentialMetadata[] }>('/credentials')
   const catalog = useApi<CatalogView>('/catalog')
+  const quota = useApi<QuotaView>('/quota')
 
   return (
     <Page>
@@ -23,6 +25,9 @@ export default function ApiKeysPage() {
         title="Provider API keys"
         description="Live comparisons use your own OpenAI and Anthropic keys. Each generation is billed by the provider to your account. Jurors never need a key."
       />
+      <div className="mb-4">
+        <DailyAllowance quota={quota.data} />
+      </div>
       {credentials.loading && !credentials.data ? (
         <PageSkeleton label="Loading keys" />
       ) : credentials.error && !credentials.data ? (

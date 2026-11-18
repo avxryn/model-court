@@ -5,7 +5,8 @@
  */
 
 import { useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { KeyRound, RefreshCw } from 'lucide-react'
 import { Fold } from '@/components/court/Fold'
 import { Plain } from '@/components/court/Paper'
 import type { Act } from '@/components/hearing/use-hearing-action'
@@ -16,16 +17,40 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { PROVIDER_NAMES, type ProviderId } from '@/domain/registry'
 import { api, newIntentKey } from '@/lib/api-client'
-import type { OwnerRunView } from '@/lib/dto'
+import type { CredentialMetadata, OwnerRunView } from '@/lib/dto'
 import { ERROR_TEXT } from '@/lib/error-text'
 import { formatDuration, plural } from '@/lib/format'
 import { partySource } from '@/lib/parties'
+import { useApi } from '@/lib/use-api'
+
+/** D-57: a provider whose pinned key was removed or expired, and the judge's current key for it, if any. */
+interface StaleKey {
+  provider: ProviderId
+  current: CredentialMetadata | null
+}
+
+function staleKeys(run: OwnerRunView, keys: readonly CredentialMetadata[], now: number): StaleKey[] {
+  return run.pinnedKeys
+    .filter((pin) => !pin.usable)
+    .map((pin) => ({
+      provider: pin.provider,
+      current: keys.find((key) => key.provider === pin.provider && key.id !== pin.credentialId && (key.expiresAt === null || key.expiresAt > now)) ?? null,
+    }))
+}
+
+function providerOf(run: OwnerRunView, configurationKey: string): ProviderId | null {
+  return run.configurations.find((c) => c.key === configurationKey)?.provider ?? null
+}
 
 export function GenerationSection({ run, busy, act, folded }: { run: OwnerRunView; busy: boolean; act: Act; folded: boolean }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const { counts } = run
   const retryable = run.generations.some((g) => g.retryable)
+  const needsRepin = retryable && run.pinnedKeys.some((pin) => !pin.usable)
+  const keys = useApi<{ items: CredentialMetadata[] }>(needsRepin ? '/credentials' : null)
+  const stale = needsRepin ? staleKeys(run, keys.data?.items ?? [], Date.now()) : []
   const terminal = counts.succeeded + counts.failed + counts.uncertain + counts.canceled
   const tally = `${terminal}/${counts.planned} finished · ${counts.succeeded} succeeded · ${counts.failed} failed · ${counts.uncertain} uncertain`
   const toggle = (id: string, on: boolean) =>
@@ -59,7 +84,8 @@ export function GenerationSection({ run, busy, act, folded }: { run: OwnerRunVie
       {folded ? <Fold summary={<span className="tabular-nums">{tally} · show each question and party</span>}>{body}</Fold> : body}
       {(run.status === 'ready' || (run.status === 'generating' && retryable)) && (
         <div className="flex flex-wrap gap-2 border-t border-paper-rule pt-3">
-          {retryable && <RetryButton run={run} selected={selected} busy={busy} act={act} onDone={() => setSelected(new Set())} />}
+          {stale.length > 0 && keys.data && <StaleKeyNotice stale={stale} />}
+          {retryable && <RetryButton run={run} selected={selected} stale={stale} keysLoading={needsRepin && !keys.data} busy={busy} act={act} onDone={() => setSelected(new Set())} />}
           {run.status === 'ready' && <OpenDeliberationButton run={run} busy={busy} act={act} />}
         </div>
       )}
@@ -118,11 +144,41 @@ function GenerationTable({ run, selected, onToggle }: { run: OwnerRunView; selec
   )
 }
 
-function RetryButton({ run, selected, busy, act, onDone }: { run: OwnerRunView; selected: Set<string>; busy: boolean; act: Act; onDone: () => void }) {
+function StaleKeyNotice({ stale }: { stale: StaleKey[] }) {
+  return (
+    <div className="flex basis-full items-start gap-2 text-sm" role="status">
+      <KeyRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <div>
+        {stale.map(({ provider, current }) => {
+          const name = PROVIDER_NAMES[provider]
+          return current ? (
+            <p key={provider}>
+              The {name} key pinned to this hearing was removed or expired. A retry will use your current {name} key ({current.label}) instead.
+            </p>
+          ) : (
+            <p key={provider}>
+              The {name} key pinned to this hearing was removed or expired, and you have no current {name} key.{' '}
+              <Link to="/settings/api-keys" className="underline underline-offset-4">
+                Add one in Provider keys
+              </Link>
+              , then retry here.
+            </p>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function RetryButton({ run, selected, stale, keysLoading, busy, act, onDone }: { run: OwnerRunView; selected: Set<string>; stale: StaleKey[]; keysLoading: boolean; busy: boolean; act: Act; onDone: () => void }) {
   const uncertain = run.generations.filter((g) => selected.has(g.id) && g.status === 'uncertain').length
+  const providers = new Set(run.generations.filter((g) => selected.has(g.id)).map((g) => providerOf(run, g.configurationKey)))
+  const affected = stale.filter((key) => providers.has(key.provider))
+  const blocked = keysLoading || affected.some((key) => !key.current)
+  const credentialIdsByProvider = Object.fromEntries(affected.flatMap((key) => (key.current ? [[key.provider, key.current.id]] : [])))
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={<Button variant="outline" disabled={selected.size === 0 || busy} />}>
+      <AlertDialogTrigger render={<Button variant="outline" disabled={selected.size === 0 || busy || blocked} />}>
         <RefreshCw aria-hidden /> Retry selected ({selected.size})
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -131,11 +187,12 @@ function RetryButton({ run, selected, busy, act, onDone }: { run: OwnerRunView; 
           <AlertDialogDescription>
             Each retry is a new paid request to your provider account and the last allowed attempt.
             {uncertain > 0 && ` ${uncertain} selected generation${uncertain === 1 ? ' has' : 's have'} an uncertain outcome: the provider may already have charged for the earlier attempt.`}
+            {affected.map((key) => ` This hearing will use your current ${PROVIDER_NAMES[key.provider]} key (${key.current?.label ?? ''}) from now on, in place of the removed one.`).join('')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={() => void act(() => api('POST', `/runs/${run.runId}/retries`, { body: { generationIds: [...selected], acknowledgePossiblePriorCharge: true }, revision: run.revision, idempotencyKey: newIntentKey() }), 'Retry queued', onDone)}>
+          <AlertDialogAction onClick={() => void act(() => api('POST', `/runs/${run.runId}/retries`, { body: { generationIds: [...selected], acknowledgePossiblePriorCharge: true, ...(affected.length > 0 ? { credentialIdsByProvider } : {}) }, revision: run.revision, idempotencyKey: newIntentKey() }), 'Retry queued', onDone)}>
             Retry and charge my account
           </AlertDialogAction>
         </AlertDialogFooter>
