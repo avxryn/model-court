@@ -146,6 +146,37 @@ export const RUBRICS = {
       },
     },
   },
+  // Spec 03 §6.6 (D-78): the classification kit's default.
+  'classification-v1': {
+    name: 'Classification',
+    description: 'A label from a fixed set and its reasoning: sound reasoning, decisive evidence, and no invention.',
+    lines: {
+      correctness: {
+        label: 'Sound reasoning',
+        anchors: {
+          0: 'The reasoning contradicts the label or the item',
+          1: 'Plausible but generic, or partly wrong',
+          2: 'Follows from the item and supports the label',
+        },
+      },
+      completeness: {
+        label: 'Decisive evidence',
+        anchors: {
+          0: 'Points to nothing in the item',
+          1: 'Points to something, but misses what decides between labels',
+          2: 'Names the detail that decides between labels, as the jury instructions describe',
+        },
+      },
+      grounding: {
+        label: 'No invention',
+        anchors: {
+          0: 'Invents facts about the item or its context',
+          1: 'Minor overreach',
+          2: 'Uses only what the item and context say',
+        },
+      },
+    },
+  },
 } as const satisfies Record<string, { name: string; description: string; lines: RubricLines }>
 
 export type RubricVersion = keyof typeof RUBRICS

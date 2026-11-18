@@ -13,6 +13,7 @@ import type { TaskKit } from '../../src/domain/kits/types'
 import { RECORD_CSV_HEADER } from '../../src/server/services/export'
 import { runMaintenance } from '../../src/server/services/maintenance'
 import { exportSnapshot, openSnapshot, restoreSnapshot, sealSnapshot } from '../../src/server/services/backup'
+import { dispatchOutbox } from '../../src/server/services/generation'
 import { anthropicOk, createHarness, openAiOk, openDeliberation, OWNER, randomKeyB64, REVIEWER, setupOwner, startRun, type Harness } from './harness'
 
 const SHORT_REASON = 'Short enough: NUMBER words.'
@@ -459,6 +460,134 @@ describe('a summarization hearing (spec 03 test 2)', () => {
     expect(refused.status).toBe(422)
     expect(refused.json.error.code).toBe('UNSUPPORTED_CONFIGURATION')
     expect(refused.json.error.details.issues).toEqual([{ kind: 'kit_document_missing', caseKey: draft.cases[1].key, kitVersion: 'summarization-v1' }])
+    expect(h.providerCalls).toHaveLength(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// classification-v1 (spec 03 step 4, D-78)
+// ---------------------------------------------------------------------------
+
+const CLASSIFY_SETTINGS = { labels: ['Billing', 'Bug', 'Other'], minReasoningWords: 3 }
+/** Expected labels per question; Q5 has no answer key. */
+const EXPECTED = ['Billing', 'Bug', 'Billing', 'Other', null]
+const IMPORTED_ANSWERS = ['Label: Billing\nA charge on the card.', 'Label: Billing\nIt is about money.', 'Probably billing', 'Label: Other\nNot covered anywhere.', 'Label: Bug\nThe app fails.']
+
+async function classificationCase(harness: Harness, opts: { imported?: boolean; samplesPerAnswer?: 2 | 3 } = {}) {
+  const setup = await setupOwner(harness)
+  const { schemaVersion: _v, ...draft } = setup.draft
+  const imported = { kind: 'imported', key: crypto.randomUUID(), label: 'Help desk export', provenance: { sourceType: 'transcript_export', description: 'Routed by the help desk', redacted: false } }
+  const configurations = opts.imported ? [draft.configurations[0], imported] : draft.configurations
+  const body = {
+    ...draft,
+    comparisonMode: opts.imported ? 'configuration' : draft.comparisonMode,
+    configurations,
+    kit: { version: 'classification-v1', settings: CLASSIFY_SETTINGS },
+    cases: draft.cases.map((c: any, i: number) => ({ ...c, kitFields: EXPECTED[i] ? { kind: 'classification', expectedLabel: EXPECTED[i] } : { kind: 'classification' } })),
+    ...(opts.samplesPerAnswer ? { samplesPerAnswer: opts.samplesPerAnswer } : {}),
+  }
+  const saved = await harness.request('PUT', `/evaluations/${setup.evaluationId}/draft`, { as: OWNER, ifMatch: 1, body })
+  expect(saved.status).toBe(200)
+  let revision = saved.json.data.revision as number
+  if (opts.imported) {
+    const items = draft.cases.map((c: any, i: number) => ({ caseKey: c.key, text: IMPORTED_ANSWERS[i] }))
+    const put = await harness.request('PUT', `/evaluations/${setup.evaluationId}/imports/${imported.key}`, { as: OWNER, ifMatch: revision, body: { items, confirmMayShareWithJurors: true } })
+    expect(put.status).toBe(200)
+    revision = put.json.data.revision
+  }
+  return { setup, draft: body, revision, imported }
+}
+
+describe('a classification hearing (spec 03 tests 3 and 9)', () => {
+  beforeEach(async () => {
+    h = await createHarness()
+  })
+
+  it('checks imported answers at admission and reports accuracy per party after unsealing', async () => {
+    const { setup, revision, imported } = await classificationCase(h, { imported: true })
+    h.setProvider(async () => openAiOk('Label: Billing\nCharge related, see the ticket.'))
+    const started = await h.request('POST', `/evaluations/${setup.evaluationId}/runs`, {
+      as: OWNER,
+      body: { draftRevision: revision, credentialIdsByProvider: { openai: setup.openaiKeyId }, consentToProviderProcessing: true, acknowledgeProviderCharges: true },
+    })
+    expect(started.status).toBe(202)
+    const runId = started.json.data.runId as string
+    // The imported party's five rows are written by the admission batch, before any generation.
+    const importedRows = await h.db.prepare('SELECT COUNT(*) AS n FROM testimony_checks WHERE imported_output_id IS NOT NULL AND run_id = ?').bind(runId).first<{ n: number }>()
+    expect(Number(importedRows?.n)).toBe(5)
+    await h.drainJobs()
+    const sent = JSON.stringify(h.providerCalls.map((call) => call.body))
+    expect(sent).toContain('Label: ')
+    expect(sent).not.toContain('expectedLabel')
+    expect(await countRows()).toBe(10)
+
+    await openDeliberation(h, runId)
+    await submit(runId, OWNER, 1)
+    await reveal(runId)
+    const data = await results(runId)
+    expect(data.kit).toEqual({ version: 'classification-v1', name: 'Classification', settings: CLASSIFY_SETTINGS })
+    expect(data.rubricVersion).toBe('classification-v1')
+    expect(data.messageTemplateVersion).toBe('classify-v1')
+    const model = data.configurations[0].key
+    const accuracy = data.checks.metrics.find((m: any) => m.id === 'accuracy')
+    // The model always says Billing: right on Q1 and Q3 of the four keyed questions.
+    expect(accuracy.byConfiguration[model]).toEqual({ numerator: 2, denominator: 4 })
+    // Imported: Q1 right, Q2 wrong, Q3 no allowed label, Q4 right.
+    expect(accuracy.byConfiguration[imported.key]).toEqual({ numerator: 2, denominator: 4 })
+    expect(accuracy.caveat).toBe('On 4 questions; one question moves this by 25 percentage points. A small sample, not a benchmark.')
+    expect(data.checks.metrics.find((m: any) => m.id === 'invalid-labels').byConfiguration[imported.key]).toEqual({ numerator: 1, denominator: 5 })
+    const q3 = data.cases[2].responses.find((r: any) => r.configurationKey === imported.key)
+    expect(q3.status).toBe('imported')
+    expect(q3.checks.find((c: any) => c.checkId === 'label-format')).toMatchObject({ status: 'fail', reason: "The first line, 'Probably billing', names no allowed label." })
+    expect(data.cases[4].kitFields).toEqual({ kind: 'classification' })
+    expect(data.cases[4].responses[0].checks.find((c: any) => c.checkId === 'label-correct').status).toBe('na')
+
+    const csv = (await h.request('GET', `/runs/${runId}/export?format=csv`, { as: OWNER })).text
+    const parsed = parseCsv(csv)
+    if (!parsed.ok) throw new Error(parsed.error)
+    expect(parsed.rows[0].slice(-5)).toEqual(['kit_version', 'checks_passed', 'checks_failed', 'checks_not_applicable', 'checks_failed_ids'])
+    expect(parsed.rows.slice(1).some((row) => row.at(-1) === 'label-format;label-correct;reasoning-given')).toBe(true)
+  })
+
+  it('reports label agreement across samples with repeats (spec 01 §10)', async () => {
+    const { setup, revision } = await classificationCase(h, { samplesPerAnswer: 2 })
+    let call = 0
+    h.setProvider(async (request) => (request.url.includes('openai') ? openAiOk(`Label: ${++call % 2 ? 'Billing' : 'Bug'}\nBecause of the ticket.`) : anthropicOk('Label: Other\nNot covered here.')))
+    const runId = (await startAt(h, setup, revision)).json.data.runId as string
+    await h.drainJobs()
+    h.advance(60_000)
+    await dispatchOutbox(h.deps)
+    await h.drainJobs()
+    expect(await countRows()).toBe(20)
+    await openDeliberation(h, runId)
+    await submit(runId, OWNER, 1)
+    await reveal(runId)
+    const data = await results(runId)
+    const [openai, anthropic] = data.configurations.map((c: any) => c.key)
+    expect(data.setupMetrics[anthropic].consistency.byKit).toEqual({ agreement: 1, key: 'label' })
+    expect(data.setupMetrics[openai].consistency.byKit.agreement).toBeLessThan(1)
+    expect(data.checks.allPassedSamples[anthropic]).toEqual({ numerator: 4, denominator: 10 })
+    expect(data.cases[0].responses[0].samples.every((s: any) => Array.isArray(s.checks))).toBe(true)
+  })
+
+  it('refuses mismatched answer keys (422) and a classification question with a conversation at Start', async () => {
+    const { setup, draft, revision } = await classificationCase(h)
+    const bad = { ...draft, cases: draft.cases.map((c: any) => ({ ...c, kitFields: { kind: 'classification', expectedLabel: 'Refunds' } })) }
+    const refused = await h.request('PUT', `/evaluations/${setup.evaluationId}/draft`, { as: OWNER, ifMatch: revision, body: bad })
+    expect(refused.status).toBe(422)
+    expect(refused.json.error.code).toBe('VALIDATION_FAILED')
+    expect(JSON.stringify(refused.json.error)).toContain('expectedLabel')
+    const history = [
+      { role: 'user', content: 'Earlier question' },
+      { role: 'assistant', content: 'Earlier reply' },
+    ]
+    const withHistory = { ...draft, cases: draft.cases.map((c: any, i: number) => (i === 0 ? { ...c, messages: history } : c)) }
+    const saved = await h.request('PUT', `/evaluations/${setup.evaluationId}/draft`, { as: OWNER, ifMatch: revision, body: withHistory })
+    expect(saved.status).toBe(200)
+    const start = await startAt(h, setup, saved.json.data.revision)
+    expect(start.status).toBe(422)
+    expect(start.json.error.details.issues).toEqual([{ kind: 'kit_input_unsupported', caseKey: draft.cases[0].key, inputKind: 'conversation', kitVersion: 'classification-v1' }])
+    expect(start.json.error.message).toContain("Classification questions can't carry a conversation yet")
     expect(h.providerCalls).toHaveLength(0)
   })
 })

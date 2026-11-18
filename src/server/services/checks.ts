@@ -11,7 +11,7 @@
 import type { CaseInput } from '../../domain/contracts'
 import { KITS, kitFor, type KitTable } from '../../domain/kits/registry'
 import { runChecks } from '../../domain/kits/runner'
-import { summarizeChecks, type ChecksSummary } from '../../domain/kits/summary'
+import { kitConsistency, summarizeChecks, type ChecksSummary } from '../../domain/kits/summary'
 import type { CheckResult, CheckRow, TaskKit, Testimony } from '../../domain/kits/types'
 import { isImportedSnapshot, type RunSnapshot } from '../../domain/snapshot'
 import type { Deps } from '../deps'
@@ -114,6 +114,8 @@ export interface KitResults {
   /** Results for the accepted testimony of one slot; null when it has none or the kit has no checks. */
   forSlot(caseKey: string, configurationKey: string, sampleNo: number | null): CheckResult[] | null
   kitFieldsOf(caseKey: string): CaseInput['kitFields'] | null
+  /** Spec 01 §10: per party, sample agreement on the kit's consistency key (repeats only). */
+  consistency: Record<string, { agreement: number; key: string } | null>
 }
 
 export async function loadKitResults(
@@ -124,7 +126,7 @@ export async function loadKitResults(
   const kit = hearingKit(deps, snapshot)
   const info: KitInfo | null = snapshot.kit ? { version: snapshot.kit.version, name: kit.name, settings: snapshot.kit.settings } : null
   const kitFieldsOf = (caseKey: string) => snapshot.cases.find((testCase) => testCase.key === caseKey)?.kitFields ?? null
-  if (kit.checks.length === 0) return { kit: info, checks: null, forSlot: () => null, kitFieldsOf }
+  if (kit.checks.length === 0) return { kit: info, checks: null, forSlot: () => null, kitFieldsOf, consistency: {} }
 
   const stored = (
     await deps.db
@@ -176,7 +178,8 @@ export async function loadKitResults(
     rows,
     ...(input.samplesPerAnswer > 1 ? { sampleRows } : {}),
   })
-  return { kit: info, checks, forSlot, kitFieldsOf }
+  const consistency = input.samplesPerAnswer > 1 ? kitConsistency(kit, sampleRows, input.eligibleCaseKeys, snapshot.configurations.map((configuration) => configuration.key)) : {}
+  return { kit: info, checks, forSlot, kitFieldsOf, consistency }
 }
 
 // ---------------------------------------------------------------------------
@@ -215,5 +218,19 @@ export function withKitResults<R extends { cases: readonly CaseLike[] }>(kitResu
       }),
     } as unknown as WithCaseChecks<C>
   })
-  return { ...base, kit: kitResults.kit, checks: kitResults.checks, cases }
+  return { ...base, ...withKitConsistency(base, kitResults), kit: kitResults.kit, checks: kitResults.checks, cases }
+}
+
+/** Fills `setupMetrics[party].consistency.byKit` (spec 01 §10) where the kit gives a key and the party has repeats. */
+function withKitConsistency(base: object, kitResults: KitResults): object {
+  const metrics = (base as { setupMetrics?: Record<string, { consistency?: object | null }> }).setupMetrics
+  if (!metrics || Object.values(kitResults.consistency).every((value) => value === null)) return {}
+  return {
+    setupMetrics: Object.fromEntries(
+      Object.entries(metrics).map(([key, party]) => {
+        const byKit = kitResults.consistency[key]
+        return [key, byKit && party.consistency ? { ...party, consistency: { ...party.consistency, byKit } } : party]
+      }),
+    ),
+  }
 }

@@ -94,3 +94,27 @@ export function summarizeChecks(input: SummarizeChecksInput): ChecksSummary {
       : null,
   }
 }
+
+/**
+ * Spec 01 §10: how often a party reached the same kit result across its samples of one question
+ * (the label, for classification), from the kit's `consistencyKey`. Per party: questions where
+ * every sample's key matched, of questions with at least two keyed samples. Null without a key
+ * function or without such questions.
+ */
+export function kitConsistency(kit: TaskKit<unknown, unknown>, sampleRows: ReadonlyArray<CheckRow>, eligibleCaseKeys: readonly string[], configurationKeys: readonly string[]): Record<string, { agreement: number; key: string } | null> {
+  const eligible = new Set(eligibleCaseKeys)
+  return Object.fromEntries(
+    configurationKeys.map((configurationKey) => {
+      if (!kit.consistencyKey) return [configurationKey, null]
+      const byCase = new Map<string, string[]>()
+      for (const row of sampleRows) {
+        if (row.configurationKey !== configurationKey || !eligible.has(row.caseKey)) continue
+        const key = kit.consistencyKey(row.results)
+        if (key !== null) byCase.set(row.caseKey, [...(byCase.get(row.caseKey) ?? []), key])
+      }
+      const compared = [...byCase.values()].filter((keys) => keys.length >= 2)
+      if (compared.length === 0) return [configurationKey, null]
+      return [configurationKey, { agreement: compared.filter((keys) => keys.every((key) => key === keys[0])).length / compared.length, key: kit.outputContract.kind }]
+    }),
+  )
+}

@@ -6,6 +6,8 @@
  * Format: a header row, then one row per case (at most LIMITS.maxCases).
  *   title, input, expected_behavior   required
  *   reference                         optional (empty when absent)
+ *   expected_label, also_accept       optional, only for a classification case (D-78);
+ *                                     also_accept is `|`-separated
  * Header names are case-insensitive; spaces, hyphens and camelCase map to the
  * same column (`Expected behavior`, `expected-behavior`, `expectedBehavior`).
  * Cell values are kept exactly as written: no trimming, no normalization, and
@@ -18,9 +20,13 @@ import { LIMITS } from './limits'
 import { utf8ByteLength } from './text'
 
 export const CASE_IMPORT_COLUMNS = ['title', 'input', 'reference', 'expected_behavior', 'language'] as const
-type Column = (typeof CASE_IMPORT_COLUMNS)[number]
+/** Spec 03 (D-78): accepted only when the draft's kit is classification. */
+export const CLASSIFICATION_IMPORT_COLUMNS = ['expected_label', 'also_accept'] as const
+type KitColumn = (typeof CLASSIFICATION_IMPORT_COLUMNS)[number]
+type Column = (typeof CASE_IMPORT_COLUMNS)[number] | KitColumn
 const REQUIRED: readonly Column[] = ['title', 'input', 'expected_behavior']
-const FIELD: Record<Column, 'title' | 'input' | 'reference' | 'expectedBehavior' | 'language'> = { title: 'title', input: 'input', reference: 'reference', expected_behavior: 'expectedBehavior', language: 'language' }
+const FIELD: Record<(typeof CASE_IMPORT_COLUMNS)[number], 'title' | 'input' | 'reference' | 'expectedBehavior' | 'language'> = { title: 'title', input: 'input', reference: 'reference', expected_behavior: 'expectedBehavior', language: 'language' }
+const isKitColumn = (column: Column): column is KitColumn => (CLASSIFICATION_IMPORT_COLUMNS as readonly string[]).includes(column)
 
 export interface ImportIssue {
   /** 1-based data row (the header is row 0); null for file-level problems. */
@@ -39,8 +45,13 @@ function normalizeHeader(name: string): string {
     .replace(/[\s-]+/g, '_')
 }
 
-/** Parse and validate a cases CSV. `newId` supplies each case's key (UUID). */
-export function parseCasesCsv(text: string, newId: () => string): CaseImportResult {
+/**
+ * Parse and validate a cases CSV. `newId` supplies each case's key (UUID). `kitVersion` is the
+ * draft's task kit: the classification columns are accepted only for a classification kit.
+ */
+export function parseCasesCsv(text: string, newId: () => string, options: { kitVersion?: string } = {}): CaseImportResult {
+  const kitFamily = options.kitVersion?.split('-v')[0] ?? 'general'
+  const allowed: readonly Column[] = kitFamily === 'classification' ? [...CASE_IMPORT_COLUMNS, ...CLASSIFICATION_IMPORT_COLUMNS] : CASE_IMPORT_COLUMNS
   if (utf8ByteLength(text) > LIMITS.caseImportCsvBytes) {
     return { ok: false, issues: [{ row: null, field: null, message: `The file is larger than ${LIMITS.caseImportCsvBytes / 1024} KiB.` }] }
   }
@@ -52,11 +63,15 @@ export function parseCasesCsv(text: string, newId: () => string): CaseImportResu
   const issues: ImportIssue[] = []
   const columns: Array<Column | null> = header.map((name) => {
     const normalized = normalizeHeader(name)
-    if ((CASE_IMPORT_COLUMNS as readonly string[]).includes(normalized)) return normalized as Column
-    issues.push({ row: null, field: null, message: `Unknown column "${name}". Allowed: ${CASE_IMPORT_COLUMNS.join(', ')}.` })
+    if ((allowed as readonly string[]).includes(normalized)) return normalized as Column
+    if ((CLASSIFICATION_IMPORT_COLUMNS as readonly string[]).includes(normalized)) {
+      issues.push({ row: null, field: null, message: `Column "${name}" needs the Classification task kit. Choose it first, or remove the column.` })
+      return null
+    }
+    issues.push({ row: null, field: null, message: `Unknown column "${name}". Allowed: ${allowed.join(', ')}.` })
     return null
   })
-  for (const column of CASE_IMPORT_COLUMNS) {
+  for (const column of allowed) {
     if (columns.filter((c) => c === column).length > 1) issues.push({ row: null, field: column, message: `Column "${column}" appears more than once.` })
   }
   for (const column of REQUIRED) {
@@ -75,18 +90,26 @@ export function parseCasesCsv(text: string, newId: () => string): CaseImportResu
       return
     }
     const candidate: CaseInput = { key: newId(), title: '', input: '', reference: '', expectedBehavior: '' }
+    const kitFields: { kind: 'classification'; expectedLabel?: string; alsoAccept?: string[] } = { kind: 'classification' }
     columns.forEach((column, i) => {
       // An empty language cell means "untagged", not an invalid blank tag.
       if (column === 'language' && cells[i].trim() === '') return
-      if (column) candidate[FIELD[column]] = cells[i]
+      if (column === 'expected_label') {
+        if (cells[i].trim() !== '') kitFields.expectedLabel = cells[i]
+      } else if (column === 'also_accept') {
+        const labels = cells[i].split('|').filter((label) => label.trim() !== '')
+        if (labels.length > 0) kitFields.alsoAccept = labels
+      } else if (column) candidate[FIELD[column]] = cells[i]
     })
+    if (kitFamily === 'classification') candidate.kitFields = kitFields
     const result = caseInputSchema.safeParse(candidate)
     if (result.success) {
       cases.push(result.data)
       return
     }
     for (const issue of result.error.issues) {
-      const field = CASE_IMPORT_COLUMNS.find((column) => FIELD[column] === issue.path[0]) ?? null
+      const field =
+        issue.path[0] === 'kitFields' ? (issue.path[1] === 'alsoAccept' ? 'also_accept' : 'expected_label') : (CASE_IMPORT_COLUMNS.find((column) => !isKitColumn(column) && FIELD[column] === issue.path[0]) ?? null)
       issues.push({ row, field, message: issue.message })
     }
   })

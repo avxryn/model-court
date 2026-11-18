@@ -169,7 +169,95 @@ const PINNED: Record<string, unknown> = {
       "additionalProperties": false
     }
   },
+  'classification-v1': {
+    "version": "classification-v1",
+    "family": "classification",
+    "name": "Classification",
+    "listed": true,
+    "inputKinds": [
+      "text"
+    ],
+    "outputContract": {
+      "kind": "label",
+      "format": "first-line-v1"
+    },
+    "template": "classify-v1",
+    "defaultRubricVersion": "classification-v1",
+    "defaultJuryInstructions": "Judge whether the reasoning supports the label and rests on what the item actually says. The expected label, if given, is the judge's answer key.",
+    "checks": [
+      {
+        "id": "label-format",
+        "label": "Names one allowed label"
+      },
+      {
+        "id": "label-correct",
+        "label": "Matches the expected label"
+      },
+      {
+        "id": "reasoning-given",
+        "label": "Gives reasoning"
+      }
+    ],
+    "settingsSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "labels": {
+          "minItems": 2,
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "minReasoningWords": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "labels",
+        "minReasoningWords"
+      ],
+      "additionalProperties": false
+    },
+    "caseFieldsSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "classification"
+        },
+        "expectedLabel": {
+          "type": "string"
+        },
+        "alsoAccept": {
+          "maxItems": 5,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    }
+  },
 }
+
+const classificationCase: CaseInput = {
+  key: '00000000-0000-4000-8000-000000000003',
+  title: 'Ticket',
+  input: 'I was charged twice for my plan this month.',
+  reference: '',
+  expectedBehavior: 'Route it.',
+  kitFields: { kind: 'classification' as const, expectedLabel: 'Billing', alsoAccept: ['Other'] },
+}
+const classificationSettings = { labels: ['Billing', 'Bug', 'Account access', 'Other'], minReasoningWords: 5 }
 
 const summaryCase: CaseInput = {
   key: '00000000-0000-4000-8000-000000000002',
@@ -194,6 +282,12 @@ const OUTPUTS: Record<string, Array<{ case: CaseInput; settings: unknown; text: 
     { case: summaryCase, settings: { lengthUnit: 'words', maxLength: 20, format: 'bullets', checkNumbers: true }, text: 'Ticket 4512:\n- Lamp arrived broken.\n- Refund within 30 days with a photo.', expected: [{"checkId":"length","status":"pass","reason":"12 words; the limit is 20.","detail":{"count":12,"unit":"words"}},{"checkId":"format","status":"pass","reason":"2 bullet points.","detail":{"line":null}},{"checkId":"required-points","status":"pass","reason":"Covers all 2 required points.","detail":{"matched":2,"total":2,"missing":[]}},{"checkId":"must-not-mention","status":"pass","reason":"None of the 1 listed phrase appears.","detail":{"found":[]}},{"checkId":"numbers-from-document","status":"pass","reason":"All 2 numbers appear in the document or the request.","detail":{"unsupported":[]}}] },
     { case: summaryCase, settings: { lengthUnit: 'words', maxLength: 8, minLength: 2, format: 'paragraph', checkNumbers: true }, text: '- Dana wants 45 dollars back by 2027.\nShe has a receipt.', expected: [{"checkId":"length","status":"fail","reason":"11 words; the limit is 8.","detail":{"count":11,"unit":"words"}},{"checkId":"format","status":"fail","reason":"Line 1 starts with a bullet marker; a paragraph was asked for.","detail":{"line":1}},{"checkId":"required-points","status":"fail","reason":"Missing 2 of 2: (1) Refund window; (2) Photo needed.","detail":{"matched":0,"total":2,"missing":[1,2]}},{"checkId":"must-not-mention","status":"fail","reason":"Mentions 'Dana'.","detail":{"found":["Dana"]}},{"checkId":"numbers-from-document","status":"fail","reason":"Not in the document: 45, 2027 (may be computed or reworded).","detail":{"unsupported":["45","2027"]}}] },
     { case: summaryCase, settings: { lengthUnit: 'characters', maxLength: 2000, format: 'any', checkNumbers: false }, text: '退款 within thirty days.', expected: [{"checkId":"length","status":"pass","reason":"19 characters; the limit is 2,000.","detail":{"count":19,"unit":"characters"}},{"checkId":"format","status":"na","reason":"Any format is allowed.","detail":{"line":null}},{"checkId":"required-points","status":"fail","reason":"Missing 2 of 2: (1) Refund window; (2) Photo needed.","detail":{"matched":0,"total":2,"missing":[1,2]}},{"checkId":"must-not-mention","status":"pass","reason":"None of the 1 listed phrase appears.","detail":{"found":[]}},{"checkId":"numbers-from-document","status":"na","reason":"The numbers check is off for this case.","detail":{"unsupported":[]}}] },
+  ],
+  'classification-v1': [
+    { case: classificationCase, settings: classificationSettings, text: 'Label: Billing\nThe customer reports a duplicate charge on the plan.', expected: [{"checkId":"label-format","status":"pass","reason":"Names Billing.","detail":{"predicted":"Billing"}},{"checkId":"label-correct","status":"pass","reason":"Said Billing, the expected label.","detail":{"expected":"Billing","predicted":"Billing"}},{"checkId":"reasoning-given","status":"pass","reason":"9 words of reasoning.","detail":{"words":9}}] },
+    { case: classificationCase, settings: classificationSettings, text: '**Label:** bug.\nCrash.', expected: [{"checkId":"label-format","status":"pass","reason":"Names Bug.","detail":{"predicted":"Bug"}},{"checkId":"label-correct","status":"fail","reason":"Said Bug; the expected label is Billing.","detail":{"expected":"Billing","predicted":"Bug"}},{"checkId":"reasoning-given","status":"fail","reason":"1 word of reasoning; at least 5 expected.","detail":{"words":1}}] },
+    { case: classificationCase, settings: classificationSettings, text: 'Probably a billing issue.', expected: [{"checkId":"label-format","status":"fail","reason":"The first line, 'Probably a billing issue.', names no allowed label.","detail":{"predicted":null}},{"checkId":"label-correct","status":"fail","reason":"No allowed label, so it cannot match Billing.","detail":{"expected":"Billing","predicted":null}},{"checkId":"reasoning-given","status":"fail","reason":"0 words of reasoning; at least 5 expected.","detail":{"words":0}}] },
+    { case: { ...classificationCase, kitFields: { kind: 'classification' as const } }, settings: { ...classificationSettings, minReasoningWords: 0 }, text: 'Other', expected: [{"checkId":"label-format","status":"pass","reason":"Names Other.","detail":{"predicted":"Other"}},{"checkId":"label-correct","status":"na","reason":"No expected label for this question.","detail":{"expected":null,"predicted":null}},{"checkId":"reasoning-given","status":"na","reason":"The reasoning check is off for this case.","detail":{"words":0}}] },
   ],
 }
 
