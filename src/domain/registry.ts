@@ -179,3 +179,6 @@ export function isRouteEnabled(route: Pick<ModelRoute, 'verifiedAt'>): boolean {
 export function routesByProvider<R extends Pick<ModelRoute, 'provider'>>(routes: readonly R[]): Array<{ provider: ProviderId; routes: R[] }> {
   return PROVIDERS.map((provider) => ({ provider, routes: routes.filter((route) => route.provider === provider) })).filter((group) => group.routes.length > 0)
 }
+
+/** Dated list prices for cost estimates (D-62); kept in their own module. */
+export { callCostMicroUsd, PRICE_TABLE_VERSION, PRICE_TABLES, priceFor, priceTableFor, type PriceTable, type RoutePrice } from './prices'

@@ -78,6 +78,46 @@ Temperature is never sent: Anthropic API version `2026-10-21` rejects it, and Op
 - Usage is `null` when unknown (never 0). The request ID comes from the `x-request-id` / `request-id` header.
 - Network failure or timeout after send → `uncertain` (possibly billed); no automatic retry.
 
+## Prices (D-62, price table `2026-11-18.1`)
+
+Read by hand on **2026-11-18** from the providers' official pricing pages. No paid call was needed. The numbers live in `src/domain/prices.ts`, which is append-only: a price change is a new dated table, never an edit (a unit test pins each published table's hash). The record labels every amount an estimate at list prices; the provider bill is the authority.
+
+- OpenAI: <https://developers.openai.com/api/docs/pricing>, Standard tier, short context ("≤272K input tokens"). GPT-5.4 mini and GPT-5.2 are listed without a context split.
+- Anthropic: <https://platform.claude.com/docs/en/about-claude/pricing>, "Model pricing" table (base input, cache hits and refreshes, output). The page lists model names; the API IDs were matched by name (for example Opus 4.5 → `claude-opus-4-5-20251101`). Claude 4.6 and later, except Haiku 5.5, are priced flat across the 1M window. Haiku 5.5 costs more for prompts over 100,000 tokens; hearing prompts are at most about 24K characters, so the table records the lower tier.
+
+USD per 1M tokens:
+
+| Route key | Input | Cached input | Output |
+|---|---|---|---|
+| `openai-gpt-6-2-astra` | 8.00 | 0.40 | 40.00 |
+| `openai-gpt-6-2-sol` | 2.00 | 0.10 | 10.00 |
+| `openai-gpt-6-1-terra` | 1.00 | 0.05 | 5.00 |
+| `openai-gpt-6-1-sol` | 2.00 | 0.10 | 10.00 |
+| `openai-gpt-6-astra` | 10.00 | 1.00 | 50.00 |
+| `openai-gpt-6-sol` | 2.00 | 0.20 | 10.00 |
+| `openai-gpt-6-luna` | 0.10 | 0.01 | 0.50 |
+| `openai-gpt-5-6-sol` | 4.00 | 0.40 | 20.00 |
+| `openai-gpt-5-6-terra` | 2.00 | 0.20 | 12.00 |
+| `openai-gpt-5-6-luna` | 0.20 | 0.02 | 1.20 |
+| `openai-gpt-5-5` | 5.00 | 0.50 | 30.00 |
+| `openai-gpt-5-4` | 2.50 | 0.25 | 15.00 |
+| `openai-gpt-5-4-mini` | 0.75 | 0.075 | 4.50 |
+| `openai-gpt-5-2` | 1.75 | 0.175 | 14.00 |
+| `anthropic-claude-fable-5-2` | 8 | 0.20 | 40 |
+| `anthropic-claude-fable-5-1` | 10 | 0.25 | 50 |
+| `anthropic-claude-fable-5` | 10 | 1 | 50 |
+| `anthropic-claude-opus-5-5` | 4 | 0.20 | 20 |
+| `anthropic-claude-opus-5`, `-4-8`, `-4-7`, `-4-6`, `-4-5-20251101` | 5 | 0.50 | 25 |
+| `anthropic-claude-sonnet-5-5` | 2 | 0.10 | 10 |
+| `anthropic-claude-sonnet-5` | 2 | 0.20 | 10 |
+| `anthropic-claude-sonnet-4-6` | 3 | 0.30 | 15 |
+| `anthropic-claude-haiku-5-5` | 0.10 | 0.01 | 0.50 |
+| `anthropic-claude-haiku-4-5-20251001` | 1 | 0.10 | 5 |
+
+Not recorded, because hearings never use them: batch and flex/priority tiers, long-context tiers, cache-write prices (both providers now charge for cache writes: OpenAI 1.25× input for 30 minutes and 2.5× for 12 hours on GPT-5.6 and later; Anthropic 1.25× for 5 minutes and 2× for 1 hour), and Anthropic's 1.1× US-only routing (`inference_geo`). Hearings send no cache controls and no `inference_geo`. Reasoning and thinking tokens are billed as output on both providers.
+
+How cached input is counted (from the prompt-caching guides, read the same day): OpenAI's `usage.input_tokens` **includes** `input_tokens_details.cached_tokens` (<https://developers.openai.com/api/docs/guides/prompt-caching>); Anthropic's `usage.input_tokens` **excludes** `cache_read_input_tokens` and `cache_creation_input_tokens` (<https://platform.claude.com/docs/en/build-with-claude/prompt-caching>). The estimate subtracts or adds accordingly (`callCostMicroUsd`).
+
 ## Live smoke record (fill from `npm run smoke:providers`; paid; run by you)
 
 | Date | Provider | Model | Outcome kind | finishReason | tokens in/out | Observed model | Recorded by |
