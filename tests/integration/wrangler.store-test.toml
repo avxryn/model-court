@@ -8,6 +8,15 @@ compatibility_flags = ["nodejs_compat"]
 name = "STORE"
 class_name = "ModelCourtStore"
 
+[[durable_objects.bindings]]
+name = "PRE_SAMPLES_STORE"
+class_name = "PreSamplesStore"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ModelCourtStore"]
+
+# Test-only (D-65): a store held at the schema before 0009_generation_samples.
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["PreSamplesStore"]

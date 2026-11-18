@@ -51,6 +51,13 @@ export interface RunSnapshot {
   providerRegistryVersion: string
   appCommit: string
   createdAt: number
+  /** D-65: present only when the judge asked for repeats (2 or 3); absent means once. Part of the hashed plan. */
+  samplesPerAnswer?: 2 | 3
+}
+
+/** How many times each generated party answers each question. */
+export function samplesPerAnswer(snapshot: Pick<RunSnapshot, 'samplesPerAnswer'>): number {
+  return snapshot.samplesPerAnswer ?? 1
 }
 
 export type ReadinessIssue =
@@ -148,5 +155,6 @@ export function buildSnapshot(draft: Draft, routes: readonly ModelRoute[], appCo
     providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
     appCommit,
     createdAt,
+    ...(draft.samplesPerAnswer ? { samplesPerAnswer: draft.samplesPerAnswer } : {}),
   }
 }

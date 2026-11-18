@@ -72,12 +72,15 @@ describe('draftInputSchema (T03)', () => {
 })
 
 describe('T24 per-run bounds scale to three configurations', () => {
-  it('accepts up to cases × 3 retries and ratings, and no more', () => {
+  it('accepts up to cases × 3 × samples retries and cases × 3 ratings, and no more', () => {
     const ids = (n: number) => Array.from({ length: n }, newId)
     const max = LIMITS.maxCases * LIMITS.maxConfigurationsPerRun
     expect(max).toBe(15)
-    expect(retrySchema.safeParse({ generationIds: ids(max), acknowledgePossiblePriorCharge: true }).success).toBe(true)
-    expect(retrySchema.safeParse({ generationIds: ids(max + 1), acknowledgePossiblePriorCharge: true }).success).toBe(false)
+    // D-65: every sample of a repeated hearing can be retried at once; jurors still rate one answer per party.
+    const retries = max * LIMITS.maxSamplesPerAnswer
+    expect(retries).toBe(45)
+    expect(retrySchema.safeParse({ generationIds: ids(retries), acknowledgePossiblePriorCharge: true }).success).toBe(true)
+    expect(retrySchema.safeParse({ generationIds: ids(retries + 1), acknowledgePossiblePriorCharge: true }).success).toBe(false)
     const rating = (responseId: string) => ({ responseId, correctness: 2, completeness: 2, grounding: 2, note: '', suspectedIdentityClue: false })
     expect(saveRatingsSchema.safeParse({ ratings: ids(max).map(rating) }).success).toBe(true)
     expect(saveRatingsSchema.safeParse({ ratings: ids(max + 1).map(rating) }).success).toBe(false)

@@ -169,6 +169,8 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
   api.get('/catalog', (c) =>
     ok(c, {
       providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
+      // The newest list-price table (D-62); records use the table for their own creation day.
+      priceTable: (({ version, readOn, sources }) => ({ version, readOn, sources }))(deps(c).priceTables[deps(c).priceTables.length - 1]),
       generationEnabled: deps(c).config.generationEnabled,
       credentialWritesEnabled: deps(c).config.credentialWritesEnabled,
       providers: Object.entries(PROVIDER_NAMES).map(([id, name]) => ({ id, name })),
@@ -187,7 +189,7 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
         verifiedAt: route.verifiedAt,
         multiTurnVerifiedAt: route.multiTurnVerifiedAt,
       })),
-      limits: { maxCases: LIMITS.maxCases, configurations: deps(c).config.maxConfigurationsPerRun, minConfigurations: LIMITS.minConfigurationsPerRun, maxOutputTokens: LIMITS.maxOutputTokens, reasoningHeadroomTokens: LIMITS.reasoningHeadroomTokens, maxAttemptsPerGeneration: LIMITS.maxAttemptsPerGeneration, credentialTtlDays: Math.round(deps(c).config.credentialTtlMs / 86_400_000), ...deps(c).config.limits },
+      limits: { maxCases: LIMITS.maxCases, configurations: deps(c).config.maxConfigurationsPerRun, samplesPerAnswer: deps(c).config.maxSamplesPerAnswer, minConfigurations: LIMITS.minConfigurationsPerRun, maxOutputTokens: LIMITS.maxOutputTokens, reasoningHeadroomTokens: LIMITS.reasoningHeadroomTokens, maxAttemptsPerGeneration: LIMITS.maxAttemptsPerGeneration, credentialTtlDays: Math.round(deps(c).config.credentialTtlMs / 86_400_000), ...deps(c).config.limits },
     }),
   )
 

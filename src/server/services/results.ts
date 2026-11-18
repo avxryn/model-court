@@ -16,8 +16,8 @@ import type { Deps } from '../deps'
 import { ApiError, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
 import { notifyRun } from './generation'
-import { isImportedSnapshot } from '../../domain/snapshot'
-import { loadGenerations, parseSnapshot, type AssignmentCase, type EligibleManifest } from './runs'
+import { isImportedSnapshot, samplesPerAnswer } from '../../domain/snapshot'
+import { loadGenerations, parseSnapshot, primarySample, samplesFor, type AssignmentCase, type EligibleManifest } from './runs'
 
 interface AttemptRow {
   id: string
@@ -44,6 +44,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
   const snapshot = parseSnapshot(run.snapshot_json)
   const manifest = JSON.parse(run.eligible_manifest_json ?? '{"caseKeys":[],"excludedCaseKeys":[],"entries":[]}') as EligibleManifest
   const cohortIds = JSON.parse(run.reveal_cohort_json ?? '[]') as string[]
+  const samples = samplesPerAnswer(snapshot)
   const generations = await loadGenerations(db, runId)
   const attempts = (
     await db
@@ -145,10 +146,14 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
             sha256: output?.text_sha256 ?? null,
           }
         }
-        const generation = generations.find((g) => g.case_key === testCase.key && g.configuration_key === configuration.key)
+        // The primary sample: the one the jury scored when eligible (D-65), else the lowest succeeded, else sample 1.
+        const entry = manifest.entries.find((e) => e.caseKey === testCase.key && e.configurationKey === configuration.key)
+        const slot = samplesFor(generations, testCase.key, configuration.key)
+        const generation = (entry && slot.find((g) => g.id === entry.generationId)) ?? primarySample(generations, testCase.key, configuration.key) ?? slot[0]
         const accepted = attempts.find((attempt) => attempt.id === generation?.accepted_attempt_id)
         return {
           configurationKey: configuration.key,
+          sampleNo: generation?.sample_no ?? 1,
           status: generation?.status ?? 'pending',
           errorCode: generation?.last_error_code ?? null,
           attemptCount: generation?.attempt_count ?? 0,
@@ -161,6 +166,28 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
           reasoningTokens: accepted?.reasoning_tokens ?? null,
           durationMs: accepted?.duration_ms ?? null,
           observedModel: accepted?.observed_model ?? null,
+          // Every sample side by side, only when the judge asked for repeats (D-65). After reveal only, like everything here.
+          ...(samples > 1
+            ? {
+                samples: slot.map((g) => {
+                  const ok = attempts.find((attempt) => attempt.id === g.accepted_attempt_id)
+                  return {
+                    sampleNo: g.sample_no,
+                    primary: g.id === generation?.id,
+                    status: g.status,
+                    errorCode: g.last_error_code,
+                    attemptCount: g.attempt_count,
+                    text: ok?.output_text ?? null,
+                    truncated: ok?.truncated === 1,
+                    inputTokens: ok?.input_tokens ?? null,
+                    outputTokens: ok?.output_tokens ?? null,
+                    cachedInputTokens: ok?.cached_input_tokens ?? null,
+                    reasoningTokens: ok?.reasoning_tokens ?? null,
+                    durationMs: ok?.duration_ms ?? null,
+                  }
+                }),
+              }
+            : {}),
         }
       }),
       judgments: eligible
@@ -192,7 +219,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
   const usageRecords: UsageRecord[] = generations.map((generation) => ({
     caseKey: generation.case_key,
     configurationKey: generation.configuration_key,
-    sampleNo: 1,
+    sampleNo: generation.sample_no,
     status: generation.status,
     attempts: attempts
       .filter((attempt) => attempt.generation_id === generation.id)
@@ -245,6 +272,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
     messageTemplateVersion: snapshot.messageTemplateVersion,
     providerRegistryVersion: snapshot.providerRegistryVersion,
     appCommit: snapshot.appCommit,
+    samplesPerAnswer: samples,
     // Credential references are execution authorization, never evidence: not included.
     // Imported parties carry their provenance instead of a model; generated parties keep their earlier shape.
     configurations: snapshot.configurations.map((c) =>

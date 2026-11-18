@@ -102,6 +102,25 @@ v2, generation after v1 removal, resumable batches, idempotent reruns, revoked r
 swapped ciphertext refused, wrong-root no-op, no plaintext anywhere. **Not yet run on the live platform.**
 The cron tick and the `deepspace logs` output need a live check the first time this runs.
 
+## Deploying migration 0009 (repeats, D-65): needs Avery's OK
+
+`0009_generation_samples` rebuilds `generations`, `generation_attempts`, `outbox` and `attempt_reservations` in
+place, in one transaction, the first time the store starts on the new code. Do not deploy it without Avery's
+explicit go-ahead, and then:
+
+1. Take a sealed V9 backup (below) and keep it until the new version has run a hearing end to end.
+2. If the store is large, restore that backup into a fresh store and start it on the new code first; check
+   that the row counts of the four tables match.
+3. Deploy when no hearing is generating (a claim or commit that races the rebuild waits for it, but there is
+   no reason to test that live).
+4. After the deploy, open an old record and an old hearing's owner view: testimony, findings and Cost and speed
+   must read as before, with every generation at sample 1.
+
+If the migration fails, the transaction rolls back and the store keeps the old schema; the new code then
+cannot serve hearings (it writes `sample_no`), so roll the app back (`npx deepspace rollback`). Once it has
+succeeded, rolling the app back is also safe: the older code never names `sample_no`, and its inserts get the
+default of 1. The schema itself is not rolled back; restore the backup for that.
+
 ## Backup and restore (V9)
 
 The data lives in one `ModelCourtStore` SQLite Durable Object. `src/server/services/backup.ts` provides

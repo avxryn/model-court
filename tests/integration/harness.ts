@@ -17,7 +17,7 @@ import { verifyJwt } from 'deepspace/worker'
 import { MODEL_ROUTES, PRICE_TABLES, type ModelRoute, type PriceTable } from '../../src/domain/registry'
 import { createApi } from '../../src/server/api'
 import { parseConfig, type ConfigEnv } from '../../src/server/config'
-import { ensureMigrated, migrate } from '../../src/server/db/migrations'
+import { ensureMigrated, migrate, MIGRATIONS } from '../../src/server/db/migrations'
 import type { Deps, GenerationJob } from '../../src/server/deps'
 import { handleGenerationJob, type JobOutcome } from '../../src/server/services/generation'
 import { handleGradingJob, type GradingJob } from '../../src/server/services/special-master'
@@ -87,6 +87,41 @@ async function openDatabase(): Promise<{ db: D1Database; dispose: () => Promise<
   // persist: false → a fresh in-memory local D1 per harness.
   const proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: 'tests/integration/wrangler.test.toml', persist: false })
   return { db: proxy.env.DB, dispose: () => proxy.dispose() }
+}
+
+/**
+ * D-65: a store held at the schema before `0009_generation_samples`, on whichever store is under
+ * test, for seeding legacy rows with SQL and then applying the remaining migrations.
+ */
+export async function openPreSamplesDatabase(): Promise<{ db: D1Database; migrateRest: () => Promise<string[]>; dispose: () => Promise<void> }> {
+  const before = MIGRATIONS.slice(0, MIGRATIONS.findIndex((m) => m.id === '0009_generation_samples'))
+  if (process.env.MC_STORE === 'do') {
+    storeWorker ??= unstable_dev(fileURLToPath(new URL('./store-test-worker.ts', import.meta.url)), {
+      config: fileURLToPath(new URL('./wrangler.store-test.toml', import.meta.url)),
+      experimental: { disableExperimentalWarning: true },
+      logLevel: 'error',
+    })
+    const worker = await storeWorker
+    const name = crypto.randomUUID()
+    const db = new SqlBatchDatabase(async (statements) => {
+      const response = await worker.fetch(`http://store/?store=pre-samples&db=${name}`, { method: 'POST', body: JSON.stringify(statements) })
+      const body = (await response.json()) as { error?: string }
+      if (!response.ok) throw new Error(body.error ?? 'store error')
+      return body as never
+    }).asD1()
+    const migrateRest = async () => {
+      const response = await worker.fetch(`http://store/?store=pre-samples&db=${name}&migrate=rest`, { method: 'POST', body: '[]' })
+      const body = (await response.json()) as string[] | { error: string }
+      if (!response.ok) throw new Error((body as { error: string }).error)
+      return body as string[]
+    }
+    // Force the object to start (and migrate up to 0008) before the caller seeds it.
+    await db.prepare('SELECT 1').first()
+    return { db, migrateRest, dispose: async () => {} }
+  }
+  const proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: 'tests/integration/wrangler.test.toml', persist: false })
+  await migrate(proxy.env.DB, before)
+  return { db: proxy.env.DB, migrateRest: () => migrate(proxy.env.DB), dispose: () => proxy.dispose() }
 }
 
 export interface HarnessOptions {

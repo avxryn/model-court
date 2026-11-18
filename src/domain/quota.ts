@@ -52,6 +52,12 @@ export function quotaStanding(caps: CallCaps, usage: CallUsage, now: number): Qu
   }
 }
 
+/** Paid calls a draft plans: questions × generated parties × samples (D-65). Imported parties make none. */
+export function plannedCalls(draft: { cases: readonly unknown[]; configurations: ReadonlyArray<{ kind?: string }>; samplesPerAnswer?: number }): number {
+  const generated = draft.configurations.filter((configuration) => configuration.kind !== 'imported').length
+  return draft.cases.length * generated * (generated > 0 ? (draft.samplesPerAnswer ?? 1) : 1)
+}
+
 export type QuotaBlock = { cap: 'user' | 'globalToday' | 'globalLifetime'; message: string }
 
 /** Why `planned` calls cannot start now, naming the tightest cap; null when they fit. */

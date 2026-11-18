@@ -3,20 +3,62 @@
  * HTTP so the integration suite can run against real Durable Object SQLite.
  * `?db=<name>` selects an isolated store instance per test harness.
  */
-import { storeStub, type ModelCourtStore } from '../../src/server/db/store-object'
-import type { StoreStatement } from '../../src/server/db/sql-batch-database'
+import { DurableObject } from 'cloudflare:workers'
+import { migrateSync, MIGRATIONS } from '../../src/server/db/migrations'
+import type { ModelCourtStore } from '../../src/server/db/store-object'
+import type { StoreResult, StoreStatement } from '../../src/server/db/sql-batch-database'
 
 export { ModelCourtStore } from '../../src/server/db/store-object'
 
+const WRITE = /^\s*(insert|update|delete|replace)\b/i
+
+/**
+ * Test-only (D-65): the same Durable Object SQLite, migrated only up to the migration before
+ * `0009_generation_samples`, so the rebuild can be applied to a seeded store exactly as a
+ * deployed store would see it. `migrateRest` then applies the remaining migrations.
+ */
+export class PreSamplesStore extends DurableObject {
+  constructor(ctx: DurableObjectState, env: unknown) {
+    super(ctx, env as never)
+    ctx.blockConcurrencyWhile(async () => {
+      migrateSync(this.exec, (fn) => ctx.storage.transactionSync(fn), MIGRATIONS.slice(0, MIGRATIONS.findIndex((m) => m.id === '0009_generation_samples')))
+    })
+  }
+
+  private exec = (statement: string, ...params: Array<string | number>) => this.ctx.storage.sql.exec(statement, ...params).toArray() as Array<Record<string, unknown>>
+
+  execute(statements: StoreStatement[]): StoreResult[] {
+    const sql = this.ctx.storage.sql
+    return this.ctx.storage.transactionSync(() =>
+      statements.map((statement) => {
+        const rows = sql.exec(statement.sql, ...statement.params).toArray() as Record<string, unknown>[]
+        const changes = WRITE.test(statement.sql) ? Number(sql.exec('SELECT changes() AS c').one().c) : 0
+        return { rows, changes }
+      }),
+    )
+  }
+
+  migrateRest(): string[] {
+    return migrateSync(this.exec, (fn) => this.ctx.storage.transactionSync(fn))
+  }
+}
+
 interface Env {
   STORE: DurableObjectNamespace<ModelCourtStore>
+  PRE_SAMPLES_STORE: DurableObjectNamespace<PreSamplesStore>
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const name = new URL(request.url).searchParams.get('db') ?? 'default'
-    const stub = env.STORE.get(env.STORE.idFromName(name))
+    const url = new URL(request.url)
+    const name = url.searchParams.get('db') ?? 'default'
     try {
+      if (url.searchParams.get('store') === 'pre-samples') {
+        const legacy = env.PRE_SAMPLES_STORE.get(env.PRE_SAMPLES_STORE.idFromName(name))
+        if (url.searchParams.get('migrate') === 'rest') return Response.json(await legacy.migrateRest())
+        return Response.json(await legacy.execute((await request.json()) as StoreStatement[]))
+      }
+      const stub = env.STORE.get(env.STORE.idFromName(name))
       const statements = (await request.json()) as StoreStatement[]
       return Response.json(await stub.execute(statements))
     } catch (error) {

@@ -20,6 +20,8 @@ export interface ConfigEnv {
   PROVIDER_TIMEOUT_MS?: string
   CREDENTIAL_TTL_DAYS?: string
   MAX_CONFIGURATIONS_PER_RUN?: string
+  /** D-65: the most samples per answer a hearing may ask for, 1–3 (1 turns repeats off). Default 3. */
+  MAX_SAMPLES_PER_ANSWER?: string
   /** Operator-only: re-encrypt every active key to this root version on each cron tick. */
   CREDENTIAL_REKEY_TARGET_VERSION?: string
   /** Operator-only: during re-keying, revoke keys that fail authentication under their recorded root. */
@@ -44,6 +46,8 @@ export interface AppConfig {
   providerTimeoutMs: number
   /** F24: 2 or 3 configurations per run; operators may hold a deployment at 2. */
   maxConfigurationsPerRun: number
+  /** D-65: 1–3; 1 turns repeats off for this deployment. */
+  maxSamplesPerAnswer: number
   /** Saved provider keys expire this long after saving or renewal (D-23). */
   credentialTtlMs: number
   /** Operator credential maintenance run by the cron (docs/runbook.md). Null/false = off. */
@@ -82,6 +86,14 @@ function configurationCap(value: string | undefined, problems: string[]): number
   if (Number.isInteger(parsed) && parsed >= LIMITS.minConfigurationsPerRun && parsed <= LIMITS.maxConfigurationsPerRun) return parsed
   problems.push(`MAX_CONFIGURATIONS_PER_RUN must be ${LIMITS.minConfigurationsPerRun}–${LIMITS.maxConfigurationsPerRun}; using ${LIMITS.minConfigurationsPerRun}.`)
   return LIMITS.minConfigurationsPerRun
+}
+
+function samplesCap(value: string | undefined, problems: string[]): number {
+  if (value === undefined || value.trim() === '') return LIMITS.maxSamplesPerAnswer
+  const parsed = Number(value)
+  if (Number.isInteger(parsed) && parsed >= 1 && parsed <= LIMITS.maxSamplesPerAnswer) return parsed
+  problems.push(`MAX_SAMPLES_PER_ANSWER must be 1–${LIMITS.maxSamplesPerAnswer}; using 1 (repeats off).`)
+  return 1
 }
 
 export function parseConfig(env: ConfigEnv): AppConfig {
@@ -148,6 +160,7 @@ export function parseConfig(env: ConfigEnv): AppConfig {
     // Operators may shorten, never lengthen, the 90s provider deadline.
     providerTimeoutMs: Math.min(positiveInt(env.PROVIDER_TIMEOUT_MS, LIMITS.providerTimeoutMs, problems, 'PROVIDER_TIMEOUT_MS') || LIMITS.providerTimeoutMs, LIMITS.providerTimeoutMs),
     maxConfigurationsPerRun: configurationCap(env.MAX_CONFIGURATIONS_PER_RUN, problems),
+    maxSamplesPerAnswer: samplesCap(env.MAX_SAMPLES_PER_ANSWER, problems),
     credentialOps: {
       rekeyTargetVersion,
       rekeyRevokeUnreadable: rekeyTargetVersion !== null && env.CREDENTIAL_REKEY_REVOKE_UNREADABLE === 'true',

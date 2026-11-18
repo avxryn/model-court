@@ -15,6 +15,8 @@ Draft fields added in v2: optional `rubricVersion` (`reference-qa-v1` default, `
 
 Cost and speed (D-63), after reveal, every participant: results add `priceTable: {version, readOn, sources: {openai, anthropic}, predates}` and `setupMetrics: {<configurationKey>: {source, calls: {planned, succeeded, failed, uncertain, canceled, retries, errorCodes, providerCalls, medianPerAnswer}, latency: {medianMs, slowestMs, n}, tokens: {medianInput, medianOutput, totalInput, totalOutput, totalCachedInput, totalReasoning, unknownUsage}, cost: {status: "estimated"|"partial"|"no_price"|"imported", perAnswerMedianMicroUsd, perThousandMicroUsd, hearingMicroUsd, possiblyBilledUnknown, cachedAssumedFull}}}`. Amounts are integer micro-dollars (µUSD) estimated at list prices from the dated table for the hearing's creation day; `null` means unknown, never 0. Medians and latency use succeeded answers on eligible questions; totals count every call. Results responses add `cachedInputTokens` and `reasoningTokens` (D-64; `null` when not recorded, including every attempt before migration `0008`). `coverage` is unchanged. The JSON export adds `versions.priceTableVersion` and `setupMetrics: {priceTable, byConfiguration}`, both under `certification.contentSha256`; CSV is unchanged.
 
+Repeats (D-65): the draft accepts optional `samplesPerAnswer` (2 or 3; absent = once; 422 when every party is imported, or above the deployment's `MAX_SAMPLES_PER_ANSWER`, re-checked at Start). The catalog adds `limits.samplesPerAnswer` (deployment max, 1–3) and `priceTable: {version, readOn, sources}` (the newest table). Start creates questions × generated parties × samples generations, so `plannedCalls` includes samples; sample *k* is first dispatched (*k* − 1) minutes after Start. The owner run view adds `samplesPerAnswer` and `generations[].sampleNo`; `counts.planned` counts every sample. `POST /runs/:id/retries` accepts up to 45 `generationIds`, one per sample. A question is eligible when every generated party has at least one succeeded sample; jurors get the **primary** sample (lowest-numbered success) and nothing else, so the reviewer run view and the review DTO are unchanged (same shape at 1 and 3 samples, tested). Results add `samplesPerAnswer`, `cases[].responses[].sampleNo` (the primary) and, when `samplesPerAnswer > 1`, `cases[].responses[].samples[]` (`sampleNo, primary, status, errorCode, attemptCount, text, truncated, inputTokens, outputTokens, cachedInputTokens, reasoningTokens, durationMs`); `coverage` and `setupMetrics` count every sample. The JSON export adds `run.samplesPerAnswer` (only with repeats) and carries `samples` on each response.
+
 Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **jurors**. Field names, enum values, and error codes keep the original terms; only display strings (session labels such as `Juror 1`, and messages) use the new ones.
 
 - Success: `{"data": …, "requestId": "req_…"}`
@@ -26,16 +28,16 @@ Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **ju
 | Method & path | Who | Notes |
 |---|---|---|
 | GET `/healthz` (no `/api/v1`) | public | `{build, ready, storeOk, generationEnabled}` |
-| GET `/catalog` | signed in | Model routes with `enabled` (verified) flag, limits, generation switch |
+| GET `/catalog` | signed in | Model routes with `enabled` (verified) flag, limits (including `samplesPerAnswer`), price table, generation switch |
 | GET/POST `/credentials`, DELETE `/credentials/:id` | own | Metadata only; POST `{provider,label,apiKey,consentToStorage:true,replacesCredentialId?}`. Admin keys are refused (422) |
 | POST `/credentials/:id/renew` | own | If-Match, empty body. Resets `expiresAt` to now + `CREDENTIAL_TTL_DAYS`; 409 once expired or removed |
 | GET/POST `/evaluations` | own/joined | Cursor pagination `?cursor&limit≤50`; POST seeds the example draft |
 | GET `/evaluations/:id` | owner / joined reviewer | Owner: draft + runs; reviewer: title + joined runs |
-| PUT `/evaluations/:id/draft` | owner | `{comparisonMode,cases,configurations}` full replacement |
+| PUT `/evaluations/:id/draft` | owner | `{comparisonMode,cases,configurations,rubricVersion?,samplesPerAnswer?}` full replacement |
 | DELETE `/evaluations/:id` | owner | `{confirmTitle}` → 202 tombstone |
 | POST `/evaluations/:id/runs` | owner | `{draftRevision,credentialIdsByProvider,consentToProviderProcessing:true,acknowledgeProviderCharges:true}` → 202 |
 | GET `/runs/:id` | owner / reviewer | Role-specific projection; owner read reconciles expired leases |
-| POST `/runs/:id/retries` | owner | `{generationIds,acknowledgePossiblePriorCharge:true}` → 202 |
+| POST `/runs/:id/retries` | owner | `{generationIds (≤ 45, one per sample),acknowledgePossiblePriorCharge:true}` → 202 |
 | POST `/runs/:id/cancel` | owner | `{reason?}` |
 | POST `/runs/:id/open-review` | owner | `{acknowledgeExcludedCases}`. Needed only when some answer failed: once every planned answer is in, review opens by itself (audit `review.open` with no actor and `automatic: true`) |
 | POST `/runs/:id/invites`, DELETE `/runs/:id/invites/:inviteId` | owner | One-time URL `…/join#token=…`; replay returns `{url:null, requiresReissue:true}` |

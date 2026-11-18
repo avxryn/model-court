@@ -5,6 +5,10 @@ export const LIMITS = {
   /** F24: P1 allows a third configuration; operators may cap at 2 (MAX_CONFIGURATIONS_PER_RUN). */
   minConfigurationsPerRun: 2,
   maxConfigurationsPerRun: 3,
+  /** D-65: repeats. A hearing may ask each generated party 1–3 times per question; operators may lower it (MAX_SAMPLES_PER_ANSWER). */
+  maxSamplesPerAnswer: 3,
+  /** Sample k is first dispatched (k − 1) × this after the hearing starts, to spread the burst over cron ticks. */
+  sampleStaggerMs: 60_000,
   caseTitle: { min: 1, max: 100 },
   caseInput: { min: 1, max: 4_000 },
   caseReference: { min: 0, max: 8_000 },

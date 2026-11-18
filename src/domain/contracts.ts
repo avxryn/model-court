@@ -130,9 +130,18 @@ export const draftInputSchema = z
       .min(LIMITS.minConfigurationsPerRun, `Add at least ${LIMITS.minConfigurationsPerRun} configurations`)
       .max(LIMITS.maxConfigurationsPerRun, `At most ${LIMITS.maxConfigurationsPerRun} configurations`)
       .refine(uniqueKeys, 'Configuration keys must be unique'),
+    /**
+     * Repeats (D-65): ask each generated party this many times per question. Absent means once,
+     * so older drafts and snapshots keep their hashes. Jurors still score one answer per party.
+     */
+    samplesPerAnswer: z.union([z.literal(2), z.literal(3)]).optional(),
   })
   .refine((draft) => utf8ByteLength(JSON.stringify(draft)) <= LIMITS.draftJsonBytes, {
     message: 'Draft exceeds 96 KiB',
+  })
+  .refine((draft) => draft.samplesPerAnswer === undefined || draft.configurations.some((configuration) => !isImported(configuration)), {
+    message: 'Imported answers are used once; repeats need at least one generated party',
+    path: ['samplesPerAnswer'],
   })
 export type DraftInput = z.infer<typeof draftInputSchema>
 export type Draft = DraftInput & { schemaVersion: 1 }
@@ -166,7 +175,7 @@ export const startSpecialMasterSchema = z.strictObject({
 })
 
 export const retrySchema = z.strictObject({
-  generationIds: z.array(uuid).min(1).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun),
+  generationIds: z.array(uuid).min(1).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun * LIMITS.maxSamplesPerAnswer),
   acknowledgePossiblePriorCharge: z.literal(true),
   /**
    * D-57: the judge's current key for a provider whose pinned key was removed or

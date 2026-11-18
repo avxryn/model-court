@@ -38,6 +38,8 @@ function buildRecordBody(results: Results, evaluationId: string) {
       comparisonMode: results.comparisonMode,
       createdAt: results.createdAt,
       revealedAt: results.revealedAt,
+      // Only with repeats (D-65); each response then carries `samples`.
+      ...(results.samplesPerAnswer > 1 ? { samplesPerAnswer: results.samplesPerAnswer } : {}),
     },
     versions: {
       snapshotHash: results.snapshotHash,

@@ -7,14 +7,14 @@ import { canonicalJson, sha256Hex } from '../../domain/canonical'
 import { cancelRunSchema, retrySchema, startRunSchema } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
 import { PROVIDER_NAMES, type ProviderId } from '../../domain/registry'
-import { buildSnapshot, describeIssue, generatedParties, importCoverageIssues, isImportedSnapshot, readinessIssues, requiredProviders, type ImportMeta, type RunSnapshot } from '../../domain/snapshot'
+import { buildSnapshot, describeIssue, generatedParties, importCoverageIssues, isImportedSnapshot, readinessIssues, requiredProviders, samplesPerAnswer, type ImportMeta, type RunSnapshot } from '../../domain/snapshot'
 import { canRun, isRetryable, type GenerationStatus, type RunStatus } from '../../domain/transitions'
 import { loadEvaluationAccess, loadRunAccess, requireOwner, type RunAccess } from '../access'
 import { all, auditStatement, budgetSubjects, classifyConstraint, cond, GuardFailed, releaseReservations, reserveBudget, runGuarded, type Condition } from '../db/sql'
 import type { Deps } from '../deps'
 import { ApiError, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
-import { configurationCapError, parseStoredDraft } from './evaluations'
+import { configurationCapError, parseStoredDraft, samplesCapError } from './evaluations'
 import { dispatchOutbox, notifyRun, reconcileLeases } from './generation'
 import { guestNames } from './guest-jurors'
 
@@ -28,13 +28,28 @@ export interface GenerationRow {
   attempt_count: number
   accepted_attempt_id: string | null
   last_error_code: string | null
+  /** D-65: 1 unless the hearing asked for repeats. */
+  sample_no: number
+}
+
+/** Every sample of one (question, party) slot, lowest sample first (D-65). */
+export function samplesFor<G extends Pick<GenerationRow, 'case_key' | 'configuration_key' | 'sample_no'>>(generations: readonly G[], caseKey: string, configurationKey: string): G[] {
+  return generations.filter((g) => g.case_key === caseKey && g.configuration_key === configurationKey).sort((a, b) => a.sample_no - b.sample_no)
+}
+
+/**
+ * The sample the jury scores: the lowest-numbered succeeded one. Deterministic and never chosen by
+ * content. Null when no sample succeeded.
+ */
+export function primarySample<G extends Pick<GenerationRow, 'case_key' | 'configuration_key' | 'sample_no' | 'status' | 'accepted_attempt_id'>>(generations: readonly G[], caseKey: string, configurationKey: string): G | null {
+  return samplesFor(generations, caseKey, configurationKey).find((g) => g.status === 'succeeded' && g.accepted_attempt_id !== null) ?? null
 }
 
 export interface EligibleManifest {
   caseKeys: string[]
   excludedCaseKeys: string[]
   /** Generated entries carry a generation and attempt; imported entries (D-38) carry `importedOutputId` and null ids. */
-  entries: Array<{ caseKey: string; configurationKey: string; generationId: string | null; acceptedAttemptId: string | null; importedOutputId?: string }>
+  entries: Array<{ caseKey: string; configurationKey: string; generationId: string | null; acceptedAttemptId: string | null; importedOutputId?: string; /** D-65: the primary sample when it is not 1. */ sampleNo?: number }>
 }
 
 export function parseSnapshot(json: string): RunSnapshot {
@@ -163,7 +178,7 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
   const result = await idempotent(deps, { actorUserId: userId, idempotencyKey: key, operation, requestHash: hash }, async (receipt) => {
     if (access.evaluation.revision !== input.draftRevision) throw revisionConflict()
     const draft = parseStoredDraft(access.evaluation)
-    const capError = configurationCapError(deps, draft.configurations.length)
+    const capError = configurationCapError(deps, draft.configurations.length) ?? samplesCapError(deps, draft.samplesPerAnswer)
     if (capError) throw capError
     const issues = readinessIssues(draft, deps.routes)
     if (issues.length > 0) {
@@ -197,8 +212,13 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
     const snapshotHash = await sha256Hex(canonicalJson(snapshot))
     const subjects = budgetSubjects(userId, now)
 
+    // D-65: one generation per (question, party, sample). Sample k is first dispatched (k − 1) minutes
+    // later, so the minute cron spreads a repeated hearing's burst instead of sending it all at once.
+    const samples = samplesPerAnswer(snapshot)
     const generations = snapshot.cases.flatMap((testCase) =>
-      generatedParties(snapshot.configurations).map((configuration) => ({ id: deps.newId(), outboxId: deps.newId(), caseKey: testCase.key, configurationKey: configuration.key, provider: configuration.provider })),
+      generatedParties(snapshot.configurations).flatMap((configuration) =>
+        Array.from({ length: samples }, (_, index) => ({ id: deps.newId(), outboxId: deps.newId(), caseKey: testCase.key, configurationKey: configuration.key, provider: configuration.provider, sampleNo: index + 1, dispatchAt: now + index * LIMITS.sampleStaggerMs })),
+      ),
     )
     const imported = snapshot.configurations.filter(isImportedSnapshot).flatMap((configuration) => configuration.imports.map((item) => ({ id: deps.newId(), configurationKey: configuration.key, ...item })))
     // With nothing to generate, the hearing is ready for review at once and touches no budget.
@@ -240,10 +260,10 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
       ...generations.flatMap((generation) => [
         db
           .prepare(
-            `INSERT INTO generations (id, run_id, case_key, configuration_key, provider, status, attempt_count, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, 'pending', 1, ?, ?)`,
+            `INSERT INTO generations (id, run_id, case_key, configuration_key, provider, status, attempt_count, created_at, updated_at, sample_no)
+             VALUES (?, ?, ?, ?, ?, 'pending', 1, ?, ?, ?)`,
           )
-          .bind(generation.id, runId, generation.caseKey, generation.configurationKey, generation.provider, now, now),
+          .bind(generation.id, runId, generation.caseKey, generation.configurationKey, generation.provider, now, now, generation.sampleNo),
         db
           .prepare(
             `INSERT INTO attempt_reservations (generation_id, attempt_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at)
@@ -252,10 +272,10 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
           .bind(generation.id, subjects.actor, subjects.global, subjects.lifetime, subjects.windowStart, now),
         db
           .prepare(`INSERT INTO outbox (id, generation_id, attempt_no, status, next_dispatch_at, created_at, updated_at) VALUES (?, ?, 1, 'pending', ?, ?, ?)`)
-          .bind(generation.outboxId, generation.id, now, now, now),
+          .bind(generation.outboxId, generation.id, generation.dispatchAt, now, now),
       ]),
       db.prepare('UPDATE evaluations SET updated_at = ? WHERE id = ?').bind(now, evaluationId),
-      auditStatement(db, { eventType: 'run.create', requestId, outcome: 'ok', actorUserId: userId, evaluationId, runId, metadata: { plannedCalls: generations.length, providers: providers.join(',') } }, now),
+      auditStatement(db, { eventType: 'run.create', requestId, outcome: 'ok', actorUserId: userId, evaluationId, runId, metadata: { plannedCalls: generations.length, providers: providers.join(','), ...(samples > 1 ? { samplesPerAnswer: samples } : {}) } }, now),
     ]
 
     try {
@@ -324,8 +344,10 @@ export async function loadImportedOutputs(db: D1Database, runId: string): Promis
 }
 
 /**
- * A question is eligible when every generated party succeeded and every
- * imported party has its frozen answer. Entries are in snapshot party order.
+ * A question is eligible when every generated party has at least one succeeded
+ * sample and every imported party has its frozen answer. The entry for a generated
+ * party is its primary sample (lowest-numbered success, D-65); the others never reach
+ * a juror. Entries are in snapshot party order.
  */
 export function computeEligibility(snapshot: RunSnapshot, generations: readonly GenerationRow[], importedOutputs: readonly ImportedOutputRow[] = []): EligibleManifest {
   const caseKeys: string[] = []
@@ -337,9 +359,9 @@ export function computeEligibility(snapshot: RunSnapshot, generations: readonly 
         const row = importedOutputs.find((output) => output.case_key === testCase.key && output.configuration_key === configuration.key)
         return row ? { caseKey: testCase.key, configurationKey: configuration.key, generationId: null, acceptedAttemptId: null, importedOutputId: row.id } : null
       }
-      const generation = generations.find((g) => g.case_key === testCase.key && g.configuration_key === configuration.key)
-      return generation?.status === 'succeeded' && generation.accepted_attempt_id
-        ? { caseKey: testCase.key, configurationKey: configuration.key, generationId: generation.id, acceptedAttemptId: generation.accepted_attempt_id }
+      const primary = primarySample(generations, testCase.key, configuration.key)
+      return primary
+        ? { caseKey: testCase.key, configurationKey: configuration.key, generationId: primary.id, acceptedAttemptId: primary.accepted_attempt_id, ...(primary.sample_no > 1 ? { sampleNo: primary.sample_no } : {}) }
         : null
     })
     if (forCase.every((entry) => entry !== null)) {
@@ -421,6 +443,7 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
     snapshotHash: run.snapshot_hash,
     comparisonMode: snapshot.comparisonMode,
     providerRegistryVersion: snapshot.providerRegistryVersion,
+    samplesPerAnswer: samplesPerAnswer(snapshot),
     // Owner-only (D-57): which saved key each provider slot uses, so a retry can offer the current key.
     pinnedKeys: await loadPinnedKeys(db, run.id, now),
     configurations: snapshot.configurations.map((c) =>
@@ -436,6 +459,7 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
         id: generation.id,
         caseKey: generation.case_key,
         configurationKey: generation.configuration_key,
+        sampleNo: generation.sample_no,
         status: generation.status,
         attemptCount: generation.attempt_count,
         errorCode: generation.last_error_code,
@@ -682,8 +706,8 @@ export async function openReview(deps: Deps, userId: string, runId: string, ackn
 
 /**
  * Open deliberation without a judge's click once every planned answer has
- * arrived: every question is comparable, so there is nothing to
- * acknowledge. A hearing with any failed, uncertain or missing answer stays
+ * arrived (every sample of every repeat, D-65): every question is comparable,
+ * so there is nothing to acknowledge. A hearing with any failed, uncertain or missing answer stays
  * `ready` for the judge to retry or to open with exclusions. The audit row is
  * the usual `review.open`, with no actor and `automatic: true`. Returns
  * whether it opened; a lost race (cancel, delete, another opener) is not an
@@ -696,7 +720,10 @@ export async function autoOpenReview(deps: Deps, runId: string, requestId: strin
     .bind(runId)
     .first<{ owner_user_id: string; evaluation_id: string; revision: number; status: RunStatus; snapshot_json: string }>()
   if (!run || !canRun('openReview', run.status)) return false
-  const manifest = computeEligibility(parseSnapshot(run.snapshot_json), await loadGenerations(db, runId), await loadImportedOutputs(db, runId))
+  const generations = await loadGenerations(db, runId)
+  // With repeats a question can be eligible while one of its samples failed; that still waits for the judge.
+  if (generations.some((generation) => generation.status !== 'succeeded')) return false
+  const manifest = computeEligibility(parseSnapshot(run.snapshot_json), generations, await loadImportedOutputs(db, runId))
   if (manifest.caseKeys.length === 0 || manifest.excludedCaseKeys.length > 0) return false
   try {
     await commitOpenReview(deps, { id: runId, ownerUserId: run.owner_user_id, evaluationId: run.evaluation_id, revision: run.revision }, manifest, requestId, true)

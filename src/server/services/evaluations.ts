@@ -151,6 +151,7 @@ export function parseStoredDraft(row: Pick<EvaluationRow, 'draft_json'>): Draft 
     ...(raw.rubricVersion !== undefined ? { rubricVersion: raw.rubricVersion } : {}),
     cases: raw.cases,
     configurations: raw.configurations,
+    ...(raw.samplesPerAnswer !== undefined ? { samplesPerAnswer: raw.samplesPerAnswer } : {}),
   })
   if (!parsed.success) throw new ApiError(500, 'INTERNAL', 'Stored draft failed validation.')
   return { schemaVersion: 1, ...parsed.data }
@@ -205,10 +206,19 @@ export function configurationCapError(deps: Deps, count: number): ApiError | nul
   })
 }
 
+/** D-65: a draft may not ask for more samples per answer than this deployment allows. */
+export function samplesCapError(deps: Deps, samples: number | undefined): ApiError | null {
+  const cap = deps.config.maxSamplesPerAnswer
+  if ((samples ?? 1) <= cap) return null
+  return new ApiError(422, 'VALIDATION_FAILED', cap === 1 ? 'Repeats are turned off on this deployment.' : `This deployment allows at most ${cap} samples per answer.`, {
+    fields: [{ path: 'samplesPerAnswer', message: cap === 1 ? 'Repeats are off' : `At most ${cap}` }],
+  })
+}
+
 export async function saveDraft(deps: Deps, userId: string, evaluationId: string, input: DraftInput, ifMatch: number) {
   const access = await loadEvaluationAccess(deps.db, evaluationId, userId)
   requireOwner(access)
-  const capError = configurationCapError(deps, input.configurations.length)
+  const capError = configurationCapError(deps, input.configurations.length) ?? samplesCapError(deps, input.samplesPerAnswer)
   if (capError) throw capError
   const draft: Draft = { schemaVersion: 1, ...input }
   const now = deps.now()

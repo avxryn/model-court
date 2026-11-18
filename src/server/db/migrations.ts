@@ -438,6 +438,114 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE generation_attempts ADD COLUMN reasoning_tokens INTEGER CHECK (reasoning_tokens IS NULL OR reasoning_tokens >= 0)`,
     ],
   },
+  {
+    // D-65: repeats. `generations` gains `sample_no` and UNIQUE (run_id, case_key, configuration_key, sample_no).
+    // SQLite cannot alter a UNIQUE constraint, so the table is rebuilt. Neither D1 nor the Durable
+    // Object store lets a migration turn foreign keys off, and with them on, DROP TABLE generations
+    // would cascade-delete every attempt, outbox row and reservation. So the parent and its three
+    // children are rebuilt together, children dropped first, in this one migration (one transaction).
+    // Renaming generations_next to generations rewrites the children's REFERENCES (legacy_alter_table
+    // is off on both stores). Columns, checks, indexes and triggers are identical to 0001 + 0008.
+    // LIVE TABLE REBUILD: take a V9 backup before deploying (docs/runbook.md); Avery's OK required.
+    id: '0009_generation_samples',
+    statements: [
+      `CREATE TABLE generations_next (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        case_key TEXT NOT NULL,
+        configuration_key TEXT NOT NULL,
+        provider TEXT NOT NULL CHECK (provider IN ('openai','anthropic')),
+        status TEXT NOT NULL CHECK (status IN ('pending','running','succeeded','failed','uncertain','canceled')),
+        attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count BETWEEN 0 AND 2),
+        accepted_attempt_id TEXT,
+        last_error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        sample_no INTEGER NOT NULL DEFAULT 1 CHECK (sample_no BETWEEN 1 AND 3),
+        UNIQUE (run_id, case_key, configuration_key, sample_no)
+      )`,
+      `INSERT INTO generations_next (id, run_id, case_key, configuration_key, provider, status, attempt_count, accepted_attempt_id, last_error_code, created_at, updated_at, sample_no)
+       SELECT id, run_id, case_key, configuration_key, provider, status, attempt_count, accepted_attempt_id, last_error_code, created_at, updated_at, 1 FROM generations ORDER BY rowid`,
+
+      `CREATE TABLE generation_attempts_next (
+        id TEXT PRIMARY KEY,
+        generation_id TEXT NOT NULL REFERENCES generations_next(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        fence_token TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL CHECK (status IN ('running','succeeded','failed','uncertain','canceled')),
+        started_at INTEGER NOT NULL,
+        deadline_at INTEGER NOT NULL,
+        finished_at INTEGER,
+        queue_wait_ms INTEGER CHECK (queue_wait_ms IS NULL OR queue_wait_ms >= 0),
+        output_text TEXT,
+        finish_reason TEXT,
+        input_tokens INTEGER CHECK (input_tokens IS NULL OR input_tokens >= 0),
+        output_tokens INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0),
+        duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0),
+        error_code TEXT,
+        provider_request_id TEXT,
+        observed_model TEXT,
+        truncated INTEGER NOT NULL DEFAULT 0 CHECK (truncated IN (0,1)),
+        cached_input_tokens INTEGER CHECK (cached_input_tokens IS NULL OR cached_input_tokens >= 0),
+        reasoning_tokens INTEGER CHECK (reasoning_tokens IS NULL OR reasoning_tokens >= 0),
+        UNIQUE (generation_id, attempt_no)
+      )`,
+      `INSERT INTO generation_attempts_next (id, generation_id, attempt_no, fence_token, status, started_at, deadline_at, finished_at, queue_wait_ms, output_text, finish_reason, input_tokens, output_tokens, duration_ms, error_code, provider_request_id, observed_model, truncated, cached_input_tokens, reasoning_tokens)
+       SELECT id, generation_id, attempt_no, fence_token, status, started_at, deadline_at, finished_at, queue_wait_ms, output_text, finish_reason, input_tokens, output_tokens, duration_ms, error_code, provider_request_id, observed_model, truncated, cached_input_tokens, reasoning_tokens FROM generation_attempts ORDER BY rowid`,
+
+      `CREATE TABLE outbox_next (
+        id TEXT PRIMARY KEY,
+        generation_id TEXT NOT NULL REFERENCES generations_next(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        status TEXT NOT NULL CHECK (status IN ('pending','dispatched','claimed','terminal')),
+        job_id TEXT,
+        dispatch_count INTEGER NOT NULL DEFAULT 0 CHECK (dispatch_count >= 0),
+        next_dispatch_at INTEGER NOT NULL,
+        last_error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE (generation_id, attempt_no)
+      )`,
+      `INSERT INTO outbox_next (id, generation_id, attempt_no, status, job_id, dispatch_count, next_dispatch_at, last_error_code, created_at, updated_at)
+       SELECT id, generation_id, attempt_no, status, job_id, dispatch_count, next_dispatch_at, last_error_code, created_at, updated_at FROM outbox ORDER BY rowid`,
+
+      `CREATE TABLE attempt_reservations_next (
+        generation_id TEXT NOT NULL REFERENCES generations_next(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        actor_subject TEXT NOT NULL,
+        global_subject TEXT NOT NULL,
+        lifetime_subject TEXT NOT NULL,
+        window_start INTEGER NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('reserved','consumed','released')),
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (generation_id, attempt_no)
+      )`,
+      `INSERT INTO attempt_reservations_next (generation_id, attempt_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at)
+       SELECT generation_id, attempt_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at FROM attempt_reservations ORDER BY rowid`,
+
+      // Children first, so dropping the old parent cascades into nothing. Their indexes and triggers drop with them.
+      `DROP TABLE attempt_reservations`,
+      `DROP TABLE outbox`,
+      `DROP TABLE generation_attempts`,
+      `DROP TABLE generations`,
+      `ALTER TABLE generations_next RENAME TO generations`,
+      `ALTER TABLE generation_attempts_next RENAME TO generation_attempts`,
+      `ALTER TABLE outbox_next RENAME TO outbox`,
+      `ALTER TABLE attempt_reservations_next RENAME TO attempt_reservations`,
+
+      `CREATE INDEX generations_by_run_status ON generations(run_id, status)`,
+      `CREATE INDEX attempts_by_status_deadline ON generation_attempts(status, deadline_at)`,
+      `CREATE INDEX outbox_by_status ON outbox(status, next_dispatch_at)`,
+      immutable('generations', 'accepted_attempt_id', 'OLD.accepted_attempt_id IS NOT NULL AND NEW.accepted_attempt_id IS NOT OLD.accepted_attempt_id'),
+      immutable('generation_attempts', 'output_text, status, finish_reason', "OLD.status <> 'running'"),
+      // A testimony slot never moves to another question, party or sample.
+      immutable(
+        'generations',
+        'run_id, case_key, configuration_key, sample_no',
+        'NEW.run_id IS NOT OLD.run_id OR NEW.case_key IS NOT OLD.case_key OR NEW.configuration_key IS NOT OLD.configuration_key OR NEW.sample_no IS NOT OLD.sample_no',
+      ),
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`
