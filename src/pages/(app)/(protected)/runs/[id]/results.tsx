@@ -1,5 +1,5 @@
 /**
- * The record (C divider): who each party was, the findings, the judgment,
+ * The record (C divider): the headline count, who each party was, the findings, the judgment,
  * the testimony, and reliability. Entering judgment, the certified record
  * and the special master live on their own dividers.
  */
@@ -10,6 +10,7 @@ import { HearingFolder, StageLine } from '@/components/court/HearingNav'
 import { Page } from '@/components/layout/Page'
 import { DisagreementSection, findSplits } from '@/components/record/DisagreementSection'
 import { FindingsSection } from '@/components/record/FindingsSection'
+import { HeadlineSection } from '@/components/record/HeadlineSection'
 import { PartiesSection } from '@/components/record/PartiesSection'
 import { RecordGate, rubricName } from '@/components/record/RecordGate'
 import { ReliabilitySection } from '@/components/record/ReliabilitySection'
@@ -41,13 +42,14 @@ function Record({ data }: { data: ResultsView }) {
                 <div>Unsealed · {formatTime(data.revealedAt)}</div>
                 <StageLine status={data.status} />
                 <div>Rubric · {rubricName(data.rubricVersion)}</div>
-                <div className="text-xs leading-snug text-muted-foreground">Scores are 0–2 means over {plural(data.eligibleCaseKeys.length, 'eligible question')}. No winner is declared automatically.</div>
+                <div className="text-xs leading-snug text-muted-foreground">Scores are 0–2 means over {plural(data.eligibleCaseKeys.length, 'eligible question')}. The headline counts scores; only the judge enters judgment.</div>
               </>
             }
             stamp={<Stamp kind={data.status === 'decided' ? 'entered' : 'unsealed'} />}
           />
           <SheetIndex
             items={[
+              { id: 'headline', label: 'Headline' },
               { id: 'mapping', label: 'Parties' },
               { id: 'scores', label: 'Findings' },
               { id: 'verdict', label: 'Judgment' },
@@ -56,6 +58,7 @@ function Record({ data }: { data: ResultsView }) {
               { id: 'coverage', label: 'Reliability' },
             ]}
           />
+          <HeadlineSection data={data} />
           <PartiesSection data={data} />
           <FindingsSection data={data} />
           <JudgmentSummary data={data} />

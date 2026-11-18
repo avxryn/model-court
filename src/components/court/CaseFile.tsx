@@ -48,14 +48,14 @@ export function SectionLabel({ id, name, children, className }: { id?: string; n
  * Where a case stands, for the caption: "Stage 3 of 5 · Deliberate (review
  * blind)" over a five-segment progress bar. Not a control.
  */
-export function CaseStage({ step, complete = false }: { step: CaseStep; complete?: boolean }) {
+export function CaseStage({ step, complete = false, name }: { step: CaseStep; complete?: boolean; /** Overrides the stage's name, as the sample's "Judgment (example)". */ name?: string }) {
   const index = CASE_STEPS.findIndex((s) => s.key === step)
   const entry = CASE_STEPS[index]
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-sm">
         <span className="text-muted-foreground">Stage {index + 1} of {CASE_STEPS.length} · </span>
-        <span className="font-medium text-foreground">{entry.name}</span>
+        <span className="font-medium text-foreground">{name ?? entry.name}</span>
         <span className="text-xs text-muted-foreground"> ({complete ? 'done' : entry.plain.toLowerCase()})</span>
       </span>
       <span aria-hidden className="grid max-w-56 grid-cols-5 gap-1">
