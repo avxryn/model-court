@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MODEL_ROUTES } from '../../src/domain/registry'
-import { createHarness, OWNER, setupOwner, startRun, type Harness, type HarnessOptions } from './harness'
+import { createHarness, openDeliberation, OWNER, setupOwner, startRun, type Harness, type HarnessOptions } from './harness'
 
 let h: Harness
 async function fresh(options?: HarnessOptions) {
@@ -72,7 +72,7 @@ describe('next-turn hearings', () => {
     const runId = (await start(setup, revision)).json.data.runId
     await h.drainJobs()
     const view = (await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data
-    expect((await h.request('POST', `/runs/${runId}/open-review`, { as: OWNER, ifMatch: view.revision, body: { acknowledgeExcludedCases: true } })).status).toBe(200)
+    await openDeliberation(h, runId)
     const review = (await h.request('GET', `/runs/${runId}/review`, { as: OWNER })).json.data
     const withHistory = review.cases.filter((c: any) => c.messages.length > 0)
     expect(withHistory).toHaveLength(1)

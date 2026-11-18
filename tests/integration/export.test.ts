@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parseCsv } from '../../src/domain/csv'
 import { RECORD_CSV_HEADER } from '../../src/server/services/export'
-import { anthropicOk, createHarness, openAiOk, OTHER, OWNER, REVIEWER, setupOwner, type Harness } from './harness'
+import { anthropicOk, createHarness, openAiOk, openDeliberation, OTHER, OWNER, REVIEWER, setupOwner, type Harness } from './harness'
 
 let h: Harness
 beforeEach(async () => {
@@ -46,7 +46,7 @@ async function reviewingRun() {
   const runId = started.json.data.runId as string
   await h.drainJobs()
   let view = await runView(runId)
-  expect((await h.request('POST', `/runs/${runId}/open-review`, { as: OWNER, ifMatch: view.revision, body: { acknowledgeExcludedCases: true } })).status).toBe(200)
+  await openDeliberation(h, runId)
   const invite = await h.request('POST', `/runs/${runId}/invites`, { as: OWNER, body: {} })
   const token = new URL(invite.json.data.url).hash.replace('#token=', '')
   expect((await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token } })).status).toBe(200)
@@ -196,7 +196,7 @@ describe('certified record export', () => {
     await h.request('POST', `/runs/${runId}/retries`, { as: OWNER, ifMatch: view.revision, body: { generationIds: [failed.id], acknowledgePossiblePriorCharge: true } })
     await h.drainJobs()
     view = await runView(runId)
-    expect((await h.request('POST', `/runs/${runId}/open-review`, { as: OWNER, ifMatch: view.revision, body: { acknowledgeExcludedCases: true } })).status).toBe(200)
+    await openDeliberation(h, runId)
     await submit(runId, OWNER, 2)
     await reveal(runId)
     const parsed = parseCsv((await h.request('GET', `/runs/${runId}/export?format=csv`, { as: OWNER })).text)

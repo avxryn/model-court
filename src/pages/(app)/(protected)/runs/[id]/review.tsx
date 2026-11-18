@@ -3,8 +3,8 @@
  * anonymous testimony against the exhibit and the jury instructions.
  */
 
-import { useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { useCallback, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Info } from 'lucide-react'
 import { Sheet, Stamp, Term } from '@/components/court/CaseFile'
 import { HearingFolder } from '@/components/court/HearingNav'
@@ -12,6 +12,8 @@ import { Plain } from '@/components/court/Paper'
 import { ErrorPanel } from '@/components/feedback/ErrorPanel'
 import { PageSkeleton } from '@/components/feedback/PageSkeleton'
 import { SaveIndicator } from '@/components/feedback/SaveIndicator'
+import { UnsealButton } from '@/components/hearing/JuryPanel'
+import { useHearingAction } from '@/components/hearing/use-hearing-action'
 import { Page } from '@/components/layout/Page'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
@@ -20,7 +22,8 @@ import { QuestionPager, QuestionStepper, useWorksheetKeys, WorksheetGrid, Worksh
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import type { AnonymousReview } from '@/lib/dto'
+import type { AnonymousReview, OwnerRunView, RunView } from '@/lib/dto'
+import { plural } from '@/lib/format'
 import { useNoticeRefresh } from '@/lib/notices'
 import { isUnsealed } from '@/lib/status'
 import { useApi } from '@/lib/use-api'
@@ -40,10 +43,20 @@ export default function ReviewPage() {
 
 function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: () => Promise<void> }) {
   const recordBase = useLocation().pathname.startsWith('/juror/') ? `/juror/${review.runId}` : `/runs/${review.runId}`
-  const w = useWorksheet(review, reload)
+  const navigate = useNavigate()
+  const isOwner = review.contextType === 'owner'
+  // The judge also needs the hearing: whether a jury exists, and what unsealing would close.
+  const hearingResource = useApi<RunView>(isOwner ? `/runs/${review.runId}` : null)
+  const reloadHearing = hearingResource.reload
+  const hearing = hearingResource.data?.role === 'owner' ? hearingResource.data : null
+  const refreshAll = useCallback(async () => {
+    await Promise.all([reload(), reloadHearing()])
+  }, [reload, reloadHearing])
+  const w = useWorksheet(review, refreshAll)
+  const { busy, act } = useHearingAction(refreshAll)
   const [caseIndex, setCaseIndex] = useState(0)
   // A notice means something changed (e.g. reveal); refetch the authoritative review.
-  useNoticeRefresh(review.runId, reload)
+  useNoticeRefresh(review.runId, refreshAll)
 
   const goTo = async (index: number) => {
     await w.flush()
@@ -55,8 +68,8 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
     onPreviousQuestion: caseIndex > 0 ? () => goTo(caseIndex - 1) : undefined,
   })
   const current = review.cases[caseIndex]
-  const isOwner = review.contextType === 'owner'
   const filed = review.sessionStatus === 'submitted'
+  const solo = hearing !== null && hasNoJury(hearing)
 
   return (
     <Page width="wide">
@@ -100,10 +113,24 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
                       </Link>
                       .
                     </>
+                  ) : isOwner ? (
+                    hearing ? (
+                      <JudgeNextStep run={hearing} />
+                    ) : null
                   ) : (
                     'The record opens when the judge unseals it.'
                   )}
                 </p>
+              )}
+              {filed && isOwner && hearing && !isUnsealed(review.runStatus) && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <UnsealButton run={hearing} busy={busy} act={act} />
+                  {hearing.review.pendingCount > 0 && (
+                    <Button variant="outline" render={<Link to={`/runs/${review.runId}`} />} nativeButton={false}>
+                      Follow the jury in Proceedings
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
             <div className="flex shrink-0 items-center gap-4">
@@ -164,7 +191,18 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
                   <span className="text-xs text-muted-foreground tabular-nums" role="status">
                     {w.scored < w.total ? `${w.scored} of ${w.total} testimonies scored` : w.issues.length > 0 ? 'Add a note to every 0 before filing' : `All ${w.total} testimonies scored`}
                   </span>
-                  <FileFindings disabled={w.issues.length > 0 || w.submitting} onFile={() => void w.submit()} />
+                  {isOwner && solo ? (
+                    <FileAndUnseal
+                      disabled={w.issues.length > 0 || w.submitting}
+                      onConfirm={() =>
+                        void w.submit({ unseal: true }).then((done) => {
+                          if (done) navigate(`/runs/${review.runId}/results`)
+                        })
+                      }
+                    />
+                  ) : (
+                    <FileFindings disabled={w.issues.length > 0 || w.submitting} onFile={() => void w.submit()} />
+                  )}
                 </>
               )}
             </QuestionStepper>
@@ -172,6 +210,43 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
         </Sheet>
       </HearingFolder>
     </Page>
+  )
+}
+
+/** No juror seated or summoned: the judge's review is the whole record. The server checks this again. */
+function hasNoJury(run: OwnerRunView): boolean {
+  return !run.review.participants.some((p) => p.contextType === 'invited' && p.status !== 'revoked') && !run.review.invites.some((i) => i.state === 'unused')
+}
+
+/** After the judge files: what is left before the record can open. */
+function JudgeNextStep({ run }: { run: OwnerRunView }) {
+  const { pendingCount, submittedCount } = run.review
+  if (pendingCount > 0) {
+    return (
+      <>
+        {plural(pendingCount, 'juror worksheet or summons', 'juror worksheets or summonses')} still out. Unseal now to close them, or wait for the jury in Proceedings.
+      </>
+    )
+  }
+  return <>{submittedCount > 1 ? 'Every juror has filed. ' : ''}Unseal the record to see which party gave each answer.</>
+}
+
+/** A judge with no jury: one confirmation files the worksheet and unseals the record. */
+function FileAndUnseal({ disabled, onConfirm }: { disabled: boolean; onConfirm: () => void }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger render={<Button disabled={disabled} />}>File and unseal</AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>File your findings and unseal the record?</AlertDialogTitle>
+          <AlertDialogDescription>No jurors were summoned, so your review is the whole record. Your ratings become final and the record shows which party gave each answer. This can’t be undone. To add jurors first, summon them from Proceedings.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep scoring</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>File and unseal</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 

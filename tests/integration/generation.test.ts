@@ -40,7 +40,7 @@ describe('T05/T06 run admission and durable generation', () => {
     const outcomes = await h.drainJobs()
     expect(outcomes.filter((o) => o === 'succeeded')).toHaveLength(10)
     const view = await run(started.json.data.runId)
-    expect(view.status).toBe('ready')
+    expect(view.status).toBe('reviewing') // every answer in: deliberation opened by itself
     expect(view.counts.succeeded).toBe(10)
     // Messages were built from the snapshot, not the edited draft; expected behavior never sent.
     const sent = JSON.stringify(h.providerCalls.map((call) => call.body))
@@ -140,7 +140,7 @@ describe('T05/T06 run admission and durable generation', () => {
     const report = await runMaintenance(h.deps)
     expect(report.dispatched).toBe(10)
     await h.drainJobs()
-    expect((await run(started.json.data.runId)).status).toBe('ready')
+    expect((await run(started.json.data.runId)).status).toBe('reviewing') // every answer in: deliberation opened by itself
   })
 })
 

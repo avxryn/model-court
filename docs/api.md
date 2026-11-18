@@ -17,8 +17,8 @@ Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **ju
 
 - Success: `{"data": …, "requestId": "req_…"}`
 - Error: `{"error": {"code", "message", "retryable", "fields?", "details?"}, "requestId"}`
-- `Idempotency-Key: <uuid>` is **required** for: start run, retry, invite, submit review, reveal, verdict, save credential. The same key and payload replay the original response; the same key with a different payload returns `409 IDEMPOTENCY_CONFLICT`.
-- `If-Match: "<revision>"` is **required** (428 if missing) for: draft save, delete evaluation, retry, cancel, open review, rating save/submit, reveal, verdict, replace/remove credential.
+- `Idempotency-Key: <uuid>` is **required** for: start run, retry, invite, submit review, file and unseal, reveal, verdict, save credential. The same key and payload replay the original response; the same key with a different payload returns `409 IDEMPOTENCY_CONFLICT`.
+- `If-Match: "<revision>"` is **required** (428 if missing) for: draft save, delete evaluation, retry, cancel, open review, rating save/submit, file and unseal, reveal, verdict, replace/remove credential.
 - Body caps: 128 KiB (413); credential requests 16 KiB.
 
 | Method & path | Who | Notes |
@@ -35,12 +35,13 @@ Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **ju
 | GET `/runs/:id` | owner / reviewer | Role-specific projection; owner read reconciles expired leases |
 | POST `/runs/:id/retries` | owner | `{generationIds,acknowledgePossiblePriorCharge:true}` → 202 |
 | POST `/runs/:id/cancel` | owner | `{reason?}` |
-| POST `/runs/:id/open-review` | owner | `{acknowledgeExcludedCases}` |
+| POST `/runs/:id/open-review` | owner | `{acknowledgeExcludedCases}`. Needed only when some answer failed: once every planned answer is in, review opens by itself (audit `review.open` with no actor and `automatic: true`) |
 | POST `/runs/:id/invites`, DELETE `/runs/:id/invites/:inviteId` | owner | One-time URL `…/join#token=…`; replay returns `{url:null, requiresReissue:true}` |
 | POST `/invites/redeem` | signed in | `{token}`; all invalid tokens → identical 409 `INVITE_UNAVAILABLE` |
 | GET/PUT `/runs/:id/review`, POST `/runs/:id/review/submit` | own session | Anonymous DTO; drafts partial; submit needs complete ratings |
 | DELETE `/runs/:id/reviewers/:sessionId` | owner | Unsubmitted invited sessions only |
 | POST `/runs/:id/reveal` | owner | `{acknowledgePendingCount}` must equal current pending count |
+| POST `/runs/:id/review/file-and-unseal` | owner, no jury | `{}`; If-Match is the judge's session revision. Files the judge's complete worksheet and reveals in one commit. 409 `STATE_CONFLICT` with `details.juryPresent` while any juror holds a seat or an unused summons is out |
 | GET `/runs/:id/results` | participant, after reveal | Mapping, cohorts, coverage, evidence, verdicts |
 | GET `/runs/:id/export?format=json\|csv` | owner, after reveal | Certified record (cases, responses, ratings by juror label, findings, verdicts, versions, `certification.contentSha256`); CSV is one row per rating with formula-neutralized cells. No keys, credential/session/response IDs, invite tokens, or user IDs |
 | POST `/runs/:id/verdicts` | owner, after reveal | `{outcome,selectedConfigurationKey?,rationale,limitations}` → appended revision |

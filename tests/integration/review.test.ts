@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { runMaintenance } from '../../src/server/services/maintenance'
-import { anthropicOk, createHarness, openAiOk, OTHER, OWNER, REVIEWER, setupOwner, startRun, type Harness } from './harness'
+import { anthropicOk, createHarness, openAiOk, openDeliberation, OTHER, OWNER, REVIEWER, setupOwner, startRun, type Harness } from './harness'
 
 let h: Harness
 beforeEach(async () => {
@@ -25,10 +25,7 @@ async function runView(runId: string) {
 }
 
 async function openAndInvite(runId: string) {
-  const view = await runView(runId)
-  const opened = await h.request('POST', `/runs/${runId}/open-review`, { as: OWNER, ifMatch: view.revision, body: { acknowledgeExcludedCases: true } })
-  expect(opened.status).toBe(200)
-  return opened.json.data
+  return openDeliberation(h, runId)
 }
 
 async function invite(runId: string): Promise<string> {
@@ -253,7 +250,7 @@ describe('T13 reveal races', () => {
         const runId = (await startRun(local, setup)).json.data.runId
         await local.drainJobs()
         let view = (await local.request('GET', `/runs/${runId}`, { as: OWNER })).json.data
-        view = (await local.request('POST', `/runs/${runId}/open-review`, { as: OWNER, ifMatch: view.revision, body: { acknowledgeExcludedCases: true } })).json.data
+        await openDeliberation(local, runId)
         const tokenA = new URL((await local.request('POST', `/runs/${runId}/invites`, { as: OWNER, body: {} })).json.data.url).hash.slice(7)
         await local.request('POST', '/invites/redeem', { as: REVIEWER, body: { token: tokenA } })
         // Owner submits so reveal has one submission; the reviewer races reveal.

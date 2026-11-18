@@ -263,6 +263,29 @@ export async function setupOwner(h: Harness, user = OWNER) {
   return { openaiKeyId: openai.json.data.id as string, anthropicKeyId: anthropic.json.data.id as string, evaluationId: evaluation.json.data.id as string, draft: evaluation.json.data.draft }
 }
 
+/**
+ * Deliberation opens by itself once every answer is in. Open it by hand
+ * (acknowledging exclusions) only when it did not, and return the
+ * open-review fields either way; `automatic` says which happened.
+ */
+export async function openDeliberation(h: Harness, runId: string, user = OWNER) {
+  const view = (await h.request('GET', `/runs/${runId}`, { as: user })).json.data
+  if (view.status === 'reviewing') {
+    return {
+      runId,
+      status: 'reviewing',
+      revision: view.revision as number,
+      eligibleCaseCount: view.eligibility.caseKeys.length as number,
+      excludedCaseCount: view.eligibility.excludedCaseKeys.length as number,
+      ownerSessionId: view.review.ownerSessionId as string,
+      automatic: true,
+    }
+  }
+  const opened = await h.request('POST', `/runs/${runId}/open-review`, { as: user, ifMatch: view.revision, body: { acknowledgeExcludedCases: true } })
+  if (opened.status !== 200) throw new Error(`open-review failed: ${opened.status} ${JSON.stringify(opened.json)}`)
+  return { ...opened.json.data, automatic: false } as { runId: string; status: string; revision: number; eligibleCaseCount: number; excludedCaseCount: number; ownerSessionId: string; automatic: boolean }
+}
+
 export async function startRun(h: Harness, setup: Awaited<ReturnType<typeof setupOwner>>, user = OWNER, idempotencyKey?: string) {
   return h.request('POST', `/evaluations/${setup.evaluationId}/runs`, {
     as: user,

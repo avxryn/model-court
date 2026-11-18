@@ -78,17 +78,24 @@ export function useWorksheet(review: AnonymousReview, reload: () => Promise<void
     if (dirty) await save()
   }
 
-  const submit = async () => {
+  /**
+   * File the worksheet. `unseal` (a judge with no jury) also unseals the
+   * record in the same commit. Resolves true when it went through.
+   */
+  const submit = async (options: { unseal?: boolean } = {}): Promise<boolean> => {
     setSubmitting(true)
     try {
       if (saving.current) await saving.current
       if (dirty && !(await save())) throw new ApiClientError(409, 'NOT_SAVED', 'Your latest ratings could not be saved yet, so nothing was submitted.')
-      await api('POST', `/runs/${review.runId}/review/submit`, { body: {}, revision: revision.current, idempotencyKey: submitKey.current })
-      toast.success('Findings filed')
+      const action = options.unseal ? 'file-and-unseal' : 'submit'
+      await api('POST', `/runs/${review.runId}/review/${action}`, { body: {}, revision: revision.current, idempotencyKey: submitKey.current })
+      toast.success(options.unseal ? 'Findings filed and the record unsealed' : 'Findings filed')
       await reload()
+      return true
     } catch (caught) {
       toast.error(describeError(caught))
       submitKey.current = newIntentKey()
+      return false
     } finally {
       setSubmitting(false)
     }

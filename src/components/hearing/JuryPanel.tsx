@@ -161,7 +161,8 @@ function JurySummonsDialog({ url, onClose }: { url: string | null; onClose: () =
   )
 }
 
-function UnsealButton({ run, busy, act }: { run: OwnerRunView; busy: boolean; act: Act }) {
+/** Also shown on the judge's filed worksheet, so filing is never a dead end. */
+export function UnsealButton({ run, busy, act }: { run: OwnerRunView; busy: boolean; act: Act }) {
   const { submittedCount, pendingCount } = run.review
   if (submittedCount === 0) return <span className="self-center text-xs text-muted-foreground">Unsealing needs at least one filed worksheet.</span>
   return (
