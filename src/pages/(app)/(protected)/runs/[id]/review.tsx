@@ -75,6 +75,15 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
               </div>
               <h1 className="font-display text-2xl leading-tight font-medium tracking-tight sm:text-3xl">Score the testimony</h1>
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Score each testimony against the exhibit and the jury instructions. Labels are shuffled for every question and every person.</p>
+              {!isOwner && !filed && (
+                <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                  First time scoring?{' '}
+                  <a href="/sample" target="_blank" rel="noopener" className="text-foreground underline underline-offset-4">
+                    Practice on the sample case
+                  </a>{' '}
+                  (opens in a new tab, about two minutes; nothing you do there is saved or sent).
+                </p>
+              )}
               {isOwner && w.editable && (
                 <p className="flex max-w-2xl items-start gap-1.5 text-sm leading-relaxed text-muted-foreground">
                   <Info aria-hidden className="mt-0.5 size-4 shrink-0" /> You know which parties you chose, so your review is reported separately as context-aware, never as part of the jury’s findings.

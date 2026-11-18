@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { ConversationSoFar, SheetSection, Term } from '@/components/court/CaseFile'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -8,14 +9,30 @@ import { formatDuration } from '@/lib/format'
 
 type Question = ResultsView['cases'][number]
 
-/** Every question with both testimonies side by side and every rating given; the first is open. */
+/**
+ * Every question with both testimonies side by side and every rating given;
+ * the first is open. A link to #q-<key> (from "Where the jury split") opens
+ * that question and scrolls to it.
+ */
 export function TestimonySection({ data }: { data: ResultsView }) {
   const labels = Object.fromEntries(data.configurations.map((c) => [c.key, c.label]))
+  const [open, setOpen] = useState<string[]>(() => data.cases.slice(0, 1).map((c) => c.key))
+  useEffect(() => {
+    const follow = () => {
+      const key = decodeURIComponent(window.location.hash.replace(/^#q-/, ''))
+      if (!window.location.hash.startsWith('#q-') || !data.cases.some((c) => c.key === key)) return
+      setOpen((current) => (current.includes(key) ? current : [...current, key]))
+      requestAnimationFrame(() => document.getElementById(`q-${key}`)?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }))
+    }
+    follow()
+    window.addEventListener('hashchange', follow)
+    return () => window.removeEventListener('hashchange', follow)
+  }, [data.cases])
   return (
     <SheetSection id="evidence" label={<Term name="record" />}>
-      <Accordion multiple defaultValue={data.cases.slice(0, 1).map((c) => c.key)} className="gap-4">
+      <Accordion multiple value={open} onValueChange={(next) => setOpen(next as string[])} className="gap-4">
         {data.cases.map((testCase, index) => (
-          <AccordionItem key={testCase.key} value={testCase.key} className="exhibit-panel overflow-hidden not-last:border-b-0">
+          <AccordionItem key={testCase.key} id={`q-${testCase.key}`} value={testCase.key} className="exhibit-panel scroll-mt-28 overflow-hidden not-last:border-b-0">
             <AccordionTrigger className="items-center rounded-none px-5 py-4 hover:bg-slip hover:no-underline">
               <span className="flex flex-1 flex-wrap items-center justify-between gap-2 pr-2">
                 <span className="font-heading text-base font-bold">

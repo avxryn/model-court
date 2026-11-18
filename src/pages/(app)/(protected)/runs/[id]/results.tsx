@@ -8,6 +8,7 @@ import { useParams } from 'react-router-dom'
 import { Caption, Sheet, SheetIndex, Stamp } from '@/components/court/CaseFile'
 import { HearingFolder, StageLine } from '@/components/court/HearingNav'
 import { Page } from '@/components/layout/Page'
+import { DisagreementSection, findSplits } from '@/components/record/DisagreementSection'
 import { FindingsSection } from '@/components/record/FindingsSection'
 import { PartiesSection } from '@/components/record/PartiesSection'
 import { RecordGate, rubricName } from '@/components/record/RecordGate'
@@ -50,6 +51,7 @@ function Record({ data }: { data: ResultsView }) {
               { id: 'mapping', label: 'Parties' },
               { id: 'scores', label: 'Findings' },
               { id: 'verdict', label: 'Judgment' },
+              ...(findSplits(data).jurors >= 2 ? [{ id: 'splits', label: 'Splits' }] : []),
               { id: 'evidence', label: 'Testimony' },
               { id: 'coverage', label: 'Reliability' },
             ]}
@@ -57,6 +59,7 @@ function Record({ data }: { data: ResultsView }) {
           <PartiesSection data={data} />
           <FindingsSection data={data} />
           <JudgmentSummary data={data} />
+          <DisagreementSection data={data} />
           <TestimonySection data={data} />
           <ReliabilitySection data={data} />
         </Sheet>
