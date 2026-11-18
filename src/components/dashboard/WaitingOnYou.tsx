@@ -2,7 +2,7 @@ import { Gavel, LockOpen, PenLine, Scale, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { WaitingItem, WaitingKind } from './docket'
+import { waitingHref, type WaitingItem, type WaitingKind } from './docket'
 
 /**
  * Each next step links to the case page: the summary has no hearing id, so the
@@ -47,7 +47,7 @@ export function WaitingOnYou({ items, className }: { items: WaitingItem[]; class
                   size="sm"
                   variant={index === 0 ? 'default' : 'outline'}
                   className="shrink-0"
-                  render={<Link to={`/evaluations/${item.case.id}`} aria-label={`${step.action}: ${step.title}, ${item.case.title}`} />}
+                  render={<Link to={waitingHref(item)} aria-label={`${step.action}: ${step.title}, ${item.case.title}`} />}
                   nativeButton={false}
                 >
                   {step.action}

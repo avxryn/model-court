@@ -62,6 +62,21 @@ export function waitingKind(item: EvaluationSummary): WaitingKind | null {
   }
 }
 
+/** Where a waiting row's button goes: the hearing page that has the action, or the case if the hearing is unknown. */
+export function waitingHref(item: WaitingItem): string {
+  const runId = item.case.latestRunId
+  if (!runId) return `/evaluations/${item.case.id}`
+  switch (item.kind) {
+    case 'judgment':
+      return `/runs/${runId}/judgment`
+    case 'score':
+      return `/runs/${runId}/review`
+    default:
+      // Opening deliberation and unsealing are on the hearing's Proceedings page.
+      return `/runs/${runId}`
+  }
+}
+
 export function waitingItems(items: EvaluationSummary[]): WaitingItem[] {
   const found: WaitingItem[] = []
   for (const item of items) {

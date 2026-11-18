@@ -20,6 +20,8 @@ export interface EvaluationSummary {
   title: string
   role: 'owner' | 'reviewer'
   latestRunStatus: RunStatus | null
+  /** The hearing that status belongs to, so a list can link straight to its next step. */
+  latestRunId: string | null
   updatedAt: number
 }
 
@@ -53,13 +55,17 @@ export async function listEvaluations(deps: Deps, userId: string, cursor: string
     .prepare(
       `WITH visible AS (
          SELECT e.id, e.title, 'owner' AS role, e.updated_at AS updated_at,
-           (SELECT r.status FROM runs r WHERE r.evaluation_id = e.id ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS latest_run_status
+           (SELECT r.status FROM runs r WHERE r.evaluation_id = e.id ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS latest_run_status,
+           (SELECT r.id FROM runs r WHERE r.evaluation_id = e.id ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS latest_run_id
          FROM evaluations e WHERE e.owner_user_id = ?1 AND e.deleted_at IS NULL
          UNION ALL
          SELECT e.id, e.title, 'reviewer' AS role, MAX(s.joined_at) AS updated_at,
            (SELECT r2.status FROM runs r2 JOIN review_sessions s2 ON s2.run_id = r2.id
              WHERE r2.evaluation_id = e.id AND s2.reviewer_user_id = ?1 AND s2.context_type = 'invited' AND s2.status <> 'revoked'
-             ORDER BY r2.created_at DESC, r2.id DESC LIMIT 1) AS latest_run_status
+             ORDER BY r2.created_at DESC, r2.id DESC LIMIT 1) AS latest_run_status,
+           (SELECT r3.id FROM runs r3 JOIN review_sessions s3 ON s3.run_id = r3.id
+             WHERE r3.evaluation_id = e.id AND s3.reviewer_user_id = ?1 AND s3.context_type = 'invited' AND s3.status <> 'revoked'
+             ORDER BY r3.created_at DESC, r3.id DESC LIMIT 1) AS latest_run_id
          FROM evaluations e
            JOIN runs r ON r.evaluation_id = e.id
            JOIN review_sessions s ON s.run_id = r.id
@@ -71,13 +77,14 @@ export async function listEvaluations(deps: Deps, userId: string, cursor: string
        ORDER BY v.updated_at DESC, v.id DESC LIMIT ?4`,
     )
     .bind(userId, after?.[0] ?? null, after?.[1] ?? null, pageSize + 1)
-    .all<{ id: string; title: string; role: 'owner' | 'reviewer'; updated_at: number; latest_run_status: RunStatus | null }>()
+    .all<{ id: string; title: string; role: 'owner' | 'reviewer'; updated_at: number; latest_run_status: RunStatus | null; latest_run_id: string | null }>()
   const page = rows.results.slice(0, pageSize)
   const items: EvaluationSummary[] = page.map((row) => ({
     id: row.id,
     title: row.title,
     role: row.role,
     latestRunStatus: row.latest_run_status,
+    latestRunId: row.latest_run_id,
     updatedAt: row.updated_at,
   }))
   const last = page.at(-1)

@@ -389,8 +389,12 @@ describe('review fix: reviewer evaluation list shows only joined runs', () => {
     const list = (await h.request('GET', '/evaluations', { as: REVIEWER })).json.data.items
     expect(list).toHaveLength(1)
     expect(list[0].latestRunStatus).toBe('revealed')
+    // The juror's link points at the hearing they sat on, never the later one they were not invited to.
+    expect(list[0].latestRunId).toBe(runId)
     const owners = (await h.request('GET', '/evaluations', { as: OWNER })).json.data.items
     expect(owners[0].latestRunStatus).toBe('generating')
+    expect(owners[0].latestRunId).toEqual(expect.any(String))
+    expect(owners[0].latestRunId).not.toBe(runId)
   })
 
   it('treats a non-numeric limit as the default instead of failing', async () => {
