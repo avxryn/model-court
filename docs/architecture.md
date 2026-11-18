@@ -22,6 +22,7 @@ flowchart LR
 | Path | Responsibility |
 |---|---|
 | `src/domain/*` | Pure, browser-safe rules: Zod contracts, limits, rubric and scoring, transitions, prompt template `qa-v1`, canonical hashing, snapshot/readiness, registry. No React, SDK, or I/O (lint-enforced). |
+| `src/domain/scenario*.ts` | Spec 02 (D-67–D-71): scenario and party fingerprints and diffs (`scenario.ts`), the hearing comparison (`scenario-compare.ts`), and the scenario file parser (`scenario-file.ts`). Pure; nothing is stored: versions are recomputed from immutable snapshots. |
 | `src/server/api.ts` | `/api/v1` boundary: identity, origin check, rate limits, body caps, HTTP mapping. |
 | `src/server/services/*` | Use cases: evaluations, credentials, runs (admission/retry/cancel/open review), generation (outbox/claim/commit/lease), reviews (invites/sessions/reveal), results (scoring/verdict), maintenance (cron). |
 | `src/server/db/*` | `ModelCourtStore` Durable Object + D1-compatible adapter, migrations, guarded-batch helper, budget/reservation statements, audit, rate buckets. |
@@ -36,6 +37,7 @@ flowchart LR
 - Pre-reveal reviewer payloads are built by explicit allowlists (`getReview`, `reviewerRunView`, reviewer `getEvaluation`). Generation and attempt IDs, configuration keys, and provider/model identity stay in the server-only `assignment_json`.
 - Jobs and notices carry opaque IDs only. Client sockets cannot touch the JobRoom.
 - Results exist only after reveal and use the cohort frozen in the reveal transaction (`reveal_cohort_json`).
+- Re-hearing, comparing, copying and scenario files (spec 02) are judge-only routes and fields; a hearing's parties appear in the case's hearing list only once it is unsealed, and jurors' projections are unchanged. Every hearing of a case is compared side by side, never pooled; an anchor party (same fingerprint in every hearing) is the only bridge (`src/server/services/scenarios.ts`, `comparison.ts`).
 
 ## State and durability
 

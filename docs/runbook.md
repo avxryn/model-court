@@ -121,6 +121,12 @@ cannot serve hearings (it writes `sample_no`), so roll the app back (`npx deepsp
 succeeded, rolling the app back is also safe: the older code never names `sample_no`, and its inserts get the
 default of 1. The schema itself is not rolled back; restore the backup for that.
 
+## Migration 0010 (case origin, spec 02, D-71)
+
+`0010_case_origin` adds four nullable columns to `evaluations` and one trigger that keeps them unchanged once set.
+It is additive and fast, but it ships after 0008/0009, so the 0009 rules above apply to the release that carries it.
+Rolling the app back is safe: older code never names the columns. Backups taken before it restore after it.
+
 ## Backup and restore (V9)
 
 The data lives in one `ModelCourtStore` SQLite Durable Object. `src/server/services/backup.ts` provides
