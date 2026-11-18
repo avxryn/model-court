@@ -5,6 +5,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
+import { MIGRATIONS } from '../../src/server/db/migrations'
 import { BACKUP_TABLES, exportSnapshot, restoreSnapshot } from '../../src/server/services/backup'
 import { dispatchOutbox } from '../../src/server/services/generation'
 import { anthropicOk, createHarness, openAiOk, openPreSamplesDatabase, OWNER, REVIEWER, setupOwner, type Harness } from './harness'
@@ -94,7 +95,8 @@ describe('migration 0009_generation_samples', () => {
     expect(before.generations).toHaveLength(7)
     expect(before.generation_attempts).toHaveLength(6) // the pending generation has no attempt yet
 
-    expect(await legacy.migrateRest()).toEqual(['0009_generation_samples'])
+    // 0009 and every migration after it (later items append theirs, e.g. D-76's 0011_task_kit_checks).
+    expect(await legacy.migrateRest()).toEqual(MIGRATIONS.slice(MIGRATIONS.findIndex((m) => m.id === '0009_generation_samples')).map((m) => m.id))
     const after = await tableRows(db)
 
     // Same rows and values; every existing testimony is sample 1.
