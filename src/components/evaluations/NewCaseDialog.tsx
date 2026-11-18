@@ -1,5 +1,6 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from 'deepspace'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { ChoiceCard, ChoiceCardGroup } from '@/components/court/ChoiceCard'
@@ -11,12 +12,19 @@ import { Textarea } from '@/components/ui/textarea'
 import type { DraftInput } from '@/domain/contracts'
 import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
 import type { OwnerEvaluationView } from '@/lib/dto'
+import { clearNewCaseDraft, isEmptyDraft, readNewCaseDraft, writeNewCaseDraft } from '@/lib/new-case-draft'
 import { CASE_TEMPLATES } from '@/lib/templates'
 
-/** Open a new case from a starter template. `trigger` replaces the default "Open a new case" button. */
+/**
+ * Open a new case from a starter template. `trigger` replaces the default
+ * "Open a new case" button. What the judge types is kept as a draft in this
+ * browser (per user) until the case opens or the draft is discarded.
+ */
 export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
   const navigate = useNavigate()
+  const { userId } = useAuth()
   const [open, setOpen] = useState(false)
+  const [restored, setRestored] = useState(false)
   const [templateId, setTemplateId] = useState(CASE_TEMPLATES[0].id)
   // Empty fields with the template's example as the placeholder: typing replaces
   // the example instead of being appended to it. Left empty, the example is used.
@@ -29,6 +37,25 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
   }
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  // Autosave while the dialog is open; an untouched form leaves no draft behind.
+  useEffect(() => {
+    if (!open) return
+    const draft = { templateId, title, task }
+    if (isEmptyDraft(draft, CASE_TEMPLATES[0].id)) clearNewCaseDraft(userId)
+    else writeNewCaseDraft(userId, draft)
+  }, [open, userId, templateId, title, task])
+
+  const reset = () => {
+    setTemplateId(CASE_TEMPLATES[0].id)
+    setTitle('')
+    setTask('')
+    setRestored(false)
+  }
+  const discardDraft = () => {
+    clearNewCaseDraft(userId)
+    reset()
+  }
 
   const create = async () => {
     setBusy(true)
@@ -44,6 +71,8 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
           toast.error('The case was opened with the default example; the template could not be applied.')
         }
       }
+      clearNewCaseDraft(userId)
+      reset()
       setOpen(false)
       navigate(`/evaluations/${result.id}`)
     } catch (caught) {
@@ -59,9 +88,16 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
       onOpenChange={(next) => {
         setOpen(next)
         if (next) {
-          setTitle('')
-          setTask('')
           setError(null)
+          const draft = readNewCaseDraft(userId)
+          if (draft) {
+            setTemplateId(CASE_TEMPLATES.some((t) => t.id === draft.templateId) ? draft.templateId : CASE_TEMPLATES[0].id)
+            setTitle(draft.title)
+            setTask(draft.task)
+            setRestored(true)
+          } else {
+            reset()
+          }
         }
       }}
     >
@@ -101,7 +137,15 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
             <Textarea id="eval-task" value={task} maxLength={2000} rows={3} placeholder={template.task} onChange={(e) => setTask(e.target.value)} />
           </Field>
           {error && <FieldError>{error}</FieldError>}
-          <DialogFooter>
+          <DialogFooter className="items-center">
+            {restored && (
+              <p className="mr-auto text-xs text-muted-foreground" role="status">
+                Restored your unsent draft.{' '}
+                <Button type="button" variant="link" size="xs" className="h-auto p-0 text-xs" onClick={discardDraft}>
+                  Discard draft
+                </Button>
+              </p>
+            )}
             <Button type="submit" disabled={busy}>
               {busy ? 'Opening…' : 'Open case'}
             </Button>

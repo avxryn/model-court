@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { runMaintenance } from '../../src/server/services/maintenance'
-import { createHarness, OTHER, OWNER, REVIEWER, setupOwner, startRun, type Harness } from './harness'
+import { createHarness, openDeliberation, OTHER, OWNER, REVIEWER, setupOwner, startRun, type Harness } from './harness'
 
 let h: Harness
 beforeEach(async () => {
@@ -22,7 +22,7 @@ async function reviewingHearing() {
   const runId = (await startRun(h, setup)).json.data.runId as string
   await h.drainJobs()
   const view = (await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data
-  expect((await h.request('POST', `/runs/${runId}/open-review`, { as: OWNER, ifMatch: view.revision, body: { acknowledgeExcludedCases: true } })).status).toBe(200)
+  await openDeliberation(h, runId)
   return { setup, runId }
 }
 

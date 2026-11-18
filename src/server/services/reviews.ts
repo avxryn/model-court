@@ -387,3 +387,81 @@ export async function reveal(deps: Deps, userId: string, runId: string, acknowle
   if (!result.replayed) await notifyRun(deps, runId)
   return result
 }
+
+/**
+ * A judge with no jury files their own worksheet and unseals the record in
+ * one commit, behind one confirmation. "No jury" means no invited session
+ * that was not removed and no unused, unexpired summons, checked again at
+ * commit time: a juror who joins meanwhile makes this fail, and the judge
+ * goes through the usual file-then-unseal steps. `ifMatch` is the judge's
+ * session revision, as for filing.
+ */
+export async function fileAndUnseal(deps: Deps, userId: string, runId: string, ifMatch: number, key: string, requestId: string) {
+  const access = await loadRunAccess(deps.db, runId, userId)
+  requireOwner(access)
+  const session = access.session
+  if (!session || session.context_type !== 'owner') throw notFound()
+  const operation = `review.file_and_unseal:${runId}`
+  const result = await idempotent(deps, { actorUserId: userId, idempotencyKey: key, operation, requestHash: await requestHash(operation, { ifMatch }) }, async (receipt) => {
+    if (session.status !== 'draft' || access.run.status !== 'reviewing') throw stateConflict('This review is closed or already submitted.')
+    if (session.revision !== ifMatch) throw revisionConflict()
+    const ratings = JSON.parse(session.ratings_json) as DraftRating[]
+    const issues = submissionIssues(assignedResponseIds(JSON.parse(session.assignment_json) as AssignmentCase[]), ratings)
+    if (issues.length > 0) throw new ApiError(409, 'INCOMPLETE_REVIEW', 'Score every response on every dimension, with a note for any 0, before submitting.', { details: { issues } })
+    const db = deps.db
+    const now = deps.now()
+    const noJury = cond(
+      `(SELECT COUNT(*) FROM review_sessions WHERE run_id = ? AND context_type = 'invited' AND status <> 'revoked')
+       + (SELECT COUNT(*) FROM invites WHERE run_id = ? AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > ?) = 0`,
+      runId,
+      runId,
+      now,
+    )
+    const response = { status: 200 as const, data: { runId, status: 'revealed' as RunStatus, revision: access.run.revision + 1, sessionId: session.id, sessionRevision: ifMatch + 1, submittedAt: now, revealedAt: now } }
+    try {
+      await runGuarded(
+        db,
+        'review.file_and_unseal',
+        all(
+          cond(`EXISTS (SELECT 1 FROM review_sessions WHERE id = ? AND reviewer_user_id = ? AND status = 'draft' AND revision = ?)`, session.id, userId, ifMatch),
+          cond(`EXISTS (SELECT 1 FROM runs r JOIN evaluations e ON e.id = r.evaluation_id WHERE r.id = ? AND r.owner_user_id = ? AND r.status = 'reviewing' AND e.deleted_at IS NULL)`, runId, userId),
+          noJury,
+        ),
+        [
+          db.prepare(`UPDATE review_sessions SET status = 'submitted', submitted_at = ?, revision = revision + 1 WHERE id = ?`).bind(now, session.id),
+          // Same as reveal: the cohort (here, the judge's session alone) is captured in the commit that closes review.
+          db
+            .prepare(
+              `UPDATE runs SET status = 'revealed', revealed_at = ?, revision = revision + 1, updated_at = ?,
+                 reveal_cohort_json = (SELECT json_group_array(id) FROM (SELECT id FROM review_sessions WHERE run_id = ? AND status = 'submitted' ORDER BY joined_at))
+               WHERE id = ?`,
+            )
+            .bind(now, now, runId, runId),
+          // Expired summonses are retired as reveal does; there are no live ones by the guard above.
+          db.prepare(`UPDATE invites SET revoked_at = ? WHERE run_id = ? AND redeemed_at IS NULL AND revoked_at IS NULL`).bind(now, runId),
+          auditStatement(db, { eventType: 'review.submit', requestId, outcome: 'ok', actorUserId: userId, runId, evaluationId: access.run.evaluation_id, metadata: { withUnseal: true } }, now),
+          auditStatement(db, { eventType: 'run.reveal', requestId, outcome: 'ok', actorUserId: userId, runId, evaluationId: access.run.evaluation_id, metadata: { pendingClosed: 0, withFiling: true } }, now),
+          receipt(response, runId),
+        ],
+      )
+    } catch (error) {
+      if (error instanceof GuardFailed) {
+        const run = await db.prepare('SELECT status FROM runs WHERE id = ?').bind(runId).first<{ status: string }>()
+        if (run?.status !== 'reviewing') throw stateConflict('Review closed before your submission was recorded; your draft was not included.')
+        const jurors = await db
+          .prepare(
+            `SELECT (SELECT COUNT(*) FROM review_sessions WHERE run_id = ? AND context_type = 'invited' AND status <> 'revoked')
+               + (SELECT COUNT(*) FROM invites WHERE run_id = ? AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > ?) AS n`,
+          )
+          .bind(runId, runId, now)
+          .first<{ n: number }>()
+        if ((jurors?.n ?? 0) > 0) throw stateConflict('This hearing has a jury. File your findings, then unseal the record when the jury is done.', { juryPresent: true })
+        throw revisionConflict()
+      }
+      throw error
+    }
+    return response
+  })
+  if (!result.replayed) await notifyRun(deps, runId)
+  return result
+}

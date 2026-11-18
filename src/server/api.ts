@@ -30,7 +30,7 @@ import { listCredentials, removeCredential, renewCredential, saveCredential } fr
 import { createEvaluation, deleteEvaluation, deleteImports, getEvaluation, listEvaluations, putImports, saveDraft } from './services/evaluations'
 import { exportRun, parseExportFormat } from './services/export'
 import { getResults, recordVerdict } from './services/results'
-import { createInvite, getReview, redeemInvite, reveal, revokeInvite, revokeSession, saveReview, submitReview } from './services/reviews'
+import { createInvite, fileAndUnseal, getReview, redeemInvite, reveal, revokeInvite, revokeSession, saveReview, submitReview } from './services/reviews'
 import { cancelRun, getRun, openReview, retryGenerations, startRun } from './services/runs'
 import { cancelSpecialMaster, getSpecialMaster, startSpecialMaster } from './services/special-master'
 import {
@@ -286,6 +286,13 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     const ifMatch = ifMatchRevision(c)
     await readBody(c, emptySchema)
     const result = await submitReview(deps(c), user(c), pathId(c, 'runId'), ifMatch, idempotencyKey(c), rid(c))
+    return ok(c, result.data, result.status)
+  })
+  // A judge with no jury: file the judge's worksheet and unseal in one commit. If-Match is the session revision.
+  api.post('/runs/:runId/review/file-and-unseal', async (c) => {
+    const ifMatch = ifMatchRevision(c)
+    await readBody(c, emptySchema)
+    const result = await fileAndUnseal(deps(c), user(c), pathId(c, 'runId'), ifMatch, idempotencyKey(c), rid(c))
     return ok(c, result.data, result.status)
   })
   api.post('/runs/:runId/reviewers/:sessionId/sign-out-devices', async (c) => {

@@ -280,6 +280,11 @@ export async function getRun(deps: Deps, userId: string, runId: string) {
   if (access.role === 'owner' && (access.run.status === 'generating' || access.run.status === 'ready')) {
     // Cheap per-run lease reconciliation so abandoned work does not wait for cron (§10.2).
     if ((await reconcileLeases(deps, runId)) > 0) access = await loadRunAccess(deps.db, runId, userId)
+    // A complete hearing whose automatic opening has not happened yet (imported-only, or a missed job hook).
+    if (access.run.status === 'ready' && (await autoOpenReview(deps, runId, `auto_${runId}`))) {
+      await notifyRun(deps, runId)
+      access = await loadRunAccess(deps.db, runId, userId)
+    }
   }
   return access.role === 'owner' ? ownerRunView(deps, access) : reviewerRunView(access)
 }
@@ -574,34 +579,86 @@ export async function openReview(deps: Deps, userId: string, runId: string, ackn
   if (manifest.excludedCaseKeys.length > 0 && !acknowledgeExcludedCases) {
     throw stateConflict('Acknowledge the excluded cases to open review.', { excludedCaseKeys: manifest.excludedCaseKeys })
   }
-  const now = deps.now()
-  const sessionId = deps.newId()
+  let sessionId: string
   try {
-    await runGuarded(
-      db,
-      'run.open_review',
-      all(
-        cond(`EXISTS (SELECT 1 FROM runs WHERE id = ? AND owner_user_id = ? AND revision = ? AND status = 'ready')`, runId, userId, ifMatch),
-        // Recheck the frozen evidence at commit time.
-        ...manifest.entries.map((entry) =>
-          entry.importedOutputId
-            ? cond('EXISTS (SELECT 1 FROM run_imported_outputs WHERE id = ? AND run_id = ?)', entry.importedOutputId, runId)
-            : cond(`EXISTS (SELECT 1 FROM generations WHERE id = ? AND status = 'succeeded' AND accepted_attempt_id = ?)`, entry.generationId, entry.acceptedAttemptId),
-        ),
-      ),
-      [
-        db
-          .prepare(`UPDATE runs SET status = 'reviewing', eligible_manifest_json = ?, review_opened_at = ?, revision = revision + 1, updated_at = ? WHERE id = ?`)
-          .bind(JSON.stringify(manifest), now, now, runId),
-        insertSessionStatement(db, { id: sessionId, runId, userId, contextType: 'owner', assignment: buildAssignment(manifest, deps.newId), now }),
-        auditStatement(db, { eventType: 'review.open', requestId, outcome: 'ok', actorUserId: userId, runId, evaluationId: access.run.evaluation_id, metadata: { eligible: manifest.caseKeys.length, excluded: manifest.excludedCaseKeys.length } }, now),
-      ],
-    )
+    sessionId = await commitOpenReview(deps, { id: runId, ownerUserId: userId, evaluationId: access.run.evaluation_id, revision: ifMatch }, manifest, requestId, false)
   } catch (error) {
     if (error instanceof GuardFailed) throw revisionConflict()
     throw error
   }
   await notifyRun(deps, runId)
   return { runId, status: 'reviewing' as RunStatus, revision: ifMatch + 1, eligibleCaseCount: manifest.caseKeys.length, excludedCaseCount: manifest.excludedCaseKeys.length, ownerSessionId: sessionId }
+}
+
+/**
+ * Open deliberation without a judge's click once every planned answer has
+ * arrived: every question is comparable, so there is nothing to
+ * acknowledge. A hearing with any failed, uncertain or missing answer stays
+ * `ready` for the judge to retry or to open with exclusions. The audit row is
+ * the usual `review.open`, with no actor and `automatic: true`. Returns
+ * whether it opened; a lost race (cancel, delete, another opener) is not an
+ * error. The caller publishes the notice.
+ */
+export async function autoOpenReview(deps: Deps, runId: string, requestId: string): Promise<boolean> {
+  const db = deps.db
+  const run = await db
+    .prepare(`SELECT r.owner_user_id, r.evaluation_id, r.revision, r.status, r.snapshot_json FROM runs r JOIN evaluations e ON e.id = r.evaluation_id WHERE r.id = ? AND e.deleted_at IS NULL`)
+    .bind(runId)
+    .first<{ owner_user_id: string; evaluation_id: string; revision: number; status: RunStatus; snapshot_json: string }>()
+  if (!run || !canRun('openReview', run.status)) return false
+  const manifest = computeEligibility(parseSnapshot(run.snapshot_json), await loadGenerations(db, runId), await loadImportedOutputs(db, runId))
+  if (manifest.caseKeys.length === 0 || manifest.excludedCaseKeys.length > 0) return false
+  try {
+    await commitOpenReview(deps, { id: runId, ownerUserId: run.owner_user_id, evaluationId: run.evaluation_id, revision: run.revision }, manifest, requestId, true)
+    return true
+  } catch (error) {
+    if (error instanceof GuardFailed) return false
+    throw error
+  }
+}
+
+/** ready → reviewing with the frozen manifest and the judge's own session. Throws GuardFailed when the run moved on. */
+async function commitOpenReview(deps: Deps, run: { id: string; ownerUserId: string; evaluationId: string; revision: number }, manifest: EligibleManifest, requestId: string, automatic: boolean): Promise<string> {
+  const db = deps.db
+  const now = deps.now()
+  const sessionId = deps.newId()
+  await runGuarded(
+    db,
+    'run.open_review',
+    all(
+      cond(
+        `EXISTS (SELECT 1 FROM runs r JOIN evaluations e ON e.id = r.evaluation_id WHERE r.id = ? AND r.owner_user_id = ? AND r.revision = ? AND r.status = 'ready' AND e.deleted_at IS NULL)`,
+        run.id,
+        run.ownerUserId,
+        run.revision,
+      ),
+      // Recheck the frozen evidence at commit time.
+      ...manifest.entries.map((entry) =>
+        entry.importedOutputId
+          ? cond('EXISTS (SELECT 1 FROM run_imported_outputs WHERE id = ? AND run_id = ?)', entry.importedOutputId, run.id)
+          : cond(`EXISTS (SELECT 1 FROM generations WHERE id = ? AND status = 'succeeded' AND accepted_attempt_id = ?)`, entry.generationId, entry.acceptedAttemptId),
+      ),
+    ),
+    [
+      db
+        .prepare(`UPDATE runs SET status = 'reviewing', eligible_manifest_json = ?, review_opened_at = ?, revision = revision + 1, updated_at = ? WHERE id = ?`)
+        .bind(JSON.stringify(manifest), now, now, run.id),
+      insertSessionStatement(db, { id: sessionId, runId: run.id, userId: run.ownerUserId, contextType: 'owner', assignment: buildAssignment(manifest, deps.newId), now }),
+      auditStatement(
+        db,
+        {
+          eventType: 'review.open',
+          requestId,
+          outcome: 'ok',
+          actorUserId: automatic ? null : run.ownerUserId,
+          runId: run.id,
+          evaluationId: run.evaluationId,
+          metadata: { eligible: manifest.caseKeys.length, excluded: manifest.excludedCaseKeys.length, automatic },
+        },
+        now,
+      ),
+    ],
+  )
+  return sessionId
 }
 

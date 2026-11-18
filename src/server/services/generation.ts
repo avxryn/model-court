@@ -15,6 +15,8 @@ import { all, auditStatement, cond, GuardFailed, releaseReservations, runGuarded
 import type { Deps, GenerationJob } from '../deps'
 import { adapterFor, type ProviderOutcome } from '../providers'
 import { attemptStillCurrent, CredentialUnusable, withRunCredential } from './credentials'
+// Function-only cycle (runs.ts imports this module too); nothing runs at import time.
+import { autoOpenReview } from './runs'
 
 class AttemptFenced extends Error {}
 
@@ -289,6 +291,15 @@ async function finishAttempt(deps: Deps, ref: AttemptRef, outcome: ProviderOutco
       return 'stale'
     }
     throw error
+  }
+  // The last answer in opens deliberation; a failure leaves the choice to the judge.
+  if (outcome.kind === 'success') {
+    try {
+      await autoOpenReview(deps, context.runId, ref.requestId)
+    } catch {
+      // The judge can still open it; the run page retries on load.
+      deps.log({ event: 'review.auto_open_failed', runId: context.runId })
+    }
   }
   await notifyRun(deps, context.runId)
   return outcome.kind === 'success' ? 'succeeded' : outcome.definite ? 'failed' : 'uncertain'

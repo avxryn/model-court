@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parseCsv } from '../../src/domain/csv'
-import { anthropicOk, createHarness, openAiOk, OWNER, REVIEWER, setupOwner, type Harness, type HarnessOptions, type ProviderStub } from './harness'
+import { anthropicOk, createHarness, openAiOk, openDeliberation, OWNER, REVIEWER, setupOwner, type Harness, type HarnessOptions, type ProviderStub } from './harness'
 
 let h: Harness
 async function fresh(options?: HarnessOptions) {
@@ -62,10 +62,7 @@ async function invite(runId: string): Promise<string> {
 }
 
 async function openReview(runId: string) {
-  const view = await runView(runId)
-  const opened = await h.request('POST', `/runs/${runId}/open-review`, { as: OWNER, ifMatch: view.revision, body: { acknowledgeExcludedCases: true } })
-  expect(opened.status).toBe(200)
-  return opened.json.data
+  return openDeliberation(h, runId)
 }
 
 async function submit(runId: string, user: string, scoreFor: (label: string) => 0 | 1 | 2) {
@@ -100,7 +97,7 @@ describe('T24 admission and budget with three configurations', () => {
     // The two OpenAI configurations share the owner's one OpenAI key.
     expect(h.providerCalls.filter((call) => call.url.includes('openai')).every((call) => call.headers.authorization === 'Bearer sk-test-SENTINEL-OPENAI-KEY')).toBe(true)
     const view = await runView(started.json.data.runId)
-    expect(view.status).toBe('ready')
+    expect(view.status).toBe('reviewing') // every answer in: deliberation opened by itself
     expect(view.configurations).toHaveLength(3)
     expect(view.counts).toMatchObject({ planned: 15, succeeded: 15 })
     expect(await bucket(`user:${OWNER}`)).toBe(15) // succeeded calls stay charged

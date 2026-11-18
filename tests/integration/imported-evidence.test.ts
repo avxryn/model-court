@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { runMaintenance } from '../../src/server/services/maintenance'
-import { createHarness, OWNER, REVIEWER, setupOwner, type Harness } from './harness'
+import { createHarness, openDeliberation, OWNER, REVIEWER, setupOwner, type Harness } from './harness'
 
 let h: Harness
 beforeEach(async () => {
@@ -52,7 +52,7 @@ async function bucket(subject: string) {
 
 async function openAndSeatJuror(runId: string) {
   const view = (await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data
-  expect((await h.request('POST', `/runs/${runId}/open-review`, { as: OWNER, ifMatch: view.revision, body: { acknowledgeExcludedCases: true } })).status).toBe(200)
+  await openDeliberation(h, runId)
   const invite = await h.request('POST', `/runs/${runId}/invites`, { as: OWNER, body: {} })
   const token = new URL(invite.json.data.url).hash.replace('#token=', '')
   expect((await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token } })).status).toBe(200)
@@ -125,7 +125,7 @@ describe('mixed hearings', () => {
     expect(h.providerCalls).toHaveLength(5)
     expect(h.providerCalls.every((call) => !JSON.stringify(call.body).includes(HUMAN_MARKER))).toBe(true)
     const view = (await h.request('GET', `/runs/${started.json.data.runId}`, { as: OWNER })).json.data
-    expect(view.status).toBe('ready')
+    expect(view.status).toBe('reviewing') // every answer in: deliberation opened by itself
     expect(view.imported).toHaveLength(5)
     expect(view.eligibility.caseKeys).toHaveLength(5)
   })

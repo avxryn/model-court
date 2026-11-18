@@ -5,7 +5,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { anthropicOk, createHarness, okStub, openAiOk, OWNER, REVIEWER, setupOwner, startRun, type Harness, type ProviderStub } from './harness'
+import { anthropicOk, createHarness, okStub, openAiOk, openDeliberation, OWNER, REVIEWER, setupOwner, startRun, type Harness, type ProviderStub } from './harness'
 
 let h: Harness
 beforeEach(async () => {
@@ -33,7 +33,7 @@ async function unsealedHearing() {
   const runId = (await startRun(h, setup)).json.data.runId as string
   await h.drainJobs()
   let view = (await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data
-  expect((await h.request('POST', `/runs/${runId}/open-review`, { as: OWNER, ifMatch: view.revision, body: { acknowledgeExcludedCases: true } })).status).toBe(200)
+  await openDeliberation(h, runId)
   const invite = await h.request('POST', `/runs/${runId}/invites`, { as: OWNER, body: {} })
   const token = new URL(invite.json.data.url).hash.replace('#token=', '')
   await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token } })

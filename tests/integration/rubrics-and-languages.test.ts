@@ -5,7 +5,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createHarness, OWNER, REVIEWER, setupOwner, startRun, type Harness } from './harness'
+import { createHarness, openDeliberation, OWNER, REVIEWER, setupOwner, startRun, type Harness } from './harness'
 
 let h: Harness
 beforeEach(async () => {
@@ -38,7 +38,7 @@ async function hearing(rubricVersion: string | undefined, languages: Array<strin
   const runId = started.json.data.runId as string
   await h.drainJobs()
   let view = (await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data
-  expect((await h.request('POST', `/runs/${runId}/open-review`, { as: OWNER, ifMatch: view.revision, body: { acknowledgeExcludedCases: true } })).status).toBe(200)
+  await openDeliberation(h, runId)
   const invite = await h.request('POST', `/runs/${runId}/invites`, { as: OWNER, body: {} })
   const token = new URL(invite.json.data.url).hash.replace('#token=', '')
   expect((await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token } })).status).toBe(200)
