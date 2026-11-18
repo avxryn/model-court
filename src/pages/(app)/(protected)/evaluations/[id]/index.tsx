@@ -120,7 +120,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
     <Page width="wide">
       <div className="flex items-start justify-between gap-3">
         <Breadcrumbs items={[{ label: 'Your cases', to: '/evaluations' }, { label: evaluation.title }]} />
-        <CaseActions evaluationId={evaluation.id} title={evaluation.title} revision={c.revision} />
+        <CaseActions evaluationId={evaluation.id} title={evaluation.title} revision={c.revision} runs={evaluation.runs} copyCount={evaluation.copyCount} hasImported={draft.configurations.some((party) => party.kind === 'imported')} />
       </div>
       <Tabs value={tab} onValueChange={(value) => setTab(String(value))} className="block">
         <CaseFolder
@@ -154,6 +154,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                   <div>
                     Presiding: <span className="italic">you, as judge</span>
                   </div>
+                  {evaluation.origin && <OriginLine origin={evaluation.origin} />}
                   {evaluation.taskDescription && <div className="text-xs leading-snug text-muted-foreground">{evaluation.taskDescription}</div>}
                 </>
               }
@@ -294,5 +295,25 @@ function RehearBanner({ source, runs, matches, onClose }: { source: OwnerEvaluat
         </Button>
       </AlertAction>
     </Alert>
+  )
+}
+
+/** Where a copied or imported case came from (D-71). Never a link into a file's content. */
+function OriginLine({ origin }: { origin: NonNullable<OwnerEvaluationView['origin']> }) {
+  if (origin.kind === 'scenario_file') return <div className="text-xs text-muted-foreground">Opened from a scenario file</div>
+  if (origin.kind === 'certified_record') return <div className="text-xs text-muted-foreground">Questions taken from a certified record</div>
+  return (
+    <div className="text-xs text-muted-foreground">
+      {origin.sourceDeleted || !origin.fromEvaluationId ? (
+        'Copied from a case that was deleted'
+      ) : (
+        <>
+          Copied from{' '}
+          <Link className="underline underline-offset-4" to={`/evaluations/${origin.fromEvaluationId}`}>
+            case {docketNumber(origin.fromEvaluationId)}
+          </Link>
+        </>
+      )}
+    </div>
   )
 }

@@ -546,6 +546,25 @@ export const MIGRATIONS: Migration[] = [
       ),
     ],
   },
+  {
+    // Spec 02 (D-71): where a case came from (a duplicate, a scenario file, a certified record). Set once at
+    // creation, never changed. Additive and nullable, so existing cases read null ("made here"). Named 0010
+    // (not the spec's 0007) to sit after item 1's 0008/0009; item 3 takes 0011.
+    id: '0010_case_origin',
+    statements: [
+      `ALTER TABLE evaluations ADD COLUMN origin_kind TEXT CHECK (origin_kind IS NULL OR origin_kind IN ('duplicate','scenario_file','certified_record'))`,
+      // Only for duplicates of the same judge's case; never an id taken from a file. No FK: the source may be purged.
+      `ALTER TABLE evaluations ADD COLUMN origin_evaluation_id TEXT`,
+      `ALTER TABLE evaluations ADD COLUMN origin_run_id TEXT`,
+      // Computed by the server from the copied questions, never taken from a file.
+      `ALTER TABLE evaluations ADD COLUMN origin_scenario_hash TEXT`,
+      immutable(
+        'evaluations',
+        'origin_kind, origin_evaluation_id, origin_run_id, origin_scenario_hash',
+        'NEW.origin_kind IS NOT OLD.origin_kind OR NEW.origin_evaluation_id IS NOT OLD.origin_evaluation_id OR NEW.origin_run_id IS NOT OLD.origin_run_id OR NEW.origin_scenario_hash IS NOT OLD.origin_scenario_hash',
+      ),
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`

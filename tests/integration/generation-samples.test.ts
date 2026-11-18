@@ -94,7 +94,8 @@ describe('migration 0009_generation_samples', () => {
     expect(before.generations).toHaveLength(7)
     expect(before.generation_attempts).toHaveLength(6) // the pending generation has no attempt yet
 
-    expect(await legacy.migrateRest()).toEqual(['0009_generation_samples'])
+    // 0009 runs first; later migrations (0010_case_origin, spec 02) may follow it.
+    expect((await legacy.migrateRest())[0]).toBe('0009_generation_samples')
     const after = await tableRows(db)
 
     // Same rows and values; every existing testimony is sample 1.

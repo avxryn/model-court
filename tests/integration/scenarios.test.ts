@@ -5,6 +5,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { exportSnapshot, restoreSnapshot } from '../../src/server/services/backup'
+import { runMaintenance } from '../../src/server/services/maintenance'
 import { createHarness, openDeliberation, OTHER, OWNER, REVIEWER, setupOwner, type Harness } from './harness'
 
 let h: Harness
@@ -48,8 +50,8 @@ function fullRatings(review: any) {
 }
 
 /** Start a hearing on the saved draft, let the fake providers answer, then the judge files alone and unseals. */
-async function hearAndUnseal(setup: Setup): Promise<string> {
-  const started = await start(setup)
+async function hearAndUnseal(setup: Setup, extra: Record<string, unknown> = {}): Promise<string> {
+  const started = await start(setup, extra)
   expect(started.status, JSON.stringify(started.json)).toBe(202)
   const runId = started.json.data.runId as string
   await h.drainJobs()
@@ -375,5 +377,136 @@ describe('comparing hearings (D-70)', () => {
     expect((await h.request('GET', path([first, crypto.randomUUID()]), { as: OWNER })).status).toBe(404)
     expect((await h.request('GET', path([first, sealed]), { as: REVIEWER })).status).toBe(404)
     expect((await h.request('GET', path([first, sealed]), { as: OTHER })).status).toBe(404)
+  })
+})
+
+async function duplicate(setup: Setup, body: Record<string, unknown>, idempotencyKey = crypto.randomUUID(), as = OWNER) {
+  return h.request('POST', `/evaluations/${setup.evaluationId}/duplicate`, { as, idempotencyKey, body: { title: 'Copy', ...body } })
+}
+
+describe('copies and scenario files (D-71)', () => {
+  it('duplicates the draft with fresh keys, copies no hearing, key or session, and sets the origin once', async () => {
+    const setup = await setupImportedCase()
+    const runId = (await start(setup, NO_KEYS)).json.data.runId as string
+    const sourceView = await evaluation(setup)
+    const key = crypto.randomUUID()
+    const copied = await duplicate(setup, { includeParties: true }, key)
+    expect(copied.status, JSON.stringify(copied.json)).toBe(201)
+    const copyId = copied.json.data.id as string
+    // Same key and body replay the same answer; nothing new is created.
+    const replay = await duplicate(setup, { includeParties: true }, key)
+    expect(replay.json.data.id).toBe(copyId)
+    expect(await count('SELECT COUNT(*) AS n FROM evaluations WHERE owner_user_id = ?', OWNER)).toBe(2)
+
+    const copy = (await h.request('GET', `/evaluations/${copyId}`, { as: OWNER })).json.data
+    expect(copy.title).toBe('Copy')
+    expect(copy.runs).toEqual([])
+    expect(copy.imports).toEqual([])
+    expect(copy.draft.cases.map((c: any) => c.key)).not.toEqual(sourceView.draft.cases.map((c: any) => c.key))
+    expect(copy.draft.configurations.map((c: any) => c.key)).not.toEqual(sourceView.draft.configurations.map((c: any) => c.key))
+    expect(copy.draft.configurations.map((c: any) => c.label)).toEqual(['Party A', 'Party B'])
+    expect(copy.draftScenarioHash).toBe(sourceView.draftScenarioHash)
+    expect(copy.origin).toEqual({ kind: 'duplicate', fromEvaluationId: setup.evaluationId, fromRunId: null, scenarioHash: sourceView.draftScenarioHash, sourceDeleted: false })
+    expect((await evaluation(setup)).copyCount).toBe(1)
+    for (const table of ['review_sessions', 'run_credentials', 'verdict_revisions', 'invites']) expect(await count(`SELECT COUNT(*) AS n FROM ${table} WHERE run_id IN (SELECT id FROM runs WHERE evaluation_id = ?)`, copyId)).toBe(0)
+    expect(await count('SELECT COUNT(*) AS n FROM runs WHERE evaluation_id = ?', copyId)).toBe(0)
+    // The origin can never be rewritten.
+    await expect(h.db.prepare(`UPDATE evaluations SET origin_kind = 'scenario_file' WHERE id = ?`).bind(copyId).run()).rejects.toThrow(/IMMUTABLE_EVALUATIONS/)
+
+    // Imported answers come only when asked, and from a hearing they come as frozen.
+    const withAnswers = await duplicate(setup, { includeParties: true, includeImportedAnswers: true, fromRunId: runId })
+    expect(withAnswers.status).toBe(201)
+    const answered = (await h.request('GET', `/evaluations/${withAnswers.json.data.id}`, { as: OWNER })).json.data
+    expect(answered.imports).toHaveLength(10)
+    const frozen = (await h.db.prepare('SELECT text FROM run_imported_outputs WHERE run_id = ? ORDER BY text').bind(runId).all<{ text: string }>()).results.map((row) => row.text)
+    expect(answered.imports.map((row: any) => row.text).sort()).toEqual(frozen.sort())
+    expect(answered.origin).toMatchObject({ kind: 'duplicate', fromRunId: runId })
+    expect((await duplicate(setup, { includeParties: false, includeImportedAnswers: true })).status).toBe(422)
+    // Without parties the copy gets the default pair.
+    const bare = await duplicate(setup, { includeParties: false })
+    const bareView = (await h.request('GET', `/evaluations/${bare.json.data.id}`, { as: OWNER })).json.data
+    expect(bareView.draft.configurations.map((c: any) => c.label)).toEqual(['Candidate 1', 'Candidate 2'])
+  })
+
+  it('counts copies against the case quota, and refuses jurors and strangers', async () => {
+    const setup = await setupOwner(h)
+    for (let i = 1; i < 10; i++) expect((await duplicate(setup, { includeParties: true })).status).toBe(201)
+    const refused = await duplicate(setup, { includeParties: true })
+    expect(refused.status).toBe(429)
+    expect(refused.json.error.code).toBe('QUOTA_EXHAUSTED')
+    expect(await count('SELECT COUNT(*) AS n FROM evaluations WHERE owner_user_id = ?', OWNER)).toBe(10)
+    expect((await duplicate(setup, { includeParties: true }, crypto.randomUUID(), OTHER)).status).toBe(404)
+  })
+
+  it('creates a case from an imported draft, validated and with a server-computed origin', async () => {
+    const setup = await setupOwner(h)
+    const source = await evaluation(setup)
+    const draft = draftBody(source.draft)
+    const created = await h.request('POST', '/evaluations', { as: OWNER, body: { title: 'Imported', taskDescription: '', draft, origin: { kind: 'scenario_file' } } })
+    expect(created.status, JSON.stringify(created.json)).toBe(201)
+    const view = (await h.request('GET', `/evaluations/${created.json.data.id}`, { as: OWNER })).json.data
+    expect(view.origin).toEqual({ kind: 'scenario_file', fromEvaluationId: null, fromRunId: null, scenarioHash: source.draftScenarioHash, sourceDeleted: false })
+    expect(view.draftScenarioHash).toBe(source.draftScenarioHash)
+    // Unknown fields, an origin without a draft, and an over-cap draft are refused; nothing is created.
+    const before = await count('SELECT COUNT(*) AS n FROM evaluations')
+    expect((await h.request('POST', '/evaluations', { as: OWNER, body: { title: 'x', taskDescription: '', draft: { ...draft, secret: 1 } } })).status).toBe(422)
+    expect((await h.request('POST', '/evaluations', { as: OWNER, body: { title: 'x', taskDescription: '', origin: { kind: 'scenario_file' } } })).status).toBe(422)
+    expect((await h.request('POST', '/evaluations', { as: OWNER, body: { title: 'x', taskDescription: '', draft, origin: { kind: 'duplicate' } } })).status).toBe(422)
+    expect(await count('SELECT COUNT(*) AS n FROM evaluations')).toBe(before)
+  })
+
+  it('exports a scenario file without ids, keys or answers; from a hearing it matches that snapshot', async () => {
+    const setup = await setupImportedCase()
+    const draft = (await evaluation(setup)).draft
+    draft.configurations.push({ key: crypto.randomUUID(), label: 'Model party', modelKey: 'openai-gpt-6-luna', systemPrompt: 'CONFIDENTIAL PROMPT', maxOutputTokens: 512 })
+    await saveDraft(setup, draft)
+    const runId = await hearAndUnseal(setup, { credentialIdsByProvider: { openai: setup.openaiKeyId } })
+    const view = await evaluation(setup)
+    const res = await h.request('GET', `/evaluations/${setup.evaluationId}/scenario?includeParties=false`, { as: OWNER })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Disposition')).toMatch(/attachment; filename="MC-[0-9A-F]{4}-[0-9A-F]{4}-scenario\.json"/)
+    const file = res.json.data
+    expect(file).toMatchObject({ format: 'model-court-scenario', formatVersion: 1, scenarioHashVersion: 'scenario-v1', scenarioHash: view.draftScenarioHash, rubricVersion: 'reference-qa-v1', messageTemplateVersion: 'qa-v1' })
+    expect(file.questions).toHaveLength(5)
+    expect(file.parties).toBeUndefined()
+    const body = JSON.stringify(file)
+    const ids = [setup.evaluationId, runId, setup.openaiKeyId, setup.anthropicKeyId, OWNER, ...view.draft.cases.map((c: any) => c.key), ...view.draft.configurations.map((c: any) => c.key)]
+    for (const secret of [...ids, 'sk-', 'CONFIDENTIAL PROMPT', 'Answer 1 from A']) expect(body).not.toContain(secret)
+
+    const withParties = (await h.request('GET', `/evaluations/${setup.evaluationId}/scenario?includeParties=true&fromRunId=${runId}`, { as: OWNER })).json.data
+    expect(withParties.scenarioHash).toBe(view.runs.find((run: any) => run.id === runId).scenarioHash)
+    expect(withParties.parties).toEqual([{ label: 'Model party', modelKey: 'openai-gpt-6-luna', provider: 'openai', modelId: expect.any(String), systemPrompt: 'CONFIDENTIAL PROMPT' }])
+    expect(withParties.importedPartiesLeftOut).toBe(2)
+    expect(JSON.stringify(withParties)).not.toContain('Answer 1 from A')
+    expect((await h.request('GET', `/evaluations/${setup.evaluationId}/scenario?includeParties=yes`, { as: OWNER })).status).toBe(400)
+    expect((await h.request('GET', `/evaluations/${setup.evaluationId}/scenario`, { as: OTHER })).status).toBe(404)
+    const audit = await h.db.prepare(`SELECT metadata_json FROM audit_events WHERE event_type = 'scenario.export'`).all<{ metadata_json: string }>()
+    expect(audit.results.map((row) => JSON.parse(row.metadata_json))).toEqual([{ fromRunId: null, includeParties: false }, { fromRunId: runId, includeParties: true }])
+  })
+
+  it('keeps a copy when its source is deleted and purged, and says so', async () => {
+    const setup = await setupOwner(h)
+    const copyId = (await duplicate(setup, { includeParties: true })).json.data.id as string
+    const source = await evaluation(setup)
+    expect((await h.request('DELETE', `/evaluations/${setup.evaluationId}`, { as: OWNER, ifMatch: source.revision, body: { confirmTitle: source.title } })).status).toBe(202)
+    h.advance(48 * 3_600_000)
+    await runMaintenance(h.deps)
+    expect(await count('SELECT COUNT(*) AS n FROM evaluations WHERE id = ?', setup.evaluationId)).toBe(0)
+    const copy = (await h.request('GET', `/evaluations/${copyId}`, { as: OWNER })).json.data
+    expect(copy.origin).toMatchObject({ kind: 'duplicate', fromEvaluationId: setup.evaluationId, sourceDeleted: true })
+    expect(copy.draft.cases).toHaveLength(5)
+  })
+
+  it('backs up and restores the origin columns', async () => {
+    const setup = await setupOwner(h)
+    const copyId = (await duplicate(setup, { includeParties: true })).json.data.id as string
+    const target = await createHarness()
+    try {
+      await restoreSnapshot(target.deps, await exportSnapshot(h.deps))
+      const row = await target.db.prepare('SELECT origin_kind, origin_evaluation_id, origin_run_id, origin_scenario_hash FROM evaluations WHERE id = ?').bind(copyId).first<any>()
+      expect(row).toEqual({ origin_kind: 'duplicate', origin_evaluation_id: setup.evaluationId, origin_run_id: null, origin_scenario_hash: expect.stringMatching(/^[0-9a-f]{64}$/) })
+    } finally {
+      await target.dispose()
+    }
   })
 })

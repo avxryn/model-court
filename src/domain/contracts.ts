@@ -150,10 +150,27 @@ export type Draft = DraftInput & { schemaVersion: 1 }
 // Evaluations and runs
 // ---------------------------------------------------------------------------
 
-export const createEvaluationSchema = z.strictObject({
-  title: text(LIMITS.evaluationTitle, 'Title'),
-  taskDescription: text(LIMITS.taskDescription, 'Task description'),
-})
+export const createEvaluationSchema = z
+  .strictObject({
+    title: text(LIMITS.evaluationTitle, 'Title'),
+    taskDescription: text(LIMITS.taskDescription, 'Task description'),
+    /** Spec 02 (D-71): start from this draft (an imported scenario file or record) instead of the example. */
+    draft: draftInputSchema.optional(),
+    /** Where the draft came from; the server computes the origin's scenario hash itself. */
+    origin: z.strictObject({ kind: z.enum(['scenario_file', 'certified_record']) }).optional(),
+  })
+  .refine((value) => value.origin === undefined || value.draft !== undefined, { message: 'An origin needs a draft', path: ['origin'] })
+
+/** Spec 02 (D-71): copy a case's draft, or one hearing's frozen setup, into a new case. */
+export const duplicateEvaluationSchema = z
+  .strictObject({
+    title: text(LIMITS.evaluationTitle, 'Title'),
+    fromRunId: uuid.optional(),
+    includeParties: z.boolean(),
+    /** Same meaning as `confirmMayShareWithJurors`: the copied answers will be shown to the copy's jurors. */
+    includeImportedAnswers: z.literal(true).optional(),
+  })
+  .refine((value) => !value.includeImportedAnswers || value.includeParties, { message: 'Imported answers come with their parties', path: ['includeImportedAnswers'] })
 
 export const deleteEvaluationSchema = z.strictObject({ confirmTitle: z.string().max(200) })
 

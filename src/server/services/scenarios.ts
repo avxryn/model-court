@@ -5,15 +5,19 @@
  */
 
 import type { z } from 'zod'
-import { draftInputSchema, isImported, type Configuration, type Draft, type restoreDraftSchema } from '../../domain/contracts'
-import { diffIsEmpty, diffParties, diffScenarios, partyFingerprint, questionHashes, scenarioHash, scenarioSourceOfDraft, scenarioSourceOfSnapshot, type PartyChange, type ScenarioDiff } from '../../domain/scenario'
+import { sha256Hex } from '../../domain/canonical'
+import { draftInputSchema, isImported, type Configuration, type Draft, type duplicateEvaluationSchema, type restoreDraftSchema } from '../../domain/contracts'
+import { defaultModelKeys, makeExampleDraft } from '../../domain/example'
+import { LIMITS } from '../../domain/limits'
+import { SCENARIO_HASH_VERSION, diffIsEmpty, diffParties, diffScenarios, partyFingerprint, questionHashes, scenarioHash, scenarioSourceOfDraft, scenarioSourceOfSnapshot, type PartyChange, type ScenarioDiff } from '../../domain/scenario'
 import { isImportedSnapshot, type RunSnapshot, type SnapshotConfiguration } from '../../domain/snapshot'
 import type { RunStatus } from '../../domain/transitions'
-import { loadEvaluationAccess } from '../access'
+import { loadEvaluationAccess, type EvaluationRow } from '../access'
 import { auditStatement, cond, GuardFailed, runGuarded } from '../db/sql'
 import type { Deps } from '../deps'
 import { ApiError, notFound, revisionConflict } from '../http'
-import { configurationCapError, parseStoredDraft, samplesCapError } from './evaluations'
+import { idempotent, requestHash } from '../receipts'
+import { caseQuotaError, configurationCapError, parseStoredDraft, samplesCapError } from './evaluations'
 import { parseSnapshot } from './runs'
 
 export interface HearingPartyView {
@@ -190,4 +194,157 @@ export async function loadDraftImports(db: D1Database, evaluationId: string) {
       .bind(evaluationId)
       .all<{ configuration_key: string; case_key: string; text: string; text_sha256: string; byte_length: number; updated_at: number }>()
   ).results.map((row) => ({ configurationKey: row.configuration_key, caseKey: row.case_key, text: row.text, sha256: row.text_sha256, byteLength: row.byte_length, updatedAt: row.updated_at }))
+}
+
+// ---------------------------------------------------------------------------
+// Copies and scenario files (D-71)
+// ---------------------------------------------------------------------------
+
+/** The owner view's origin line and live copy count. A duplicate's source may since be deleted or purged. */
+export async function caseOrigin(db: D1Database, evaluation: EvaluationRow) {
+  const copies = await db.prepare('SELECT COUNT(*) AS n FROM evaluations WHERE origin_evaluation_id = ? AND owner_user_id = ? AND deleted_at IS NULL').bind(evaluation.id, evaluation.owner_user_id).first<{ n: number }>()
+  let origin: { kind: NonNullable<EvaluationRow['origin_kind']>; fromEvaluationId: string | null; fromRunId: string | null; scenarioHash: string | null; sourceDeleted: boolean } | null = null
+  if (evaluation.origin_kind) {
+    const source = evaluation.origin_evaluation_id
+      ? await db.prepare('SELECT 1 AS ok FROM evaluations WHERE id = ? AND owner_user_id = ? AND deleted_at IS NULL').bind(evaluation.origin_evaluation_id, evaluation.owner_user_id).first()
+      : null
+    origin = {
+      kind: evaluation.origin_kind,
+      fromEvaluationId: evaluation.origin_evaluation_id ?? null,
+      fromRunId: evaluation.origin_run_id ?? null,
+      scenarioHash: evaluation.origin_scenario_hash ?? null,
+      sourceDeleted: evaluation.origin_kind === 'duplicate' && !source,
+    }
+  }
+  return { origin, copyCount: Number(copies?.n ?? 0) }
+}
+
+/** The setup a copy or export starts from: the draft, or one hearing's frozen snapshot stripped back to a draft. */
+async function sourceSetup(db: D1Database, evaluation: EvaluationRow, fromRunId: string | undefined) {
+  const draft = parseStoredDraft(evaluation)
+  if (!fromRunId) {
+    const imports = (await db.prepare('SELECT configuration_key, case_key, text, text_sha256, byte_length FROM evaluation_imports WHERE evaluation_id = ?').bind(evaluation.id).all<ImportRow>()).results
+    return { draft, imports, snapshot: null as RunSnapshot | null }
+  }
+  const run = await loadCaseRun(db, evaluation.id, fromRunId)
+  const snapshot = parseSnapshot(run.snapshot_json)
+  const restored = restoredDraftInput(draft, snapshot, { questions: true, parties: true })
+  const parsed = draftInputSchema.safeParse(restored)
+  if (!parsed.success) throw new ApiError(422, 'VALIDATION_FAILED', 'This hearing’s setup cannot be copied into a draft as it is.')
+  const imports = (await db.prepare('SELECT configuration_key, case_key, text, text_sha256, byte_length FROM run_imported_outputs WHERE run_id = ?').bind(run.id).all<ImportRow>()).results
+  return { draft: { schemaVersion: 1 as const, ...parsed.data }, imports, snapshot }
+}
+
+interface ImportRow {
+  configuration_key: string
+  case_key: string
+  text: string
+  text_sha256: string
+  byte_length: number
+}
+
+export async function duplicateEvaluation(deps: Deps, userId: string, evaluationId: string, input: z.output<typeof duplicateEvaluationSchema>, key: string, requestId: string) {
+  const evaluation = await loadOwnedEvaluation(deps.db, evaluationId, userId)
+  const operation = `evaluation.duplicate:${evaluationId}`
+  const result = await idempotent(deps, { actorUserId: userId, idempotencyKey: key, operation, requestHash: await requestHash(operation, input) }, async (receipt) => {
+    const db = deps.db
+    const source = await sourceSetup(db, evaluation, input.fromRunId)
+    // Fresh keys for every question and party; a key map carries imported answers across.
+    const caseKeys = new Map(source.draft.cases.map((testCase) => [testCase.key, deps.newId()]))
+    const partyKeys = new Map(source.draft.configurations.map((party) => [party.key, deps.newId()]))
+    const cases = source.draft.cases.map((testCase) => ({ ...testCase, key: caseKeys.get(testCase.key)! }))
+    const { schemaVersion: _version, ...rest } = source.draft as Draft & Record<string, unknown>
+    let next: Record<string, unknown> = { ...rest, cases }
+    if (input.includeParties) {
+      next.configurations = source.draft.configurations.map((party) => ({ ...party, key: partyKeys.get(party.key)! }))
+    } else {
+      const example = makeExampleDraft(deps.newId, defaultModelKeys(deps.routes))
+      next = { ...next, comparisonMode: example.comparisonMode, configurations: example.configurations }
+      delete next.samplesPerAnswer
+    }
+    const parsed = draftInputSchema.safeParse(next)
+    if (!parsed.success) throw new ApiError(422, 'VALIDATION_FAILED', 'This setup cannot be copied into a new case as it is.')
+    const capError = configurationCapError(deps, parsed.data.configurations.length) ?? samplesCapError(deps, parsed.data.samplesPerAnswer)
+    if (capError) throw capError
+    const draft: Draft = { schemaVersion: 1, ...parsed.data }
+    const imported = new Set(draft.configurations.filter(isImported).map((party) => party.key))
+    const copiedImports = input.includeImportedAnswers
+      ? source.imports
+          .map((row) => ({ ...row, configuration_key: partyKeys.get(row.configuration_key), case_key: caseKeys.get(row.case_key) }))
+          .filter((row): row is ImportRow => !!row.configuration_key && !!row.case_key && imported.has(row.configuration_key))
+      : []
+    // The copied text must still be what was hashed.
+    for (const row of copiedImports) if ((await sha256Hex(row.text)) !== row.text_sha256) throw new ApiError(500, 'INTERNAL', 'A copied answer did not match its fingerprint.')
+    const now = deps.now()
+    const id = deps.newId()
+    const scenario = await scenarioHash(scenarioSourceOfDraft(draft))
+    const response = { status: 201 as const, data: { id, revision: 1 } }
+    try {
+      await runGuarded(db, 'evaluation.duplicate', cond('(SELECT COUNT(*) FROM evaluations WHERE owner_user_id = ? AND deleted_at IS NULL) < ?', userId, LIMITS.ownEvaluationsPerUser), [
+        receipt(response, id),
+        db
+          .prepare(
+            `INSERT INTO evaluations (id, owner_user_id, title, task_description, draft_json, revision, created_at, updated_at, origin_kind, origin_evaluation_id, origin_run_id, origin_scenario_hash)
+             VALUES (?, ?, ?, ?, ?, 1, ?, ?, 'duplicate', ?, ?, ?)`,
+          )
+          .bind(id, userId, input.title, evaluation.task_description, JSON.stringify(draft), now, now, evaluationId, input.fromRunId ?? null, scenario),
+        ...copiedImports.map((row) =>
+          db
+            .prepare('INSERT INTO evaluation_imports (evaluation_id, configuration_key, case_key, text, text_sha256, byte_length, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+            .bind(id, row.configuration_key, row.case_key, row.text, row.text_sha256, row.byte_length, now, now),
+        ),
+        auditStatement(db, { eventType: 'evaluation.duplicate', requestId, outcome: 'ok', actorUserId: userId, evaluationId: id, metadata: { fromEvaluationId: evaluationId, fromRunId: input.fromRunId ?? null, includeParties: input.includeParties, importedAnswers: copiedImports.length } }, now),
+      ])
+    } catch (error) {
+      if (error instanceof GuardFailed) throw caseQuotaError()
+      throw error
+    }
+    return response
+  })
+  return result
+}
+
+/**
+ * A scenario file (spec 02 §6.5): questions, rubric and template, and the parties only when asked.
+ * Never any id, key, credential, imported answer, testimony, rating or judgment.
+ */
+export async function exportScenario(deps: Deps, userId: string, evaluationId: string, fromRunId: string | undefined, includeParties: boolean, requestId: string) {
+  const evaluation = await loadOwnedEvaluation(deps.db, evaluationId, userId)
+  const source = await sourceSetup(deps.db, evaluation, fromRunId)
+  const scenarioSource = source.snapshot ? scenarioSourceOfSnapshot(source.snapshot) : scenarioSourceOfDraft(source.draft)
+  const kit = (source.snapshot ?? source.draft) as unknown as { kit?: unknown }
+  const models = source.draft.configurations.filter((party) => !isImported(party)) as Array<Extract<Configuration, { modelKey: string }>>
+  const leftOut = source.draft.configurations.length - models.length
+  const file = {
+    format: 'model-court-scenario' as const,
+    formatVersion: 1 as const,
+    exportedAt: new Date(deps.now()).toISOString(),
+    scenarioHashVersion: SCENARIO_HASH_VERSION,
+    scenarioHash: await scenarioHash(scenarioSource),
+    title: evaluation.title,
+    taskDescription: evaluation.task_description,
+    rubricVersion: scenarioSource.rubricVersion,
+    messageTemplateVersion: scenarioSource.messageTemplateVersion,
+    ...(kit.kit !== undefined ? { kit: kit.kit } : {}),
+    // Every question field but the key, so fields a task kit adds travel too.
+    questions: source.draft.cases.map(({ key: _key, ...question }) => question),
+    ...(includeParties
+      ? {
+          comparisonMode: source.draft.comparisonMode,
+          parties: models.map((party) => {
+            const route = deps.routes.find((r) => r.key === party.modelKey)
+            return { label: party.label, modelKey: party.modelKey, provider: route?.provider ?? '', modelId: route?.modelId ?? '', systemPrompt: party.systemPrompt }
+          }),
+          ...(leftOut > 0 ? { importedPartiesLeftOut: leftOut } : {}),
+        }
+      : {}),
+  }
+  await auditStatement(deps.db, { eventType: 'scenario.export', requestId, outcome: 'ok', actorUserId: userId, evaluationId, ...(fromRunId ? { runId: fromRunId } : {}), metadata: { fromRunId: fromRunId ?? null, includeParties } }, deps.now()).run()
+  return { file, filename: `${docketOf(evaluationId)}-scenario.json` }
+}
+
+/** Same docket number the UI shows (src/lib/court.ts). */
+function docketOf(evaluationId: string): string {
+  const hex = evaluationId.replace(/[^0-9a-f]/gi, '').toUpperCase().padEnd(8, '0')
+  return `MC-${hex.slice(0, 4)}-${hex.slice(4, 8)}`
 }

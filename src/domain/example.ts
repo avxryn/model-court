@@ -5,6 +5,7 @@
 
 import type { DraftInput } from './contracts'
 import { LIMITS } from './limits'
+import { isRouteEnabled, MODEL_ROUTES, type ModelRoute } from './registry'
 
 export const EXAMPLE_POLICY =
   'Returns are accepted within 30 days with a receipt. Final-sale items cannot be returned. Damaged shipments must be reported within seven days. No exchange procedure is specified.'
@@ -58,4 +59,22 @@ export function makeExampleDraft(newId: () => string, modelKeys: readonly [strin
       maxOutputTokens: LIMITS.maxOutputTokens,
     })),
   }
+}
+
+/** A new case starts on the low-cost pair when it can run; registry order would put the priciest model first (D-48). */
+const PREFERRED_DEFAULTS: Record<ModelRoute['provider'], string> = { openai: 'openai-gpt-6-luna', anthropic: 'anthropic-claude-haiku-5-5' }
+
+export function defaultModelKeys(routes: readonly ModelRoute[]): [string, string] {
+  const pick = (provider: ModelRoute['provider']) => {
+    const ofProvider = routes.filter((route) => route.provider === provider)
+    const preferred = ofProvider.find((route) => route.key === PREFERRED_DEFAULTS[provider])
+    return (
+      (preferred && isRouteEnabled(preferred) ? preferred : undefined) ??
+      ofProvider.find(isRouteEnabled) ??
+      preferred ??
+      ofProvider[0] ??
+      MODEL_ROUTES.find((route) => route.provider === provider)!
+    ).key
+  }
+  return [pick('openai'), pick('anthropic')]
 }
