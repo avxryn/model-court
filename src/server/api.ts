@@ -26,11 +26,12 @@ import { isRouteEnabled, PROVIDER_NAMES, PROVIDER_REGISTRY_VERSION } from '../do
 import { hitRateLimit } from './db/sql'
 import type { Deps, VerifiedCaller } from './deps'
 import { ApiError, errorResponse, idempotencyKey, ifMatchRevision, noContent, ok, pathId, readBody, requestIdOf } from './http'
-import { listCredentials, removeCredential, renewCredential, saveCredential } from './services/credentials'
+import { checkCredential, listCredentials, removeCredential, renewCredential, saveCredential } from './services/credentials'
 import { createEvaluation, deleteEvaluation, deleteImports, getEvaluation, listEvaluations, putImports, saveDraft } from './services/evaluations'
 import { exportRun, parseExportFormat } from './services/export'
 import { getResults, recordVerdict } from './services/results'
 import { createInvite, fileAndUnseal, getReview, redeemInvite, reveal, revokeInvite, revokeSession, saveReview, submitReview } from './services/reviews'
+import { getQuota } from './services/quota'
 import { cancelRun, getRun, openReview, retryGenerations, startRun } from './services/runs'
 import { cancelSpecialMaster, getSpecialMaster, startSpecialMaster } from './services/special-master'
 import {
@@ -202,10 +203,18 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     await readBody(c, emptySchema)
     return ok(c, await renewCredential(deps(c), user(c), pathId(c, 'id'), ifMatch, rid(c)))
   })
+  // D-57: a free list-models request with the stored key; the response carries only the result.
+  api.post('/credentials/:id/check', async (c) => {
+    await readBody(c, emptySchema)
+    return ok(c, await checkCredential(deps(c), user(c), pathId(c, 'id'), rid(c)))
+  })
   api.delete('/credentials/:id', async (c) => {
     await removeCredential(deps(c), user(c), pathId(c, 'id'), optionalIfMatch(c), rid(c))
     return noContent(c)
   })
+
+  // Provider-call caps (D-57): read-only counts for the caller and the deployment.
+  api.get('/quota', async (c) => ok(c, await getQuota(deps(c), user(c))))
 
   // Evaluations -------------------------------------------------------------
   api.get('/evaluations', async (c) => ok(c, await listEvaluations(deps(c), user(c), c.req.query('cursor'), Number(c.req.query('limit') ?? 20))))

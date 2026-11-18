@@ -5,14 +5,18 @@
  * ESLint boundary rule permits exactly this (allowTypeImports).
  */
 
-import type { CredentialMetadata } from '@/server/services/credentials'
+import type { QuotaStanding } from '@/domain/quota'
+import type { CredentialMetadata, KeyCheckView } from '@/server/services/credentials'
 import type { EvaluationSummary, getEvaluation } from '@/server/services/evaluations'
 import type { getResults } from '@/server/services/results'
 import type { AnonymousReview } from '@/server/services/reviews'
 import type { getRun } from '@/server/services/runs'
 import type { getSpecialMaster } from '@/server/services/special-master'
 
-export type { AnonymousReview, CredentialMetadata, EvaluationSummary }
+export type { AnonymousReview, CredentialMetadata, EvaluationSummary, KeyCheckView }
+
+/** GET /quota (D-57): remaining provider calls for the caller and the deployment. */
+export type QuotaView = QuotaStanding
 
 type Resolved<F extends (...args: never[]) => unknown> = Awaited<ReturnType<F>>
 

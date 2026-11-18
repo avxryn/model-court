@@ -1,7 +1,7 @@
 /** Plain-language text for generation error codes (spec §9). */
 
 export const ERROR_TEXT: Record<string, string> = {
-  PROVIDER_AUTH_FAILED: 'The provider rejected the API key. Replace the key in Settings.',
+  PROVIDER_AUTH_FAILED: 'The provider rejected the API key. Replace the key in Settings, then retry here with the new key.',
   PROVIDER_ACCESS_DENIED: 'The key does not have access to this model.',
   PROVIDER_MODEL_UNAVAILABLE: 'The model is not available to this key.',
   PROVIDER_QUOTA_EXHAUSTED: 'The provider account is out of credit or quota.',
@@ -17,8 +17,8 @@ export const ERROR_TEXT: Record<string, string> = {
   INVALID_PROVIDER_RESPONSE: 'The provider returned a response Model Court could not read.',
   OUTPUT_TOO_LARGE: 'The response exceeded the 16 KiB storage limit and was not kept.',
   EMPTY_OUTPUT: 'The provider returned no text.',
-  CREDENTIAL_REVOKED: 'The key pinned to this run was removed or expired before this generation ran. Nothing was sent.',
-  CREDENTIAL_EXPIRED: 'The key pinned to this run expired before this generation ran. Nothing was sent. Save a new key and start a new run.',
+  CREDENTIAL_REVOKED: 'The key pinned to this hearing was removed or expired before this generation ran. Nothing was sent. Retry with your current key.',
+  CREDENTIAL_EXPIRED: 'The key pinned to this hearing expired before this generation ran. Nothing was sent. Save a new key in Settings, then retry with it.',
   CREDENTIAL_UNAVAILABLE: 'The saved key could not be used. Nothing was sent.',
   CANCELED: 'Canceled by the judge.',
   DELETED: 'The evaluation was deleted.',

@@ -168,6 +168,11 @@ export const startSpecialMasterSchema = z.strictObject({
 export const retrySchema = z.strictObject({
   generationIds: z.array(uuid).min(1).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun),
   acknowledgePossiblePriorCharge: z.literal(true),
+  /**
+   * D-57: the judge's current key for a provider whose pinned key was removed or
+   * expired. The retry re-pins the hearing to it; a still-usable pin is never replaced.
+   */
+  credentialIdsByProvider: z.partialRecord(providerSchema, uuid).optional(),
 })
 
 export const cancelRunSchema = z.strictObject({ reason: z.string().max(500).optional() })

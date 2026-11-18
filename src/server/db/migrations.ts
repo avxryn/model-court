@@ -410,6 +410,25 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX juror_devices_by_principal ON juror_devices(principal_id)`,
     ],
   },
+  {
+    // D-57: "Check key" (a free list-models call) and re-pinning a hearing to the judge's current key.
+    id: '0006_key_checks_and_repin',
+    statements: [
+      `ALTER TABLE provider_credentials ADD COLUMN last_checked_at INTEGER`,
+      `ALTER TABLE provider_credentials ADD COLUMN last_check_result TEXT CHECK (last_check_result IS NULL OR last_check_result IN ('valid','invalid','restricted','unreachable'))`,
+      // The pin stays immutable except for one move: an unfinished run's provider slot may point at
+      // another active key of the same owner and provider. The service also requires the old key to be
+      // removed or expired; the trigger cannot read the request clock, so it enforces the rest.
+      `DROP TRIGGER run_credentials_immutable`,
+      `CREATE TRIGGER run_credentials_immutable BEFORE UPDATE ON run_credentials
+       FOR EACH ROW WHEN NEW.run_id IS NOT OLD.run_id OR NEW.provider IS NOT OLD.provider
+         OR NOT EXISTS (SELECT 1 FROM runs r WHERE r.id = NEW.run_id AND r.status IN ('generating','ready'))
+         OR NOT EXISTS (
+           SELECT 1 FROM provider_credentials c JOIN runs r ON r.id = NEW.run_id
+           WHERE c.id = NEW.credential_id AND c.owner_user_id = r.owner_user_id AND c.provider = NEW.provider AND c.status = 'active')
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_RUN_CREDENTIALS'); END`,
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`

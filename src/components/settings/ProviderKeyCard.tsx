@@ -3,6 +3,8 @@
  * component's memory until the save request; it is cleared on success,
  * cancel, and unmount, never autosaved, and never displayed again. The
  * advice on choosing a key sits in the form, where it is acted on.
+ * "Check key" (D-57) asks the server to make the provider's free list-models
+ * call with the stored key; only the result comes back.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -18,8 +20,35 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input'
 import { PROVIDER_NAMES, type ProviderId } from '@/domain/registry'
 import { api, describeError, newIntentKey } from '@/lib/api-client'
-import type { CredentialMetadata } from '@/lib/dto'
+import type { CredentialMetadata, KeyCheckView } from '@/lib/dto'
 import { formatTime } from '@/lib/format'
+
+type CheckResult = NonNullable<CredentialMetadata['lastCheckResult']>
+
+const CHECK_BADGE: Record<CheckResult, { label: string; tone: 'good' | 'warn' | 'bad' }> = {
+  valid: { label: 'Key works', tone: 'good' },
+  restricted: { label: 'Key limited', tone: 'warn' },
+  invalid: { label: 'Key rejected', tone: 'bad' },
+  unreachable: { label: 'Check incomplete', tone: 'warn' },
+}
+
+/** What the check found, in words the judge can act on. Never provider text. */
+export function checkMessage(name: string, view: Pick<KeyCheckView, 'result' | 'reason'>): string {
+  switch (view.result) {
+    case 'valid':
+      return `${name} accepted the key. Balance and model access are confirmed on the first call.`
+    case 'restricted':
+      return `${name} recognised the key but would not list models with it. It may still work if it is limited to generation; if a hearing fails, replace it.`
+    case 'invalid':
+      return `${name} rejected the key. Replace it with a working key before you start a hearing.`
+    case 'unreachable':
+      return view.reason === 'RATE_LIMITED' ? `${name} is rate-limiting requests right now. Try the check again shortly.` : `Could not reach ${name} to check the key. Try again shortly.`
+  }
+}
+
+export async function runKeyCheck(credentialId: string): Promise<KeyCheckView> {
+  return api<KeyCheckView>('POST', `/credentials/${credentialId}/check`, { body: {} })
+}
 
 export function ProviderKeyCard({ provider, current, writesEnabled, ttlDays, onChanged }: { provider: ProviderId; current: CredentialMetadata | null; writesEnabled: boolean; ttlDays: number; onChanged: () => Promise<void> }) {
   const [editing, setEditing] = useState(false)
@@ -42,6 +71,19 @@ export function ProviderKeyCard({ provider, current, writesEnabled, ttlDays, onC
       const renewed = await api<CredentialMetadata>('POST', `/credentials/${key.id}/renew`, { body: {}, revision: key.revision })
       return `${name} key renewed until ${formatTime(renewed.expiresAt)}`
     })
+  const check = async (key: CredentialMetadata) => {
+    setBusy(true)
+    try {
+      const view = await runKeyCheck(key.id)
+      if (view.result === 'valid') toast.success(checkMessage(name, view))
+      else toast.warning(checkMessage(name, view))
+    } catch (caught) {
+      toast.error(describeError(caught))
+    } finally {
+      setBusy(false)
+      await onChanged()
+    }
+  }
   const remove = (key: CredentialMetadata) =>
     run(async () => {
       await api('DELETE', `/credentials/${key.id}`, { revision: key.revision })
@@ -67,6 +109,16 @@ export function ProviderKeyCard({ provider, current, writesEnabled, ttlDays, onC
               <span className="basis-full text-xs">
                 Expires {formatTime(current.expiresAt)} · {current.lastUsedAt ? `last used ${formatTime(current.lastUsedAt)}` : 'not used yet'}
               </span>
+              <span className="flex basis-full flex-wrap items-center gap-2 text-xs">
+                {current.lastCheckResult && current.lastCheckedAt ? (
+                  <>
+                    <StatusBadge status={current.lastCheckResult} label={CHECK_BADGE[current.lastCheckResult].label} tone={CHECK_BADGE[current.lastCheckResult].tone} />
+                    <span>checked {formatTime(current.lastCheckedAt)}</span>
+                  </>
+                ) : (
+                  <span>Not checked yet</span>
+                )}
+              </span>
             </span>
           ) : (
             'No key saved. Needed to run comparisons that use this provider.'
@@ -90,6 +142,11 @@ export function ProviderKeyCard({ provider, current, writesEnabled, ttlDays, onC
           <Button variant={current ? 'outline' : 'default'} disabled={!writesEnabled} onClick={() => setEditing(true)}>
             {current ? 'Replace key' : 'Add key'}
           </Button>
+          {current && (
+            <Button variant="outline" disabled={busy} onClick={() => void check(current)}>
+              Check key
+            </Button>
+          )}
           {current && (
             <Button variant="outline" disabled={busy} onClick={() => void renew(current)}>
               Renew
@@ -125,6 +182,7 @@ function KeyForm({ provider, current, ttlDays, onDone }: { provider: ProviderId;
   const [label, setLabel] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [consent, setConsent] = useState(false)
+  const [checkAfterSave, setCheckAfterSave] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const intent = useRef(newIntentKey())
@@ -138,13 +196,24 @@ function KeyForm({ provider, current, ttlDays, onDone }: { provider: ProviderId;
     setBusy(true)
     setError(null)
     try {
-      await api('POST', '/credentials', {
+      const saved = await api<CredentialMetadata>('POST', '/credentials', {
         body: { provider, label: label.trim() || `${name} key`, apiKey, consentToStorage: true, ...(current ? { replacesCredentialId: current.id } : {}) },
         revision: current?.revision,
         idempotencyKey: intent.current,
       })
       setApiKey('')
-      toast.success(`${name} key saved. Access is checked on the first run.`)
+      if (checkAfterSave) {
+        // The key is already saved; a failed or negative check only changes the message.
+        try {
+          const view = await runKeyCheck(saved.id)
+          if (view.result === 'valid') toast.success(`${name} key saved. ${checkMessage(name, view)}`)
+          else toast.warning(`${name} key saved. ${checkMessage(name, view)}`)
+        } catch (caught) {
+          toast.warning(`${name} key saved, but it could not be checked: ${describeError(caught)}`)
+        }
+      } else {
+        toast.success(`${name} key saved. Use Check key to test it before a hearing.`)
+      }
       await onDone(true)
     } catch (caught) {
       setError(describeError(caught))
@@ -179,8 +248,14 @@ function KeyForm({ provider, current, ttlDays, onDone }: { provider: ProviderId;
         <FieldLabel htmlFor={keyId}>API key</FieldLabel>
         <Input id={keyId} type="password" value={apiKey} autoComplete="off" spellCheck={false} data-1p-ignore data-lpignore="true" aria-describedby={`${keyId}-help`} onChange={(e) => setApiKey(e.target.value)} />
         <FieldDescription id={`${keyId}-help`} className="text-xs">
-          Saving does not call {name}. Access and balance are checked on your first run.
+          Saving alone does not contact {name}. Check key asks {name} to list its models with this key, which is free and generates nothing. Balance and model access are confirmed on the first hearing call.
         </FieldDescription>
+      </Field>
+      <Field orientation="horizontal" className="items-start">
+        <Checkbox id={`${provider}-check`} checked={checkAfterSave} onCheckedChange={(checked) => setCheckAfterSave(checked === true)} />
+        <FieldLabel htmlFor={`${provider}-check`} className="font-normal">
+          Check the key with {name} after saving
+        </FieldLabel>
       </Field>
       <Field orientation="horizontal" className="items-start">
         <Checkbox id={`${provider}-consent`} checked={consent} onCheckedChange={(checked) => setConsent(checked === true)} />
@@ -196,7 +271,7 @@ function KeyForm({ provider, current, ttlDays, onDone }: { provider: ProviderId;
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Replace your {name} key?</AlertDialogTitle>
-                <AlertDialogDescription>The old key is removed from Model Court immediately. Runs that were pinned to it will not adopt the new key; unfinished work on them stops and needs a new run.</AlertDialogDescription>
+                <AlertDialogDescription>The old key is removed from Model Court immediately. Unfinished work on hearings that use it stops; you can retry that work on the hearing page with the new key.</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>

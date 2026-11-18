@@ -4,13 +4,16 @@ import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { AllowanceRows } from '@/components/settings/CallAllowance'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import type { DraftInput } from '@/domain/contracts'
 import { LIMITS } from '@/domain/limits'
+import { quotaBlock } from '@/domain/quota'
 import { PROVIDER_NAMES, type ProviderId } from '@/domain/registry'
 import { generatedParties } from '@/domain/snapshot'
 import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
-import type { CredentialMetadata } from '@/lib/dto'
+import type { CredentialMetadata, QuotaView } from '@/lib/dto'
+import { useApi } from '@/lib/use-api'
 
 /** Freeze the saved draft into a hearing; consent to provider processing and charges when anything is generated. */
 export function StartHearingDialog({ evaluationId, revision, draft, providers, keys, disabled }: { evaluationId: string; revision: number; draft: DraftInput; providers: ProviderId[]; keys: CredentialMetadata[]; disabled: boolean }) {
@@ -26,6 +29,9 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
   // Imported-only hearings send nothing to a provider and charge nothing, so there is nothing to consent to.
   const needsConsent = calls > 0
   const providerNames = providers.map((p) => PROVIDER_NAMES[p]).join(' and ')
+  // D-57: show what is left of the call caps, and refuse a hearing that cannot fit. The server enforces them too.
+  const quota = useApi<QuotaView>(open && needsConsent ? '/quota' : null)
+  const block = quota.data ? quotaBlock(calls, quota.data) : null
 
   const start = async () => {
     setBusy(true)
@@ -41,6 +47,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
     } catch (caught) {
       setError(describeError(caught))
       if (!(caught instanceof ApiClientError && caught.status === 0)) intent.current = newIntentKey()
+      if (caught instanceof ApiClientError && caught.code === 'QUOTA_EXHAUSTED') void quota.reload()
     } finally {
       setBusy(false)
     }
@@ -88,9 +95,22 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
               <dd>{providerNames}</dd>
               <dt className="text-muted-foreground">Output limit</dt>
               <dd>{LIMITS.maxOutputTokens} tokens per response</dd>
+              {quota.data ? (
+                <AllowanceRows quota={quota.data} />
+              ) : (
+                <>
+                  <dt className="text-muted-foreground">Calls left</dt>
+                  <dd className="text-muted-foreground">{quota.error ? 'Could not load the call limits. They are still checked when you start.' : 'Loading…'}</dd>
+                </>
+              )}
             </>
           )}
         </dl>
+        {block && (
+          <p className="rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive" role="alert" id="start-blocked">
+            {block.message}
+          </p>
+        )}
         {needsConsent ? (
           <div className="space-y-3 rounded-md bg-slip p-4">
             <Field orientation="horizontal" className="items-start">
@@ -111,7 +131,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
         )}
         {error && <FieldError>{error}</FieldError>}
         <DialogFooter>
-          <Button disabled={(needsConsent && (!consent || !charges)) || busy} onClick={() => void start()}>
+          <Button disabled={(needsConsent && (!consent || !charges || block !== null)) || busy} aria-describedby={block ? 'start-blocked' : undefined} onClick={() => void start()}>
             {busy ? 'Starting…' : calls > 0 ? `Start ${calls} calls` : 'Start the hearing'}
           </Button>
         </DialogFooter>
