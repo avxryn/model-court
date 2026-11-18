@@ -18,7 +18,7 @@
     "undeploy": "deepspace app undeploy",
     "add": "deepspace add",
     "test": "deepspace test run",
-    "test:smoke": "deepspace test run smoke --port 5181",
+    "test:smoke": "deepspace test run smoke --port 5197",
     "test:api": "deepspace test run api",
     "test:e2e": "deepspace test run e2e",
     "test:unit": "vitest run --passWithNoTests",
