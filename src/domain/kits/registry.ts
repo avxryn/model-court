@@ -10,10 +10,12 @@
 import { z } from 'zod'
 import type { CaseInput } from '../contracts'
 import { GENERAL_V1 } from './general'
+import { SUMMARIZATION_V1, summarizationFieldsSchema, summarizationSettingsSchema } from './summarization'
 import type { InputKind, KitReadinessIssue, TaskKit } from './types'
 
 export const KITS = {
   'general-v1': GENERAL_V1,
+  'summarization-v1': SUMMARIZATION_V1,
 } as const satisfies Record<string, TaskKit<any, any>>
 
 export type KitVersion = keyof typeof KITS
@@ -45,10 +47,13 @@ export function kitVersionOf(holder: { kit?: { version: string } | undefined }):
  * The chosen kit and its settings on a draft, discriminated on `version`. general-v1 is chosen by
  * omission and is not a member. Kit versions append their members here.
  */
-export const kitChoiceSchema = z.never()
+export const kitChoiceSchema = z.discriminatedUnion('version', [
+  z.strictObject({ version: z.literal('summarization-v1'), settings: summarizationSettingsSchema }),
+  // classification-v1 (step 4) and items 4–6 append their versions here.
+])
 
 /** A question's kit fields, discriminated on `kind` (= family), so a v2 kit of a family reuses the shape. */
-export const kitFieldsSchema = z.never()
+export const kitFieldsSchema = z.discriminatedUnion('kind', [summarizationFieldsSchema])
 
 /** A question with earlier turns is a conversation; otherwise it is plain text. */
 export function inputKindOf(testCase: Pick<CaseInput, 'messages'>): InputKind {

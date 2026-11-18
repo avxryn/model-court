@@ -46,19 +46,26 @@ describe('general-v1 is exactly today', () => {
     // Snapshots from before D-39 recorded no template and used qa-v1.
     expect(buildKitRequest({}, 'S', draft.cases[0])).toEqual(buildConversation('qa-v1', 'S', draft.cases[0]))
     expect(buildKitRequest({ messageTemplateVersion: 'nope-v9' as never }, 'S', draft.cases[0])).toBeNull()
-    expect(Object.keys(MESSAGE_TEMPLATES).sort()).toEqual(['chat-v1', 'qa-v1'])
+    expect(Object.keys(MESSAGE_TEMPLATES)).toEqual(expect.arrayContaining(['chat-v1', 'qa-v1']))
   })
 
   it('reviewer-only fields never reach a built request (sentinel test)', () => {
     const draft = makeExampleDraft(fixedIds(), routes)
     const sentinel = 'SENTINEL-REVIEWER-ONLY'
     const testCase = { ...draft.cases[0], expectedBehavior: sentinel, title: sentinel, language: sentinel, kitFields: { kind: 'x', answer: sentinel } } as unknown as CaseInput
-    for (const version of Object.keys(MESSAGE_TEMPLATES) as Array<keyof typeof MESSAGE_TEMPLATES>) {
+    const reached = new Set<string>()
+    for (const kit of Object.values(KITS)) {
       for (const withMessages of [false, true]) {
-        const request = buildKitRequest({ messageTemplateVersion: version }, 'S', withMessages ? { ...testCase, messages: history } : testCase)
+        const prompt = withMessages ? { ...testCase, messages: history } : testCase
+        const messageTemplateVersion = kit.selectTemplate([prompt])
+        reached.add(messageTemplateVersion)
+        const request = buildKitRequest({ messageTemplateVersion, kit: { version: kit.version, settings: kit.defaultSettings } }, 'S', prompt)
+        expect(request).not.toBeNull()
         expect(JSON.stringify(request)).not.toContain(sentinel)
       }
     }
+    // Every template a kit can choose is covered.
+    expect([...reached].sort()).toEqual(Object.keys(MESSAGE_TEMPLATES).sort())
   })
 
   it('the registry falls back to general-v1 and states the version explicitly', () => {

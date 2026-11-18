@@ -115,6 +115,37 @@ export const RUBRICS = {
       },
     },
   },
+  // Spec 03 §5.5 (D-77): the summarization kit's default.
+  'summary-v1': {
+    name: 'Summary',
+    description: 'Summaries of a document: faithfulness, coverage of the required points, and fit for the reader.',
+    lines: {
+      correctness: {
+        label: 'Faithfulness',
+        anchors: {
+          0: 'Changes or invents a fact from the document',
+          1: 'Slightly distorts or overstates part of it',
+          2: 'Every statement is supported by the document',
+        },
+      },
+      completeness: {
+        label: 'Coverage',
+        anchors: {
+          0: "Misses the document's main point",
+          1: 'Misses a point the jury instructions require',
+          2: 'Covers every point the jury instructions require',
+        },
+      },
+      grounding: {
+        label: 'Fit for the reader',
+        anchors: {
+          0: 'Wrong level of detail or unusable for the reader in the request',
+          1: 'Usable but padded, uneven or partly off-target',
+          2: 'Tight and easy to use for that reader',
+        },
+      },
+    },
+  },
 } as const satisfies Record<string, { name: string; description: string; lines: RubricLines }>
 
 export type RubricVersion = keyof typeof RUBRICS

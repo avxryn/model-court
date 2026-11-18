@@ -338,3 +338,127 @@ describe('a check that throws (spec 03 test 7)', () => {
     expect(JSON.stringify(h.logs)).not.toContain('THROWN-WITH-SECRET-TEXT')
   })
 })
+
+// ---------------------------------------------------------------------------
+// summarization-v1 (spec 03 step 3, D-77)
+// ---------------------------------------------------------------------------
+
+const SUMMARY_SETTINGS = { lengthUnit: 'words', maxLength: 12, format: 'bullets', checkNumbers: true }
+const SUMMARY_FIELDS = { kind: 'summarization', requiredPoints: [{ text: 'Return window', anyOf: ['30 days'] }], mustNotMention: ['Whitfield'] }
+const OPENAI_SUMMARY = '- Returns within 30 days with a receipt.\n- Final-sale items excluded.'
+const ANTHROPIC_SUMMARY = 'Returns accepted for 45 days.'
+
+async function summarizationCase(harness: Harness) {
+  const setup = await setupOwner(harness)
+  const { schemaVersion: _v, ...draft } = setup.draft
+  const body = { ...draft, kit: { version: 'summarization-v1', settings: SUMMARY_SETTINGS }, cases: draft.cases.map((c: any) => ({ ...c, kitFields: SUMMARY_FIELDS })) }
+  const saved = await harness.request('PUT', `/evaluations/${setup.evaluationId}/draft`, { as: OWNER, ifMatch: 1, body })
+  expect(saved.status).toBe(200)
+  return setup
+}
+
+async function startAt(harness: Harness, setup: Awaited<ReturnType<typeof setupOwner>>, draftRevision: number) {
+  return harness.request('POST', `/evaluations/${setup.evaluationId}/runs`, {
+    as: OWNER,
+    body: { draftRevision, credentialIdsByProvider: { openai: setup.openaiKeyId, anthropic: setup.anthropicKeyId }, consentToProviderProcessing: true, acknowledgeProviderCharges: true },
+  })
+}
+
+describe('a summarization hearing (spec 03 test 2)', () => {
+  beforeEach(async () => {
+    h = await createHarness()
+  })
+
+  it('keeps the kit and question fields on the stored draft, and refuses mismatched fields', async () => {
+    const setup = await summarizationCase(h)
+    const evaluation = (await h.request('GET', `/evaluations/${setup.evaluationId}`, { as: OWNER })).json.data
+    expect(evaluation.draft.kit).toEqual({ version: 'summarization-v1', settings: SUMMARY_SETTINGS })
+    expect(evaluation.draft.cases.every((c: any) => JSON.stringify(c.kitFields) === JSON.stringify(SUMMARY_FIELDS))).toBe(true)
+    const { schemaVersion: _v, kit: _kit, ...general } = evaluation.draft
+    const refused = await h.request('PUT', `/evaluations/${setup.evaluationId}/draft`, { as: OWNER, ifMatch: evaluation.revision, body: general })
+    expect(refused.status).toBe(422)
+    expect(JSON.stringify(refused.json)).toContain('kitFields')
+    const wrongKind = { ...general, kit: evaluation.draft.kit, cases: general.cases.map((c: any) => ({ ...c, kitFields: { kind: 'classification' } })) }
+    expect((await h.request('PUT', `/evaluations/${setup.evaluationId}/draft`, { as: OWNER, ifMatch: evaluation.revision, body: wrongKind })).status).toBe(422)
+  })
+
+  it('checks every accepted summary in its own batch, and a retried attempt 2 has its own row and is the one shown', async () => {
+    const setup = await summarizationCase(h)
+    let failOnce = true
+    h.setProvider(async (call) => {
+      if (call.url.includes('openai')) {
+        if (failOnce) {
+          failOnce = false
+          return new Response(JSON.stringify({ error: { code: 'rate_limit_exceeded' } }), { status: 429 })
+        }
+        return openAiOk(OPENAI_SUMMARY)
+      }
+      return anthropicOk(ANTHROPIC_SUMMARY)
+    })
+    const started = await startAt(h, setup, 2)
+    expect(started.status).toBe(202)
+    const runId = started.json.data.runId as string
+    await h.drainJobs()
+    // The paid request carries the template and limits, never the answer keys.
+    const sent = JSON.stringify(h.providerCalls.map((call) => call.body))
+    expect(sent).toContain('limits')
+    expect(sent).toContain('"document')
+    for (const secret of ['Return window', 'Whitfield', 'Explain the stated eligibility']) expect(sent).not.toContain(secret)
+    expect(await countRows()).toBe(9)
+    let view = await runView(runId)
+    const failed = view.generations.find((g: any) => g.status === 'failed')
+    expect((await h.request('POST', `/runs/${runId}/retries`, { as: OWNER, ifMatch: view.revision, body: { generationIds: [failed.id], acknowledgePossiblePriorCharge: true } })).status).toBe(202)
+    await h.drainJobs()
+    expect(await countRows()).toBe(10)
+    const attempt2 = await h.db
+      .prepare('SELECT t.kit_version, a.attempt_no FROM testimony_checks t JOIN generation_attempts a ON a.id = t.attempt_id WHERE a.generation_id = ?')
+      .bind(failed.id)
+      .all<any>()
+    expect(attempt2.results).toEqual([{ kit_version: 'summarization-v1', attempt_no: 2 }])
+
+    view = await runView(runId)
+    await openDeliberation(h, runId)
+    await submit(runId, OWNER, 1)
+    await reveal(runId)
+    const data = await results(runId)
+    expect(data.kit).toEqual({ version: 'summarization-v1', name: 'Summaries', settings: SUMMARY_SETTINGS })
+    expect(data.rubricVersion).toBe('summary-v1')
+    expect(data.messageTemplateVersion).toBe('summarize-v1')
+    const [openai, anthropic] = data.configurations.map((c: any) => c.key)
+    const failedCase = data.cases.find((c: any) => c.key === failed.caseKey)
+    const shown = failedCase.responses.find((r: any) => r.configurationKey === openai)
+    expect(shown.attemptCount).toBe(2)
+    expect(shown.checks.map((c: any) => c.status)).toEqual(['pass', 'pass', 'pass', 'pass', 'pass'])
+    const other = failedCase.responses.find((r: any) => r.configurationKey === anthropic)
+    expect(Object.fromEntries(other.checks.map((c: any) => [c.checkId, c.reason]))).toEqual({
+      length: '5 words; the limit is 12.',
+      format: 'Line 1 is not a bullet point.',
+      'required-points': 'Missing 1 of 1: (1) Return window.',
+      'must-not-mention': 'None of the 1 listed phrase appears.',
+      'numbers-from-document': 'Not in the document: 45 (may be computed or reworded).',
+    })
+    expect(failedCase.kitFields).toEqual(SUMMARY_FIELDS)
+    expect(data.checks.byConfiguration[openai].format).toEqual({ pass: 5, fail: 0, na: 0, error: 0 })
+    expect(data.checks.byConfiguration[anthropic]['numbers-from-document']).toEqual({ pass: 1, fail: 4, na: 0, error: 0 }) // Q2's request itself says 45 days
+    expect(data.checks.allPassed).toEqual({ [openai]: { numerator: 5, denominator: 5 }, [anthropic]: { numerator: 0, denominator: 5 } })
+    expect(data.checks.metrics).toEqual([{ id: 'median-length', label: 'Median length', byConfiguration: { [openai]: null, [anthropic]: null }, values: { [openai]: 10, [anthropic]: 5 }, unit: 'words', caveat: null }])
+
+    const record = (await h.request('GET', `/runs/${runId}/export?format=json`, { as: OWNER })).json.data
+    expect(record.versions.kitVersion).toBe('summarization-v1')
+    expect(record.kit.name).toBe('Summaries')
+    expect(record.cases[0].kitFields).toEqual(SUMMARY_FIELDS)
+  })
+
+  it('refuses to start a summarization question without a document', async () => {
+    const setup = await summarizationCase(h)
+    const evaluation = (await h.request('GET', `/evaluations/${setup.evaluationId}`, { as: OWNER })).json.data
+    const { schemaVersion: _v, ...draft } = evaluation.draft
+    const body = { ...draft, cases: draft.cases.map((c: any, i: number) => (i === 1 ? { ...c, reference: '' } : c)) }
+    expect((await h.request('PUT', `/evaluations/${setup.evaluationId}/draft`, { as: OWNER, ifMatch: evaluation.revision, body })).status).toBe(200)
+    const refused = await startAt(h, setup, evaluation.revision + 1)
+    expect(refused.status).toBe(422)
+    expect(refused.json.error.code).toBe('UNSUPPORTED_CONFIGURATION')
+    expect(refused.json.error.details.issues).toEqual([{ kind: 'kit_document_missing', caseKey: draft.cases[1].key, kitVersion: 'summarization-v1' }])
+    expect(h.providerCalls).toHaveLength(0)
+  })
+})
