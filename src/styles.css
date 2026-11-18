@@ -392,6 +392,8 @@
 .ds-who > * { grid-area: 1 / 1; justify-self: start; }
 .ds-label { animation: ds-out 0.3s var(--ds-ease) 4.1s forwards; }
 .ds-party { opacity: 0; animation: ds-in 0.35s var(--ds-ease) 4.25s forwards; }
+/* "shuffled" sits out of the row and fades as the party name comes in, so the name has the full width. */
+.ds-shuffled { animation: ds-out 0.3s var(--ds-ease) 4.1s forwards; }
 @keyframes ds-out { to { opacity: 0; transform: translateY(-4px); } }
 @keyframes ds-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .ds-step { animation: ds-lit 0.3s var(--ds-ease) both; animation-delay: var(--d); }
@@ -411,7 +413,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .ds-sheet, .ds-tick, .ds-step, .ds-step > i, .ds-unsealed, .ds-party { animation: none !important; }
-  .ds-sealed, .ds-label { animation: none !important; display: none; }
+  .ds-sealed, .ds-label, .ds-shuffled { animation: none !important; display: none; }
   .ds-unsealed, .ds-party { opacity: 1; }
   .ds-step { color: var(--foreground); }
   .ds-step > i { background: var(--primary); }

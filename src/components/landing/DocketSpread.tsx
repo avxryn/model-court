@@ -50,7 +50,7 @@ function Testimony({ response, index }: { response: (typeof CASE.responses)[numb
           <span className={cn('ds-label max-w-full truncate bg-foreground text-background', TAG)}>TESTIMONY {response.label}</span>
           <span className={cn('ds-party max-w-full truncate bg-sticker text-sticker-foreground', TAG)}>{partyName(response.configurationKey)}</span>
         </span>
-        <span className="hidden text-caption text-muted-foreground sm:inline">shuffled</span>
+        <span className="ds-shuffled absolute top-3.5 right-3.5 hidden text-caption text-muted-foreground sm:inline">shuffled</span>
       </div>
       <p className="line-clamp-3 text-small leading-snug">{response.text}</p>
     </div>
