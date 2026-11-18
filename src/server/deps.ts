@@ -4,6 +4,7 @@
  * external boundaries (identity token issuer, job queue, notices, provider fetch).
  */
 
+import type { KitTable } from '../domain/kits/registry'
 import type { PriceTable } from '../domain/prices'
 import type { ModelRoute } from '../domain/registry'
 import type { AppConfig } from './config'
@@ -43,4 +44,6 @@ export interface Deps {
   providerFetch: typeof fetch
   /** Structured, allowlisted operational log line (no content, no secrets). */
   log: (event: Record<string, string | number | boolean | null>) => void
+  /** Task kits by version (spec 03, D-76); absent means the registry's `KITS`. Integration tests inject a kit here. */
+  kits?: KitTable
 }

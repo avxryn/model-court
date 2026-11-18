@@ -45,6 +45,8 @@ export const BACKUP_TABLES = [
   'grader_reservations',
   'generations',
   'generation_attempts',
+  // D-76: automatic check results (no secrets); after their parents.
+  'testimony_checks',
   'review_sessions',
   'invites',
   'verdict_revisions',
@@ -98,11 +100,16 @@ const isCredentialReceipt = (row: Row) => typeof row.operation === 'string' && r
 export async function exportSnapshot(deps: Deps): Promise<StoreSnapshot> {
   const db = deps.db
   const exportedAt = deps.now()
-  const [schemaResult, ledgerResult, ...tableResults] = await db.batch<Record<string, unknown>>([
+  // A store whose schema predates a table this build knows (e.g. held at an older migration) has
+  // nothing in it: that table exports as empty instead of failing the whole read.
+  const present = new Set((await db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all<{ name: string }>()).results.map((row) => row.name))
+  const exported = BACKUP_TABLES.filter((table) => present.has(table))
+  const [schemaResult, ledgerResult, ...readResults] = await db.batch<Record<string, unknown>>([
     db.prepare(`SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name`),
     db.prepare('SELECT id FROM mc_schema_migrations ORDER BY id'),
-    ...BACKUP_TABLES.map((table) => db.prepare(`SELECT * FROM ${table} ORDER BY rowid`)),
+    ...exported.map((table) => db.prepare(`SELECT * FROM ${table} ORDER BY rowid`)),
   ])
+  const tableResults = BACKUP_TABLES.map((table) => (present.has(table) ? readResults[exported.indexOf(table)] : { results: [] }))
   const schema = (schemaResult.results as Array<{ type: string; name: string; sql: string; tbl_name?: string }>)
     .filter((object) => !PLATFORM_TABLE.test(object.name))
     .map(({ type, name, sql }) => ({ type, name, sql }))

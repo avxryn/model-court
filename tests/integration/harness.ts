@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { getPlatformProxy, unstable_dev, type Unstable_DevWorker } from 'wrangler'
 import { SqlBatchDatabase } from '../../src/server/db/sql-batch-database'
 import { verifyJwt } from 'deepspace/worker'
+import type { KitTable } from '../../src/domain/kits/registry'
 import { MODEL_ROUTES, PRICE_TABLES, type ModelRoute, type PriceTable } from '../../src/domain/registry'
 import { createApi } from '../../src/server/api'
 import { parseConfig, type ConfigEnv } from '../../src/server/config'
@@ -128,6 +129,8 @@ export interface HarnessOptions {
   env?: Partial<ConfigEnv>
   routes?: readonly ModelRoute[]
   priceTables?: readonly PriceTable[]
+  /** Spec 03 (D-76): a kit table to inject, e.g. a test-only kit with a trivial or throwing check. */
+  kits?: KitTable
 }
 
 export async function createHarness(options: HarnessOptions = {}) {
@@ -201,6 +204,7 @@ export async function createHarness(options: HarnessOptions = {}) {
     purgeNotices: async () => {},
     providerFetch,
     log: (event) => logs.push(event),
+    ...(options.kits ? { kits: options.kits } : {}),
   } as Deps
 
   const app = new Hono()

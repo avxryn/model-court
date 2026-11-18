@@ -14,6 +14,7 @@ import { all, auditStatement, budgetSubjects, classifyConstraint, cond, GuardFai
 import type { Deps } from '../deps'
 import { ApiError, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
+import { importedCheckStatements } from './checks'
 import { configurationCapError, parseStoredDraft, samplesCapError } from './evaluations'
 import { dispatchOutbox, notifyRun, reconcileLeases } from './generation'
 import { guestNames } from './guest-jurors'
@@ -192,9 +193,9 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
 
     const importRows = (
       await db
-        .prepare('SELECT configuration_key, case_key, text_sha256, byte_length FROM evaluation_imports WHERE evaluation_id = ?')
+        .prepare('SELECT configuration_key, case_key, text, text_sha256, byte_length FROM evaluation_imports WHERE evaluation_id = ?')
         .bind(evaluationId)
-        .all<{ configuration_key: string; case_key: string; text_sha256: string; byte_length: number }>()
+        .all<{ configuration_key: string; case_key: string; text: string; text_sha256: string; byte_length: number }>()
     ).results
     const importMetas: ImportMeta[] = importRows.map((row) => ({ configurationKey: row.configuration_key, caseKey: row.case_key, sha256: row.text_sha256, byteLength: row.byte_length }))
     const missing = importCoverageIssues(draft, importMetas)
@@ -257,6 +258,8 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
           )
           .bind(item.id, runId, now, evaluationId, item.configurationKey, item.caseKey, item.sha256),
       ),
+      // Spec 03 (D-76): automatic checks on each frozen imported answer, the same text the snapshot hashes.
+      ...importedCheckStatements(deps, snapshot, runId, imported.map((item) => ({ ...item, text: importRows.find((row) => row.configuration_key === item.configurationKey && row.case_key === item.caseKey)?.text ?? '' })), now),
       ...generations.flatMap((generation) => [
         db
           .prepare(

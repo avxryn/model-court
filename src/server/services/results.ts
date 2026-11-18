@@ -15,6 +15,7 @@ import { all, auditStatement, cond, GuardFailed, runGuarded } from '../db/sql'
 import type { Deps } from '../deps'
 import { ApiError, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
+import { loadKitResults, withKitResults } from './checks'
 import { notifyRun } from './generation'
 import { isImportedSnapshot, samplesPerAnswer } from '../../domain/snapshot'
 import { loadGenerations, parseSnapshot, primarySample, samplesFor, type AssignmentCase, type EligibleManifest } from './runs'
@@ -258,7 +259,9 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
       .all<{ revision: number; outcome: 'selected' | 'tie' | 'inconclusive'; selected_configuration_key: string | null; rationale: string; limitations: string; created_at: number }>()
   ).results
 
-  return {
+  // Spec 03 (D-76): automatic checks, next to and never inside the findings above.
+  const kitResults = await loadKitResults(deps, { runId, snapshot, eligibleCaseKeys: manifest.caseKeys, generations, samplesPerAnswer: samples })
+  return withKitResults(kitResults, {
     runId,
     role: access.role,
     // Same case reference the run view already gives both roles; used for breadcrumbs.
@@ -303,7 +306,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
       limitations: verdict.limitations,
       createdAt: verdict.created_at,
     })),
-  }
+  })
 }
 
 /**

@@ -14,6 +14,7 @@ import { isImportedSnapshot, type RunSnapshot } from '../../domain/snapshot'
 import { all, auditStatement, cond, GuardFailed, releaseReservations, runGuarded } from '../db/sql'
 import type { Deps, GenerationJob } from '../deps'
 import { adapterFor, type ProviderOutcome } from '../providers'
+import { checkRowFor, insertTestimonyChecksStatement } from './checks'
 import { attemptStillCurrent, CredentialUnusable, withRunCredential } from './credentials'
 // Function-only cycle (runs.ts imports this module too); nothing runs at import time.
 import { autoOpenReview } from './runs'
@@ -247,6 +248,10 @@ async function finishAttempt(deps: Deps, ref: AttemptRef, outcome: ProviderOutco
 
   try {
     if (outcome.kind === 'success') {
+      // Spec 03 (D-76): automatic checks on the accepted text, committed in the same guarded batch,
+      // so a fenced or revoked completion writes neither the testimony nor its checks.
+      const testCase = context.snapshot.cases.find((item) => item.key === context.caseKey)
+      const checks = testCase ? checkRowFor(deps, context.snapshot, testCase, { kind: 'text', text: outcome.text }) : null
       await runGuarded(
         db,
         'generation.complete',
@@ -266,6 +271,7 @@ async function finishAttempt(deps: Deps, ref: AttemptRef, outcome: ProviderOutco
                  cached_input_tokens = ?, reasoning_tokens = ?, duration_ms = ?, provider_request_id = ?, observed_model = ?, truncated = ? WHERE id = ?`,
             )
             .bind(now, outcome.text, outcome.finishReason, outcome.inputTokens, outcome.outputTokens, outcome.cachedInputTokens, outcome.reasoningTokens, outcome.durationMs, outcome.providerRequestId, outcome.observedModel, outcome.truncated ? 1 : 0, ref.attemptId),
+          ...(checks ? [insertTestimonyChecksStatement(db, { id: deps.newId(), runId: context.runId, caseKey: context.caseKey, configurationKey: context.configurationKey, attemptId: ref.attemptId, ...checks }, now)] : []),
           db.prepare(`UPDATE generations SET status = 'succeeded', accepted_attempt_id = ?, last_error_code = NULL, updated_at = ? WHERE id = ?`).bind(ref.attemptId, now, job.generationId),
           terminalOutbox,
           touchRunStatement(db, context.runId, now),

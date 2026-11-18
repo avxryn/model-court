@@ -546,6 +546,31 @@ export const MIGRATIONS: Migration[] = [
       ),
     ],
   },
+  {
+    // Spec 03 / D-76: automatic checks per accepted testimony (roadmap item 3). One row per accepted
+    // generation attempt or frozen imported answer; append-only. Item 2 uses 0010; ids are names and
+    // order is array order, so renumbering at merge only reorders this entry.
+    id: '0011_task_kit_checks',
+    statements: [
+      `CREATE TABLE testimony_checks (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        case_key TEXT NOT NULL,
+        configuration_key TEXT NOT NULL,
+        attempt_id TEXT REFERENCES generation_attempts(id) ON DELETE CASCADE,
+        imported_output_id TEXT REFERENCES run_imported_outputs(id) ON DELETE CASCADE,
+        kit_version TEXT NOT NULL,
+        results_json TEXT NOT NULL CHECK (json_valid(results_json) AND json_type(results_json) = 'array' AND length(results_json) <= 16384),
+        created_at INTEGER NOT NULL,
+        CHECK ((attempt_id IS NULL) <> (imported_output_id IS NULL)),
+        UNIQUE (attempt_id),
+        UNIQUE (imported_output_id)
+      )`,
+      `CREATE INDEX testimony_checks_by_run ON testimony_checks(run_id, case_key, configuration_key)`,
+      `CREATE TRIGGER testimony_checks_append_only BEFORE UPDATE ON testimony_checks
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_TESTIMONY_CHECKS'); END`,
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`
