@@ -72,6 +72,17 @@ test.describe('Smoke tests', () => {
   })
 })
 
+/** Scores every line of every sample testimony 2 (no notes needed), question by question. */
+async function scoreSample(page: import('@playwright/test').Page) {
+  for (let question = 0; question < 5; question++) {
+    const twos = page.getByRole('radio', { name: /^2: / })
+    await expect(twos).toHaveCount(6)
+    // The visible digit sits over the visually hidden radio; click its label as a person would.
+    for (let i = 0; i < 6; i++) await twos.nth(i).locator('xpath=..').click()
+    if (question < 4) await page.getByRole('button', { name: 'Next question' }).click()
+  }
+}
+
 test.describe('public sample (F19/T19)', () => {
   test('works signed out and makes no API or provider requests', async ({ page }) => {
     const calls: string[] = []
@@ -81,8 +92,16 @@ test.describe('public sample (F19/T19)', () => {
     })
     await page.goto('/sample')
     await expect(page.getByText('Illustrative sample')).toBeVisible()
-    await page.getByRole('button', { name: 'Unseal the record' }).click()
+    const unseal = page.getByRole('button', { name: 'Unseal the record' })
+    await expect(unseal).toBeDisabled()
+    await expect(page.getByText('0 of 10 testimonies scored')).toBeVisible()
+    await scoreSample(page)
+    await expect(page.getByText('10 of 10 testimonies scored')).toBeVisible()
+    await unseal.click()
+    await expect(page.getByRole('heading', { name: 'Headline from your scores' })).toBeVisible()
+    await expect(page.getByText('A tie: all 5 questions scored the same for both parties.')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Who gave which testimony' })).toBeVisible()
+    await expect(page.getByText('Judgment (example)').first()).toBeVisible()
     await page.getByRole('button', { name: 'Start the sample over' }).click()
     expect(calls).toEqual([])
   })
@@ -108,5 +127,23 @@ test.describe('accessibility (axe, WCAG 2.2 AA)', () => {
         await context.close()
       })
     }
+  }
+  for (const theme of ['light', 'dark']) {
+    test(`/sample unsealed (${theme}) has no WCAG A/AA violations`, async ({ browser }) => {
+      const context = await browser.newContext({ reducedMotion: 'reduce' })
+      await context.addInitScript((t) => window.localStorage.setItem('mc.theme', t), theme)
+      const page = await context.newPage()
+      await page.goto('/sample', { waitUntil: 'networkidle' })
+      await scoreSample(page)
+      await page.getByRole('button', { name: 'Unseal the record' }).click()
+      await expect(page.getByRole('heading', { name: 'Headline from your scores' })).toBeVisible()
+      await page.addScriptTag({ content: axeSource })
+      const violations = await page.evaluate(async () => {
+        const result = await (window as unknown as { axe: { run: (ctx: Document, opts: object) => Promise<{ violations: Array<{ id: string; nodes: unknown[] }> }> } }).axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] })
+        return result.violations.map((v) => `${v.id} (${v.nodes.length})`)
+      })
+      expect(violations).toEqual([])
+      await context.close()
+    })
   }
 })

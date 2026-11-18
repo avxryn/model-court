@@ -9,32 +9,42 @@ import type { CohortResult } from '@/domain/rubric'
 import type { ResultsView } from '@/lib/dto'
 import { plural } from '@/lib/format'
 
-/** The jury's findings and the judge's own (context-aware) review, never combined, then what to read with care. */
+/**
+ * The jury's findings and the judge's own review, side by side and never
+ * combined, then what to read with care. With no jurors the judge's review
+ * is the result and comes first.
+ */
 export function FindingsSection({ data }: { data: ResultsView }) {
   const { invited, owner } = data.cohorts
+  const solo = invited.reviewerCount === 0
+  const juryTab = (
+    <TabsTrigger key="invited" value="invited">
+      Jury’s findings ({plural(invited.reviewerCount, 'juror')})
+    </TabsTrigger>
+  )
+  const judgeTab = (
+    <TabsTrigger key="owner" value="owner">
+      Judge’s own review ({owner.reviewerCount})
+    </TabsTrigger>
+  )
   return (
     <>
       <SheetSection
         id="scores"
         label={
           <>
-            Findings <Plain>scores from the jury and from the judge</Plain>
+            Findings <Plain>scores from the jury and from the judge, kept apart</Plain>
           </>
         }
       >
-        <Tabs defaultValue={invited.reviewerCount > 0 ? 'invited' : 'owner'}>
-          <TabsList className="h-auto flex-wrap">
-            <TabsTrigger value="invited">
-              Jury’s findings ({plural(invited.reviewerCount, 'juror')})
-            </TabsTrigger>
-            <TabsTrigger value="owner">Judge’s own review, context-aware ({owner.reviewerCount})</TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue={solo ? 'owner' : 'invited'}>
+          <TabsList className="h-auto flex-wrap">{solo ? [judgeTab, juryTab] : [juryTab, judgeTab]}</TabsList>
           <TabsContent value="invited" className="pt-3">
             <Cohort cohort={invited} data={data} />
           </TabsContent>
           <TabsContent value="owner" className="pt-3">
             <Cohort cohort={owner} data={data} />
-            <p className="mt-2 text-xs text-muted-foreground">The judge chose these parties, so this review is not blind and is never combined with the jury’s findings.</p>
+            <p className="mt-2 text-xs text-muted-foreground">{solo ? 'No jurors scored this case, so this review is the result. ' : ''}The judge knew which setups were in the case when scoring. This review is reported on its own and never combined with the jury’s findings.</p>
           </TabsContent>
         </Tabs>
       </SheetSection>
