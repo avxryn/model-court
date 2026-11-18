@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { captureConsoleErrors } from './helpers/errors'
 
 /**
@@ -84,4 +86,27 @@ test.describe('public sample (F19/T19)', () => {
     await page.getByRole('button', { name: 'Start the sample over' }).click()
     expect(calls).toEqual([])
   })
+})
+
+// WCAG 2.2 A/AA by axe on the public pages, light and dark (D-55). Signed-in
+// pages need an account and are checked by hand.
+test.describe('accessibility (axe, WCAG 2.2 AA)', () => {
+  const axeSource = readFileSync(fileURLToPath(new URL('../node_modules/axe-core/axe.min.js', import.meta.url)), 'utf8')
+  for (const path of ['/', '/sample', '/glossary', '/join']) {
+    for (const theme of ['light', 'dark']) {
+      test(`${path} (${theme}) has no WCAG A/AA violations`, async ({ browser }) => {
+        const context = await browser.newContext({ reducedMotion: 'reduce' })
+        await context.addInitScript((t) => window.localStorage.setItem('mc.theme', t), theme)
+        const page = await context.newPage()
+        await page.goto(path, { waitUntil: 'networkidle' })
+        await page.addScriptTag({ content: axeSource })
+        const violations = await page.evaluate(async () => {
+          const result = await (window as unknown as { axe: { run: (ctx: Document, opts: object) => Promise<{ violations: Array<{ id: string; nodes: unknown[] }> }> } }).axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] })
+          return result.violations.map((v) => `${v.id} (${v.nodes.length})`)
+        })
+        expect(violations).toEqual([])
+        await context.close()
+      })
+    }
+  }
 })

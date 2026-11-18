@@ -53,7 +53,7 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
                   <span id={`${id}-${dimension}-legend`} className="block text-sm font-medium">
                     {RUBRIC[dimension].label} <span className="sr-only">for testimony {label}</span>
                   </span>
-                  <span aria-live="polite" className={cn('block text-xs leading-snug', value === null ? 'text-muted-foreground/80' : 'text-muted-foreground')}>
+                  <span aria-live="polite" className="block text-xs leading-snug text-muted-foreground">
                     {value === null ? 'Not scored yet' : RUBRIC[dimension].anchors[value]}
                   </span>
                 </div>

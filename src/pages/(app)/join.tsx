@@ -112,7 +112,7 @@ export default function JoinPage() {
       <Card className="w-full max-w-md py-7">
         <CardHeader>
           <div className="typewriter mb-2 text-xs font-medium text-muted-foreground">JURY SUMMONS · MODEL COURT</div>
-          <CardTitle className="font-display text-2xl font-medium tracking-tight">You are summoned to serve as a juror</CardTitle>
+          <CardTitle className="font-display text-2xl font-medium tracking-tight"><h1>You are summoned to serve as a juror</h1></CardTitle>
           <CardDescription className="leading-relaxed">
             You were invited to review blind. You will score anonymous AI answers against a short rubric. You don’t need an API key, and you won’t see which models gave the answers — or anyone else’s ratings — until the judge unseals the record.
           </CardDescription>
