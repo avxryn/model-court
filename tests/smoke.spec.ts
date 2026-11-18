@@ -72,6 +72,20 @@ test.describe('Smoke tests', () => {
   })
 })
 
+// The landing's links open the public site's own pages, never the app shell.
+test.describe('public site pages', () => {
+  for (const path of ['/sample', '/glossary', '/privacy', '/terms', '/accessibility']) {
+    test(`landing link to ${path} opens a public page without the app sidebar`, async ({ page }) => {
+      await page.goto('/')
+      await expect(page.getByTestId('static-landing')).toBeVisible()
+      await page.locator(`a[href="${path}"]:visible`).last().click()
+      await expect(page).toHaveURL(new RegExp(`${path}$`))
+      await expect(page.getByTestId('public-site')).toBeVisible()
+      await expect(page.getByTestId('app-navigation')).toHaveCount(0)
+    })
+  }
+})
+
 /** Scores every line of every sample testimony 2 (no notes needed), question by question. */
 async function scoreSample(page: import('@playwright/test').Page) {
   for (let question = 0; question < 5; question++) {

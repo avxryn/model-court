@@ -7,14 +7,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, EyeOff, KeyRound, Lock, Trash2, type LucideIcon } from 'lucide-react'
-import { BrandMark } from '@/components/BrandMark'
 import { DocketSpread } from '@/components/landing/DocketSpread'
 import { Seo } from '@/components/Seo'
-import { AccountChip } from '@/components/shell/AccountChip'
+import { SITE_CONTAINER as CONTAINER, SiteFooter, SiteHeader } from '@/components/site/SiteChrome'
 import { readAccountHint, type AccountHint } from '@/lib/account-hint'
 import { seo } from '@/seo'
 import { Button } from '@/components/ui/button'
-import { SAMPLE_CASES } from '@/sample/fixture'
 import { cn } from '@/lib/utils'
 
 const STEPS = [
@@ -32,11 +30,6 @@ const DATA_HANDLING: Array<{ icon: LucideIcon; title: string; text: string }> = 
   { icon: Trash2, title: 'Deleting a case', text: 'Deleting a case removes it from Model Court within 24 hours; it cannot delete data a provider already received. Use synthetic or permitted information only.' },
 ]
 
-/** Same width and gutters as the app's wide pages (src/components/layout/Page.tsx). */
-const CONTAINER = 'mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10'
-
-const NAV_LINK = 'rounded-md px-1 py-1 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50'
-
 export default function Landing() {
   // Read after hydration so the prerendered HTML (always "Sign in") matches the first client render.
   const [hint, setHint] = useState<AccountHint | null>(null)
@@ -44,30 +37,7 @@ export default function Landing() {
   return (
     <div data-testid="static-landing" className="flex min-h-screen flex-col bg-background text-foreground">
       <Seo {...seo} path="/" />
-      <header className="border-b border-border bg-background">
-        <div className={cn(CONTAINER, 'flex h-16 items-center gap-7')}>
-          <Link to="/" className="flex rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-            <BrandMark />
-          </Link>
-          <nav aria-label="Public" className="hidden items-center gap-5 md:flex">
-            <a href="#how" className={NAV_LINK}>
-              How it works
-            </a>
-            <Link to="/sample" className={NAV_LINK}>
-              Sample case
-            </Link>
-            <Link to="/glossary" className={NAV_LINK}>
-              Glossary
-            </Link>
-          </nav>
-          <div className="ml-auto flex items-center gap-2.5">
-            <AccountChip hint={hint} />
-            <Button size="sm" className="hidden sm:inline-flex" render={<Link to="/sample" />} nativeButton={false}>
-              Try the sample
-            </Button>
-          </div>
-        </div>
-      </header>
+      <SiteHeader hint={hint} />
 
       <main id="main" className="flex-1">
         <section className={cn(CONTAINER, 'grid items-center gap-12 pt-14 pb-16 sm:pt-20 sm:pb-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-14')}>
@@ -148,25 +118,7 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer className="border-t border-border">
-        <div className={cn(CONTAINER, 'flex flex-col items-start justify-between gap-3 py-6 text-small text-muted-foreground sm:flex-row sm:items-center')}>
-          <BrandMark />
-          <div className="space-y-1.5 sm:text-right">
-            <p>A decision aid, not a benchmark or certification. Not affiliated with or endorsed by OpenAI or Anthropic.</p>
-            <nav aria-label="Legal" className="flex flex-wrap gap-x-4 gap-y-1 sm:justify-end">
-              <Link to="/privacy" className={NAV_LINK}>
-                Privacy
-              </Link>
-              <Link to="/terms" className={NAV_LINK}>
-                Terms
-              </Link>
-              <Link to="/accessibility" className={NAV_LINK}>
-                Accessibility
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

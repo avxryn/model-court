@@ -9,7 +9,7 @@ import { LEGAL } from '@/lib/legal'
 export function LegalPage({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
     <Page>
-      <PageHeader crumbs={[{ label: 'Legal' }, { label: title }]} eyebrow={`Effective ${LEGAL.effective}`} title={title} description={description} />
+      <PageHeader eyebrow={`Effective ${LEGAL.effective}`} title={title} description={description} />
       {LEGAL.draft && (
         <p role="note" className="mb-5 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
           Draft for review: this text has not had a legal review yet, and the bracketed details are placeholders.

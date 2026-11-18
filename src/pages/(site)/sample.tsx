@@ -1,5 +1,5 @@
 /**
- * Public, keyless sample (F19), inside the app shell so it keeps the sidebar.
+ * Public, keyless sample (F19), in the public site layout.
  * It makes no API or provider request of its own; practice ratings live only
  * in this page's memory.
  */
@@ -12,7 +12,7 @@ import { FindingsChart } from '@/components/court/FindingsChart'
 import { CaseFolder } from '@/components/court/Folder'
 import { JudgeSignature } from '@/components/court/JudgeSignature'
 import { Note } from '@/components/court/Paper'
-import { Breadcrumbs, Page } from '@/components/layout/Page'
+import { SITE_CONTAINER } from '@/components/site/SiteChrome'
 import { FindingsTable } from '@/components/record/FindingsTable'
 import { formatPoints, tallyQuestions } from '@/components/record/headline'
 import { HeadlineSummary } from '@/components/record/HeadlineSection'
@@ -91,13 +91,7 @@ export default function SamplePage() {
   })
 
   return (
-    <Page width="wide">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <Breadcrumbs items={[{ label: 'Learn' }, { label: 'Sample case' }]} />
-        <Button size="sm" variant="outline" className="mb-3" render={<Link to="/evaluations" />} nativeButton={false}>
-          Open your own case
-        </Button>
-      </div>
+    <div className={cn(SITE_CONTAINER, 'py-6 lg:py-8')}>
         <CaseFolder docket="MC-SAMPLE" title="Support policy answers">
         <Sheet>
           <Caption
@@ -258,6 +252,6 @@ export default function SamplePage() {
           </div>
         </Sheet>
         </CaseFolder>
-    </Page>
+    </div>
   )
 }

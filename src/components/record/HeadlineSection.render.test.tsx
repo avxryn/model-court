@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import SamplePage from '@/pages/(app)/sample'
+import SamplePage from '@/pages/(site)/sample'
 import { FindingsSection } from './FindingsSection'
 import { HeadlineSection } from './HeadlineSection'
 

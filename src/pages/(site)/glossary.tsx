@@ -1,6 +1,6 @@
 /**
  * The courtroom terms in plain words (D-25), grouped by what they name. Inside
- * the app shell so it keeps the sidebar; no data hooks, no API requests.
+ * the public site layout; no data hooks, no API requests.
  */
 
 import { Link } from 'react-router-dom'
@@ -21,7 +21,6 @@ export default function GlossaryPage() {
   return (
     <Page>
       <PageHeader
-        crumbs={[{ label: 'Learn' }, { label: 'Glossary' }]}
         eyebrow="Glossary"
         title="The words of the court, in plain terms"
         description="Model Court borrows courtroom words to make the steps easy to follow. Anything about your API keys, costs, consent, or deleting data is always written in plain words."
