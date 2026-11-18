@@ -116,8 +116,27 @@ test.describe('public sample (F19/T19)', () => {
     await expect(page.getByText('A tie: all 5 questions scored the same for both parties.')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Who gave which testimony' })).toBeVisible()
     await expect(page.getByText('Judgment (example)').first()).toBeVisible()
+    // Cost and speed (D-63): illustrative numbers through the same table the record uses.
+    await expect(page.getByRole('heading', { name: 'Cost and speed (illustrative numbers)' })).toBeVisible()
+    await expect(page.getByText(/^Illustrative numbers, written by hand/)).toBeVisible()
+    await expect(page.getByRole('table', { name: 'Illustrative cost, speed and failures for each party' })).toBeVisible()
     await page.getByRole('button', { name: 'Start the sample over' }).click()
     expect(calls).toEqual([])
+  })
+
+  test('the unsealed sample never scrolls sideways at 390 px; cost and speed stack as cards', async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' })
+    const page = await context.newPage()
+    await page.goto('/sample', { waitUntil: 'networkidle' })
+    await scoreSample(page)
+    await page.getByRole('button', { name: 'Unseal the record' }).click()
+    await expect(page.getByRole('heading', { name: 'Cost and speed (illustrative numbers)' })).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Illustrative cost, speed and failures for each party' })).toBeVisible()
+    await expect(page.getByRole('table', { name: 'Illustrative cost, speed and failures for each party' })).toBeHidden()
+    const section = page.locator('section[aria-labelledby="sample-setup"]')
+    const overflow = await section.evaluate((el) => el.scrollWidth - el.clientWidth)
+    expect(overflow).toBeLessThanOrEqual(0)
+    await context.close()
   })
 })
 

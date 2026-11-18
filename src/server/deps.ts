@@ -4,6 +4,7 @@
  * external boundaries (identity token issuer, job queue, notices, provider fetch).
  */
 
+import type { PriceTable } from '../domain/prices'
 import type { ModelRoute } from '../domain/registry'
 import type { AppConfig } from './config'
 
@@ -24,6 +25,8 @@ export interface Deps {
   ensureSchema: () => Promise<unknown>
   config: AppConfig
   routes: readonly ModelRoute[]
+  /** Dated list-price tables for cost estimates (D-62); tests inject a fixture. */
+  priceTables: readonly PriceTable[]
   now: () => number
   newId: () => string
   /** Verify a platform bearer token; null when missing/invalid/expired. */

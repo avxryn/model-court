@@ -5,7 +5,7 @@
  */
 
 import { enqueueJob, verifyJwt } from 'deepspace/worker'
-import { MODEL_ROUTES } from '../domain/registry'
+import { MODEL_ROUTES, PRICE_TABLES } from '../domain/registry'
 import { NOTICES_COLLECTION } from '../schemas/notices-schema'
 import type { Env } from '../../worker'
 import { parseConfig } from './config'
@@ -47,6 +47,7 @@ export function platformDeps(env: Env): Deps {
     ensureSchema: async () => {},
     config: parseConfig(env),
     routes: MODEL_ROUTES,
+    priceTables: PRICE_TABLES,
     now: () => Date.now(),
     newId: () => crypto.randomUUID(),
     verifyToken: async (token) => {

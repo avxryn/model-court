@@ -6,7 +6,9 @@
 import { z } from 'zod'
 import type { DraftRating } from '../../domain/contracts'
 import { verdictSchema } from '../../domain/contracts'
+import { priceTableFor } from '../../domain/prices'
 import { findDisagreements, scoreCohort, type CompleteRating, type ScoredSession } from '../../domain/rubric'
+import { median, setupMetrics, type AttemptStatus, type UsageRecord } from '../../domain/setup-metrics'
 import { canRun, type RunStatus } from '../../domain/transitions'
 import { loadRunAccess, requireOwner, type SessionRow } from '../access'
 import { all, auditStatement, cond, GuardFailed, runGuarded } from '../db/sql'
@@ -30,13 +32,6 @@ interface AttemptRow {
   error_code: string | null
   truncated: number
   observed_model: string | null
-}
-
-function median(values: number[]): number | null {
-  if (values.length === 0) return null
-  const sorted = [...values].sort((a, b) => a - b)
-  const middle = Math.floor(sorted.length / 2)
-  return sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2)
 }
 
 export async function getResults(deps: Deps, userId: string, runId: string) {
@@ -185,6 +180,42 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
     }
   })
 
+  // Cost and speed (D-63): computed on read from recorded usage and the dated price table for the
+  // hearing's creation day. No provider call; only after reveal, like everything else here.
+  const prices = priceTableFor(run.created_at, deps.priceTables)
+  const usageRecords: UsageRecord[] = generations.map((generation) => ({
+    caseKey: generation.case_key,
+    configurationKey: generation.configuration_key,
+    sampleNo: 1,
+    status: generation.status,
+    attempts: attempts
+      .filter((attempt) => attempt.generation_id === generation.id)
+      .map((attempt) => ({
+        attemptNo: attempt.attempt_no,
+        status: attempt.status as AttemptStatus,
+        errorCode: attempt.error_code,
+        definite: attempt.status === 'failed' ? true : attempt.status === 'uncertain' ? false : null,
+        inputTokens: attempt.input_tokens,
+        outputTokens: attempt.output_tokens,
+        cachedInputTokens: null,
+        reasoningTokens: null,
+        durationMs: attempt.duration_ms,
+      })),
+  }))
+  const metrics = setupMetrics(
+    {
+      parties: snapshot.configurations.map((c) =>
+        isImportedSnapshot(c) ? { key: c.key, source: 'imported' as const, provider: null, routeKey: null } : { key: c.key, source: 'generated' as const, provider: c.provider, routeKey: c.modelKey },
+      ),
+      eligibleCaseKeys: manifest.caseKeys,
+      records: usageRecords,
+    },
+    prices.table,
+    Object.fromEntries(
+      snapshot.configurations.filter(isImportedSnapshot).map((c) => [c.key, { planned: snapshot.cases.length, present: importedOutputs.filter((output) => output.configuration_key === c.key).length }]),
+    ),
+  )
+
   const verdicts = (
     await db
       .prepare(`SELECT revision, outcome, selected_configuration_key, rationale, limitations, created_at FROM verdict_revisions WHERE run_id = ? ORDER BY revision`)
@@ -225,6 +256,8 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
     disagreements: findDisagreements(scored),
     byLanguage: languageBreakdown(snapshot.cases, manifest.caseKeys, configurationKeys, scored),
     coverage,
+    priceTable: { version: prices.table.version, readOn: prices.table.readOn, sources: prices.table.sources, predates: prices.predates },
+    setupMetrics: metrics,
     cases,
     verdicts: verdicts.map((verdict) => ({
       revision: verdict.revision,

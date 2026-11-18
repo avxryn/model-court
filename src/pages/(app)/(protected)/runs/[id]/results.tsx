@@ -1,5 +1,5 @@
 /**
- * The record (C divider): the headline count, who each party was, the findings, the judgment,
+ * The record (C divider): the headline count, who each party was, the findings, cost and speed, the judgment,
  * the testimony, and reliability. Entering judgment, the certified record
  * and the special master live on their own dividers.
  */
@@ -14,6 +14,7 @@ import { HeadlineSection } from '@/components/record/HeadlineSection'
 import { PartiesSection } from '@/components/record/PartiesSection'
 import { RecordGate, rubricName } from '@/components/record/RecordGate'
 import { ReliabilitySection } from '@/components/record/ReliabilitySection'
+import { SetupSection } from '@/components/record/SetupSection'
 import { TestimonySection } from '@/components/record/TestimonySection'
 import { JudgmentSummary } from '@/components/record/Verdict'
 import type { ResultsView } from '@/lib/dto'
@@ -52,6 +53,7 @@ function Record({ data }: { data: ResultsView }) {
               { id: 'headline', label: 'Headline' },
               { id: 'mapping', label: 'Parties' },
               { id: 'scores', label: 'Findings' },
+              { id: 'setup', label: 'Cost and speed' },
               { id: 'verdict', label: 'Judgment' },
               ...(findSplits(data).jurors >= 2 ? [{ id: 'splits', label: 'Splits' }] : []),
               { id: 'evidence', label: 'Testimony' },
@@ -61,6 +63,7 @@ function Record({ data }: { data: ResultsView }) {
           <HeadlineSection data={data} />
           <PartiesSection data={data} />
           <FindingsSection data={data} />
+          <SetupSection data={data} />
           <JudgmentSummary data={data} />
           <DisagreementSection data={data} />
           <TestimonySection data={data} />

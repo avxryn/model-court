@@ -16,6 +16,8 @@ import { SITE_CONTAINER } from '@/components/site/SiteChrome'
 import { FindingsTable } from '@/components/record/FindingsTable'
 import { formatPoints, tallyQuestions } from '@/components/record/headline'
 import { HeadlineSummary } from '@/components/record/HeadlineSection'
+import { SetupFootnote, SetupTable } from '@/components/record/SetupSection'
+import { setupSentence, type SetupRow } from '@/components/record/setup-summary'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
 import { QuestionPager, QuestionStepper, useWorksheetKeys, WorksheetGrid, WorksheetKeyLegend } from '@/components/review/Worksheet'
@@ -25,7 +27,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { DraftRating } from '@/domain/contracts'
 import { DIMENSIONS, scoreCohort, submissionIssues, type CompleteRating } from '@/domain/rubric'
 import { cn } from '@/lib/utils'
-import { SAMPLE_CASES, SAMPLE_CONFIGURATIONS, SAMPLE_PROVENANCE, SAMPLE_VERDICT } from '@/sample/fixture'
+import { SAMPLE_CASES, SAMPLE_CONFIGURATIONS, SAMPLE_PRICE_TABLE, SAMPLE_PROVENANCE, SAMPLE_SETUP_METRICS, SAMPLE_VERDICT } from '@/sample/fixture'
+
+const SAMPLE_SETUP_ROWS: SetupRow[] = SAMPLE_CONFIGURATIONS.map((c) => ({ key: c.key, label: c.label, source: 'Illustrative numbers', reasoning: false, metrics: SAMPLE_SETUP_METRICS[c.key] }))
 
 export default function SamplePage() {
   const [ratings, setRatings] = useState<Record<string, DraftRating>>({})
@@ -225,6 +229,15 @@ export default function SamplePage() {
                       Score every testimony on all three lines (with a note for any 0) to see practice findings. In a real hearing, findings appear only for filed worksheets.
                     </Note>
                   )}
+                </section>
+
+                <section aria-labelledby="sample-setup">
+                  <h2 id="sample-setup" className="court-label mb-4">
+                    Cost and speed (illustrative numbers)
+                  </h2>
+                  <p className="mb-4 max-w-3xl font-heading leading-relaxed">{setupSentence(tally, SAMPLE_SETUP_ROWS)}</p>
+                  <SetupTable rows={SAMPLE_SETUP_ROWS} caption="Illustrative cost, speed and failures for each party" />
+                  <SetupFootnote rows={SAMPLE_SETUP_ROWS} priceTable={SAMPLE_PRICE_TABLE} eligibleCount={SAMPLE_CASES.length} illustrative />
                 </section>
 
                 <section aria-labelledby="sample-verdict" className="relative exhibit-panel px-6 pt-6 pb-8 sm:px-8">

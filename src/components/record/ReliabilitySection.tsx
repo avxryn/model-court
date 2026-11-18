@@ -4,7 +4,6 @@ import { Panel, Plain } from '@/components/court/Paper'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatScore } from '@/domain/rubric'
 import type { ResultsView } from '@/lib/dto'
-import { formatDuration } from '@/lib/format'
 
 /**
  * How reliably testimony was taken, and findings by language when questions
@@ -52,7 +51,6 @@ function Coverage({ data }: { data: ResultsView }) {
               <TableHead className="text-right">Failed</TableHead>
               <TableHead className="text-right">Uncertain</TableHead>
               <TableHead className="text-right">Attempts</TableHead>
-              <TableHead className="text-right">Median latency</TableHead>
               <TableHead className="text-right">Truncated</TableHead>
             </TableRow>
           </TableHeader>
@@ -68,7 +66,6 @@ function Coverage({ data }: { data: ResultsView }) {
                   <TableCell className="text-right tabular-nums">{cov.failed}</TableCell>
                   <TableCell className="text-right tabular-nums">{cov.uncertain}</TableCell>
                   <TableCell className="text-right tabular-nums">{cov.attempts}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatDuration(cov.medianLatencyMs)}</TableCell>
                   <TableCell className="text-right tabular-nums">{cov.truncatedCount}</TableCell>
                 </TableRow>
               )
@@ -77,7 +74,7 @@ function Coverage({ data }: { data: ResultsView }) {
         </Table>
       </Panel>
       <p className="mt-2 text-xs text-muted-foreground">
-        {data.excludedCaseKeys.length} of {data.plannedCaseCount} planned questions were excluded from scoring because a party had no accepted testimony. Latency includes network overhead and excludes queue wait.
+        {data.excludedCaseKeys.length} of {data.plannedCaseCount} planned questions were excluded from scoring because a party had no accepted testimony. Times and cost are under Cost and speed.
       </p>
     </div>
   )

@@ -6,6 +6,8 @@
  */
 
 import { EXAMPLE_CASES, EXAMPLE_POLICY } from '@/domain/example'
+import type { PriceTable } from '@/domain/prices'
+import { setupMetrics, type PartyMetrics } from '@/domain/setup-metrics'
 
 export const SAMPLE_PROVENANCE = 'Illustrative fixture written by hand for this walkthrough — not real model output, not a recorded run, and not a claim about any provider’s performance.'
 
@@ -77,3 +79,45 @@ export const SAMPLE_VERDICT = {
     'Configuration 2 invented a shipping process, an exchange procedure, and a refund exception, and contradicted the final-sale rule when pushed. Configuration 1 stayed within the supplied policy and asked for missing facts. For a support assistant that must not make commitments the policy does not allow, grounding outweighs warmth.',
   limitations: 'Five synthetic cases, one illustrative reviewer. A real decision needs more cases and independent invited reviewers.',
 }
+
+/**
+ * Illustrative cost and speed for the sample's "Cost and speed" table (D-63). Invented
+ * token counts and times run through the real `setupMetrics`, priced with an invented
+ * table: no model was called and no provider's price is implied.
+ */
+const SAMPLE_PRICES: PriceTable = {
+  version: 'illustrative',
+  readOn: '2026-11-18',
+  effectiveFrom: '2026-11-18',
+  sources: { openai: '', anthropic: '' },
+  cachedInputIncludedInInput: { openai: true, anthropic: false },
+  prices: { 'sample-route': { inputUsdPerMTok: 1, cachedInputUsdPerMTok: null, outputUsdPerMTok: 5 } },
+  unpriced: {},
+}
+
+const SAMPLE_USAGE: Record<SampleConfiguration['key'], Array<[input: number, output: number, ms: number]>> = {
+  'cfg-grounded': [[412, 38, 1180], [418, 52, 1320], [409, 71, 1610], [421, 49, 1270], [404, 22, 980]],
+  'cfg-friendly': [[371, 64, 1430], [377, 88, 1790], [368, 97, 2140], [380, 81, 1660], [363, 59, 1350]],
+}
+
+export const SAMPLE_SETUP_METRICS: Record<string, PartyMetrics> = setupMetrics(
+  {
+    parties: SAMPLE_CONFIGURATIONS.map((c) => ({ key: c.key, source: 'generated' as const, provider: 'openai' as const, routeKey: 'sample-route' })),
+    eligibleCaseKeys: SAMPLE_CASES.map((c) => c.key),
+    records: SAMPLE_CONFIGURATIONS.flatMap((c) =>
+      SAMPLE_CASES.map((testCase, index) => {
+        const [inputTokens, outputTokens, durationMs] = SAMPLE_USAGE[c.key][index % SAMPLE_USAGE[c.key].length]
+        return {
+          caseKey: testCase.key,
+          configurationKey: c.key,
+          sampleNo: 1,
+          status: 'succeeded' as const,
+          attempts: [{ attemptNo: 1, status: 'succeeded' as const, errorCode: null, definite: null, inputTokens, outputTokens, cachedInputTokens: 0, reasoningTokens: null, durationMs }],
+        }
+      }),
+    ),
+  },
+  SAMPLE_PRICES,
+)
+
+export const SAMPLE_PRICE_TABLE = { version: SAMPLE_PRICES.version, readOn: SAMPLE_PRICES.readOn, sources: SAMPLE_PRICES.sources, predates: false }

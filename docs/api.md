@@ -13,6 +13,8 @@ Imported evidence (D-38): a configuration may be `{kind: "imported", key, label,
 
 Draft fields added in v2: optional `rubricVersion` (`reference-qa-v1` default, `safety-v1`, `writing-v1`) and an optional per-case `language` tag. Results add `cases[].language` and `byLanguage` (D-35, D-36).
 
+Cost and speed (D-63), after reveal, every participant: results add `priceTable: {version, readOn, sources: {openai, anthropic}, predates}` and `setupMetrics: {<configurationKey>: {source, calls: {planned, succeeded, failed, uncertain, canceled, retries, errorCodes, providerCalls, medianPerAnswer}, latency: {medianMs, slowestMs, n}, tokens: {medianInput, medianOutput, totalInput, totalOutput, totalCachedInput, totalReasoning, unknownUsage}, cost: {status: "estimated"|"partial"|"no_price"|"imported", perAnswerMedianMicroUsd, perThousandMicroUsd, hearingMicroUsd, possiblyBilledUnknown, cachedAssumedFull}}}`. Amounts are integer micro-dollars (µUSD) estimated at list prices from the dated table for the hearing's creation day; `null` means unknown, never 0. Medians and latency use succeeded answers on eligible questions; totals count every call. `coverage` is unchanged. The JSON export adds `versions.priceTableVersion` and `setupMetrics: {priceTable, byConfiguration}`, both under `certification.contentSha256`; CSV is unchanged.
+
 Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **jurors**. Field names, enum values, and error codes keep the original terms; only display strings (session labels such as `Juror 1`, and messages) use the new ones.
 
 - Success: `{"data": …, "requestId": "req_…"}`
@@ -42,7 +44,7 @@ Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **ju
 | DELETE `/runs/:id/reviewers/:sessionId` | owner | Unsubmitted invited sessions only |
 | POST `/runs/:id/reveal` | owner | `{acknowledgePendingCount}` must equal current pending count |
 | POST `/runs/:id/review/file-and-unseal` | owner, no jury | `{}`; If-Match is the judge's session revision. Files the judge's complete worksheet and reveals in one commit. 409 `STATE_CONFLICT` with `details.juryPresent` while any juror holds a seat or an unused summons is out |
-| GET `/runs/:id/results` | participant, after reveal | Mapping, cohorts, coverage, evidence, verdicts |
+| GET `/runs/:id/results` | participant, after reveal | Mapping, cohorts, coverage, cost and speed (`priceTable`, `setupMetrics`), evidence, verdicts |
 | GET `/runs/:id/export?format=json\|csv` | owner, after reveal | Certified record (cases, responses, ratings by juror label, findings, verdicts, versions, `certification.contentSha256`); CSV is one row per rating with formula-neutralized cells. No keys, credential/session/response IDs, invite tokens, or user IDs |
 | POST `/runs/:id/verdicts` | owner, after reveal | `{outcome,selectedConfigurationKey?,rationale,limitations}` → appended revision |
 

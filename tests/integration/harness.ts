@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { getPlatformProxy, unstable_dev, type Unstable_DevWorker } from 'wrangler'
 import { SqlBatchDatabase } from '../../src/server/db/sql-batch-database'
 import { verifyJwt } from 'deepspace/worker'
-import { MODEL_ROUTES, type ModelRoute } from '../../src/domain/registry'
+import { MODEL_ROUTES, PRICE_TABLES, type ModelRoute, type PriceTable } from '../../src/domain/registry'
 import { createApi } from '../../src/server/api'
 import { parseConfig, type ConfigEnv } from '../../src/server/config'
 import { ensureMigrated, migrate } from '../../src/server/db/migrations'
@@ -92,6 +92,7 @@ async function openDatabase(): Promise<{ db: D1Database; dispose: () => Promise<
 export interface HarnessOptions {
   env?: Partial<ConfigEnv>
   routes?: readonly ModelRoute[]
+  priceTables?: readonly PriceTable[]
 }
 
 export async function createHarness(options: HarnessOptions = {}) {
@@ -139,6 +140,7 @@ export async function createHarness(options: HarnessOptions = {}) {
       return parseConfig(env)
     },
     routes: options.routes ?? MODEL_ROUTES.map((route) => ({ ...route, verifiedAt: '2026-11-16', multiTurnVerifiedAt: '2026-11-16' })),
+    priceTables: options.priceTables ?? PRICE_TABLES,
     now: () => clock,
     newId: () => {
       idCounter++

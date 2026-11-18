@@ -46,6 +46,7 @@ function buildRecordBody(results: Results, evaluationId: string) {
       messageTemplateVersion: results.messageTemplateVersion,
       providerRegistryVersion: results.providerRegistryVersion,
       appCommit: results.appCommit,
+      priceTableVersion: results.priceTable.version,
     },
     configurations: results.configurations,
     cases: results.cases.map((testCase, index) => ({
@@ -83,6 +84,8 @@ function buildRecordBody(results: Results, evaluationId: string) {
       disagreements: results.disagreements,
       coverage: results.coverage,
     },
+    // Estimated at list prices (D-63); the provider bill is the authority.
+    setupMetrics: { priceTable: results.priceTable, byConfiguration: results.setupMetrics },
     verdicts: results.verdicts,
   }
 }
