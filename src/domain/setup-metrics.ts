@@ -5,6 +5,7 @@
  * one table. Amounts are integer micro-dollars (µUSD). An estimate, never a charge.
  */
 
+import { consistencyMetrics, type ConsistencyMetrics } from './consistency'
 import type { ProviderId } from './registry'
 import { callCostMicroUsd, priceFor, type PriceTable } from './prices'
 import type { GenerationStatus } from './transitions'
@@ -33,6 +34,8 @@ export interface UsageRecord {
   attempts: AttemptUsage[]
   /** Provider calls inside one attempt: 1 today, more for later tool-loop kits. */
   calls?: number
+  /** The accepted answer, for consistency across samples (D-66). */
+  text?: string | null
 }
 
 export interface SetupParty {
@@ -47,6 +50,8 @@ export interface SetupMetricsInput {
   parties: readonly SetupParty[]
   eligibleCaseKeys: readonly string[]
   records: readonly UsageRecord[]
+  /** D-65: with more than one, each generated party also gets `consistency`. */
+  samplesPerAnswer?: number
 }
 
 export type CostStatus = 'estimated' | 'partial' | 'no_price' | 'imported'
@@ -90,6 +95,8 @@ export interface PartyMetrics {
     /** Priced calls whose cached input was unknown, so cached tokens (if any) were priced at the full input rate. */
     cachedAssumedFull: number
   }
+  /** Only with repeats (D-66); null otherwise and for imported parties. */
+  consistency: ConsistencyMetrics | null
 }
 
 export function median(values: readonly number[]): number | null {
@@ -110,6 +117,7 @@ const IMPORTED_METRICS = (planned: number, succeeded: number): PartyMetrics => (
   latency: { medianMs: null, slowestMs: null, n: 0 },
   tokens: { medianInput: null, medianOutput: null, totalInput: 0, totalOutput: 0, totalCachedInput: null, totalReasoning: null, unknownUsage: 0 },
   cost: { status: 'imported', perAnswerMedianMicroUsd: null, perThousandMicroUsd: null, hearingMicroUsd: null, possiblyBilledUnknown: 0, cachedAssumedFull: 0 },
+  consistency: null,
 })
 
 /**
@@ -229,9 +237,28 @@ export function setupMetrics(input: SetupMetricsInput, table: PriceTable, import
         possiblyBilledUnknown,
         cachedAssumedFull,
       },
+      consistency: (input.samplesPerAnswer ?? 1) > 1 ? partyConsistency(records, input.samplesPerAnswer!) : null,
     }
   }
   return result
+}
+
+/** Every question's samples for one party, in question order of first appearance, lowest sample first. */
+function partyConsistency(records: readonly UsageRecord[], planned: number): ConsistencyMetrics {
+  const byCase = new Map<string, UsageRecord[]>()
+  for (const record of records) byCase.set(record.caseKey, [...(byCase.get(record.caseKey) ?? []), record])
+  return consistencyMetrics(
+    [...byCase.entries()].map(([caseKey, samples]) => ({
+      caseKey,
+      planned,
+      samples: [...samples]
+        .sort((a, b) => a.sampleNo - b.sampleNo)
+        .map((record) => {
+          const accepted = record.status === 'succeeded' ? record.attempts.find((attempt) => attempt.status === 'succeeded') : undefined
+          return { status: record.status, text: record.text ?? null, outputTokens: accepted?.outputTokens ?? null, durationMs: accepted?.durationMs ?? null }
+        }),
+    })),
+  )
 }
 
 /**

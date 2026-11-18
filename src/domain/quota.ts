@@ -58,6 +58,18 @@ export function plannedCalls(draft: { cases: readonly unknown[]; configurations:
   return draft.cases.length * generated * (generated > 0 ? (draft.samplesPerAnswer ?? 1) : 1)
 }
 
+/**
+ * With repeats (D-65): when the planned calls do not fit but asking once would, the line that says
+ * so ("Ask each party once instead (15 calls)."); null otherwise.
+ */
+export function repeatHint(draft: Parameters<typeof plannedCalls>[0], standing: QuotaStanding): string | null {
+  if ((draft.samplesPerAnswer ?? 1) <= 1) return null
+  const planned = plannedCalls(draft)
+  const once = plannedCalls({ ...draft, samplesPerAnswer: 1 })
+  if (!quotaBlock(planned, standing) || quotaBlock(once, standing)) return null
+  return `Ask each party once instead (${once} ${once === 1 ? 'call' : 'calls'}).`
+}
+
 export type QuotaBlock = { cap: 'user' | 'globalToday' | 'globalLifetime'; message: string }
 
 /** Why `planned` calls cannot start now, naming the tightest cap; null when they fit. */

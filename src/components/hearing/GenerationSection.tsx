@@ -115,12 +115,20 @@ function GenerationTable({ run, selected, onToggle }: { run: OwnerRunView; selec
               {run.eligibility.excludedCaseKeys.includes(testCase.key) && run.status !== 'generating' && <span className="block text-xs font-normal text-warning">Not comparable (excluded)</span>}
             </TableCell>
             {run.configurations.map((c) => {
-              const g = run.generations.find((x) => x.caseKey === testCase.key && x.configurationKey === c.key)
+              const samples = run.generations.filter((x) => x.caseKey === testCase.key && x.configurationKey === c.key).sort((a, b) => a.sampleNo - b.sampleNo)
+              const g = samples[0]
               if (!g) {
                 const imported = run.imported.some((i) => i.caseKey === testCase.key && i.configurationKey === c.key)
                 return (
                   <TableCell key={c.key} className="align-top text-sm text-muted-foreground">
                     {imported ? 'Imported answer' : '—'}
+                  </TableCell>
+                )
+              }
+              if (samples.length > 1) {
+                return (
+                  <TableCell key={c.key} className="align-top">
+                    <SampleCell samples={samples} label={`${testCase.title} / ${c.label}`} selected={selected} onToggle={onToggle} />
                   </TableCell>
                 )
               }
@@ -141,6 +149,42 @@ function GenerationTable({ run, selected, onToggle }: { run: OwnerRunView; selec
         ))}
       </TableBody>
     </Table>
+  )
+}
+
+type GenerationRowView = OwnerRunView['generations'][number]
+
+const DOT: Record<string, string> = { succeeded: 'bg-primary', failed: 'bg-destructive', uncertain: 'bg-warning', canceled: 'bg-muted-foreground', running: 'bg-primary/40', pending: 'bg-transparent' }
+
+/** With repeats (D-66): sample dots (filled = answered) and one line per sample, each retried on its own. */
+function SampleCell({ samples, label, selected, onToggle }: { samples: GenerationRowView[]; label: string; selected: Set<string>; onToggle: (id: string, on: boolean) => void }) {
+  const done = samples.filter((s) => s.status === 'succeeded').length
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1" role="img" aria-label={`${done} of ${samples.length} samples answered`}>
+        {samples.map((s) => (
+          <span key={s.id} aria-hidden className={`size-2.5 rounded-full border border-foreground/40 ${DOT[s.status] ?? 'bg-transparent'}`} />
+        ))}
+        <span className="ml-1 text-xs text-muted-foreground tabular-nums">
+          {done}/{samples.length}
+        </span>
+      </div>
+      <ol className="space-y-1">
+        {samples.map((s) => (
+          <li key={s.id} className="text-xs">
+            <div className="flex items-center gap-2">
+              {s.retryable && <Checkbox aria-label={`Select ${label}, sample ${s.sampleNo}, for retry`} checked={selected.has(s.id)} onCheckedChange={(checked) => onToggle(s.id, checked === true)} />}
+              <span className="text-muted-foreground tabular-nums">Sample {s.sampleNo}</span>
+              <StatusBadge status={s.status} />
+            </div>
+            <div className="mt-0.5 text-muted-foreground tabular-nums">
+              Attempt {s.attemptCount}/2 · {formatDuration(s.durationMs)}
+            </div>
+            {s.errorCode && <div className="mt-0.5 max-w-56 text-destructive">{ERROR_TEXT[s.errorCode] ?? s.errorCode}</div>}
+          </li>
+        ))}
+      </ol>
+    </div>
   )
 }
 

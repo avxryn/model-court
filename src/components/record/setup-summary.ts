@@ -90,11 +90,22 @@ export function tokensPerAnswer(row: SetupRow): { main: string; note: string | n
   return { main: `${count(t.medianInput)} in / ${count(t.medianOutput)} out`, note }
 }
 
+/** "Same answer 3 of 5 · wording overlap 82% · answered every time 5 of 5" (D-66). */
+export function consistency(m: PartyMetrics): string {
+  const c = m.consistency
+  if (!c) return '—'
+  const parts = [c.compared > 0 ? `Same answer ${c.sameAnswer} of ${c.compared}` : 'Too few answers to compare']
+  if (c.medianOverlap !== null) parts.push(`wording overlap ${Math.round(c.medianOverlap * 100)}%`)
+  parts.push(`answered every time ${c.answeredEveryTime} of ${c.planned}`)
+  return parts.join(' · ')
+}
+
 export function failures(m: PartyMetrics): string {
   const codes = Object.entries(m.calls.errorCodes).sort(([, a], [, b]) => b - a)
   const failedCalls = codes.reduce((sum, [, n]) => sum + n, 0)
   const parts: string[] = []
-  if (failedCalls > 0) parts.push(`${failedCalls} failed (${codes.map(([code, n]) => `${ERROR_SHORT[code] ?? code.toLowerCase().replaceAll('_', ' ')}${n > 1 ? ` ×${n}` : ''}`).join(', ')})`)
+  // Calls that failed or timed out, with why; "uncertain" counts answers still without a known outcome.
+  if (failedCalls > 0) parts.push(`${plural(failedCalls, 'failed call')} (${codes.map(([code, n]) => `${ERROR_SHORT[code] ?? code.toLowerCase().replaceAll('_', ' ')}${n > 1 ? ` ×${n}` : ''}`).join(', ')})`)
   parts.push(`${m.calls.retries} retried`)
   parts.push(`${m.calls.uncertain} uncertain`)
   if (failedCalls === 0 && m.calls.retries === 0 && m.calls.uncertain === 0) return 'None'

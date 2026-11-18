@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { quotaBlock, quotaStanding } from './quota'
+import { quotaBlock, quotaStanding, repeatHint } from './quota'
 
 const CAPS = { dailyPerUser: 20, dailyGlobal: 100, lifetimeGlobal: 500 }
 const NOW = Date.UTC(2026, 10, 18, 15, 0, 0)
@@ -49,5 +49,24 @@ describe('quotaBlock (Start gating)', () => {
   it('names the lifetime cap, also on a tie, because a daily reset would not help', () => {
     expect(quotaBlock(10, quotaStanding(CAPS, { userToday: 0, globalToday: 0, globalLifetime: 499 }, NOW))?.message).toContain('1 call left of its 500-call lifetime cap')
     expect(quotaBlock(10, quotaStanding(CAPS, { userToday: 20, globalToday: 20, globalLifetime: 500 }, NOW))?.cap).toBe('globalLifetime')
+  })
+})
+
+describe('repeatHint (D-65)', () => {
+  const party = { kind: 'model' }
+  const draft = (samplesPerAnswer?: number, parties = 3) => ({ cases: [1, 2, 3, 4, 5], configurations: Array.from({ length: parties }, () => party), samplesPerAnswer })
+  const fresh = quotaStanding(CAPS, { userToday: 0, globalToday: 0, globalLifetime: 0 }, NOW)
+
+  it('offers asking once when the repeats do not fit but once does', () => {
+    // 5 × 3 × 2 = 30 > 20; once = 15 fits.
+    expect(quotaBlock(30, fresh)?.cap).toBe('user')
+    expect(repeatHint(draft(2), fresh)).toBe('Ask each party once instead (15 calls).')
+  })
+
+  it('says nothing without repeats, when the repeats fit, or when even once does not fit', () => {
+    expect(repeatHint(draft(undefined), fresh)).toBeNull()
+    expect(repeatHint(draft(2, 2), fresh)).toBeNull() // 20 fits exactly
+    const late = quotaStanding(CAPS, { userToday: 10, globalToday: 10, globalLifetime: 10 }, NOW)
+    expect(repeatHint(draft(2), late)).toBeNull() // 15 > 10 left
   })
 })

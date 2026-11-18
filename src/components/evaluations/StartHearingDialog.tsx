@@ -8,7 +8,7 @@ import { AllowanceRows } from '@/components/settings/CallAllowance'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import type { DraftInput } from '@/domain/contracts'
 import { LIMITS } from '@/domain/limits'
-import { quotaBlock } from '@/domain/quota'
+import { plannedCalls, quotaBlock, repeatHint } from '@/domain/quota'
 import { PROVIDER_NAMES, type ProviderId } from '@/domain/registry'
 import { generatedParties } from '@/domain/snapshot'
 import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
@@ -25,13 +25,15 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
   const [error, setError] = useState<string | null>(null)
   const intent = useRef(newIntentKey())
   const modelParties = generatedParties(draft.configurations).length
-  const calls = draft.cases.length * modelParties
+  const samples = modelParties > 0 ? (draft.samplesPerAnswer ?? 1) : 1
+  const calls = plannedCalls(draft)
   // Imported-only hearings send nothing to a provider and charge nothing, so there is nothing to consent to.
   const needsConsent = calls > 0
   const providerNames = providers.map((p) => PROVIDER_NAMES[p]).join(' and ')
   // D-57: show what is left of the call caps, and refuse a hearing that cannot fit. The server enforces them too.
   const quota = useApi<QuotaView>(open && needsConsent ? '/quota' : null)
   const block = quota.data ? quotaBlock(calls, quota.data) : null
+  const hint = quota.data ? repeatHint(draft, quota.data) : null
 
   const start = async () => {
     setBusy(true)
@@ -74,7 +76,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
           <DialogTitle className="font-display text-xl font-medium">Start a hearing</DialogTitle>
           <DialogDescription>
             {needsConsent
-              ? `This freezes the saved draft into an unchangeable hearing (a run) and sends one request per question and model party, using your own provider keys.${modelParties < draft.configurations.length ? ' Imported answers are not sent.' : ''}`
+              ? `This freezes the saved draft into an unchangeable hearing (a run) and sends one request per question and model party${samples > 1 ? `, ${samples} times each (repeats)` : ''}, using your own provider keys.${modelParties < draft.configurations.length ? ' Imported answers are not sent.' : ''}`
               : 'This freezes the saved draft into an unchangeable hearing (a run). Every party has imported answers, so nothing is generated.'}
           </DialogDescription>
         </DialogHeader>
@@ -83,7 +85,8 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
           <dd className="tabular-nums">
             {needsConsent ? (
               <>
-                {draft.cases.length} questions × {modelParties} model {modelParties === 1 ? 'party' : 'parties'} = <strong>{calls}</strong>
+                {draft.cases.length} questions × {modelParties} model {modelParties === 1 ? 'party' : 'parties'}
+                {samples > 1 && <> × {samples} samples</>} = <strong>{calls}</strong>
               </>
             ) : (
               <strong>None</strong>
@@ -109,6 +112,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
         {block && (
           <p className="rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive" role="alert" id="start-blocked">
             {block.message}
+            {hint && <span className="mt-1 block">{hint}</span>}
           </p>
         )}
         {needsConsent ? (

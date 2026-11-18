@@ -221,6 +221,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
     configurationKey: generation.configuration_key,
     sampleNo: generation.sample_no,
     status: generation.status,
+    text: generation.accepted_attempt_id ? (attempts.find((attempt) => attempt.id === generation.accepted_attempt_id)?.output_text ?? null) : null,
     attempts: attempts
       .filter((attempt) => attempt.generation_id === generation.id)
       .map((attempt) => ({
@@ -242,6 +243,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
       ),
       eligibleCaseKeys: manifest.caseKeys,
       records: usageRecords,
+      samplesPerAnswer: samples,
     },
     prices.table,
     Object.fromEntries(

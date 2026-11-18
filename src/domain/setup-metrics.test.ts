@@ -206,3 +206,20 @@ describe('formatMicroUsd', () => {
     expect(formatMicroUsd(1_234_567_000)).toBe('$1,234.57')
   })
 })
+
+describe('setupMetrics consistency (D-66)', () => {
+  const records = [
+    rec('q1', 'A', 'succeeded', [ok(100, 10, 1000)], { text: 'Same answer.' }),
+    rec('q1', 'A', 'succeeded', [ok(100, 10, 1400)], { sampleNo: 2, text: 'Same  answer.' }),
+    rec('q2', 'A', 'succeeded', [ok(100, 10, 1000)], { text: 'One thing.' }),
+    rec('q2', 'A', 'failed', [fail('PROVIDER_RATE_LIMITED', true)], { sampleNo: 2 }),
+  ]
+  it('is null for a hearing without repeats', () => {
+    expect(setupMetrics({ parties: [PARTIES[0]], eligibleCaseKeys: ['q1', 'q2'], records }, TABLE).A.consistency).toBeNull()
+  })
+  it('summarizes samples per question with repeats', () => {
+    const c = setupMetrics({ parties: [PARTIES[0]], eligibleCaseKeys: ['q1', 'q2'], records, samplesPerAnswer: 2 }, TABLE).A.consistency!
+    expect(c).toMatchObject({ compared: 1, sameAnswer: 1, medianOverlap: 1, answeredEveryTime: 1, planned: 2 })
+    expect(c.questions.map((q) => q.caseKey)).toEqual(['q1', 'q2'])
+  })
+})

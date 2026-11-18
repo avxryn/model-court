@@ -11,6 +11,7 @@ import { ImportedAnswers } from '@/components/evaluations/ImportedAnswers'
 import { JurorCaseView } from '@/components/evaluations/JurorCaseView'
 import { MissingKeys, SavedKeys } from '@/components/evaluations/KeyStatus'
 import { QuestionsEditor } from '@/components/evaluations/QuestionsEditor'
+import { RepeatsPicker } from '@/components/evaluations/RepeatsPicker'
 import { RubricPicker } from '@/components/evaluations/RubricPicker'
 import { StartHearingDialog } from '@/components/evaluations/StartHearingDialog'
 import { useCaseDraft } from '@/components/evaluations/use-case-draft'
@@ -21,6 +22,8 @@ import { useShellFocus } from '@/components/shell/ShellContext'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
+import type { DraftInput } from '@/domain/contracts'
+import { plannedCalls } from '@/domain/quota'
 import type { ModelRoute } from '@/domain/registry'
 import { generatedParties, requiredProviders } from '@/domain/snapshot'
 import { newIntentKey } from '@/lib/api-client'
@@ -57,7 +60,18 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
   const activeRun = evaluation.runs.find((run) => isActive(run.status))
   const latestRun = [...evaluation.runs].sort((a, b) => b.createdAt - a.createdAt)[0]
   const stamp = recordStamp(latestRun?.status)
-  const calls = draft.cases.length * generatedParties(draft.configurations).length
+  const calls = plannedCalls(draft)
+  // Repeats apply to generated parties only (D-65): drop the setting when none is left, so the draft stays valid.
+  const change = (next: DraftInput) => {
+    if (next.samplesPerAnswer && generatedParties(next.configurations).length === 0) {
+      const { samplesPerAnswer: _dropped, ...rest } = next
+      c.change(rest)
+    } else c.change(next)
+  }
+  const setSamples = (samples: 1 | 2 | 3) => {
+    const { samplesPerAnswer: _previous, ...rest } = draft
+    c.change(samples === 1 ? rest : { ...rest, samplesPerAnswer: samples })
+  }
   const blockers = caseBlockers({ draft, routes, imports: c.imports, dirty: c.dirty, hasErrors: c.hasErrors, missingProviders, hasActiveHearing: !!activeRun, generationDisabled: catalog.data ? !catalog.data.generationEnabled : false })
 
   return (
@@ -139,7 +153,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                   catalog={catalog.data}
                   errors={c.errors}
                   newId={newIntentKey}
-                  onChange={c.change}
+                  onChange={change}
                   renderImportedAnswers={(party) => (
                     <ImportedAnswers
                       key={party.key}
@@ -153,6 +167,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                     />
                   )}
                 />
+                <RepeatsPicker draft={draft} max={catalog.data?.limits.samplesPerAnswer ?? 1} onChange={setSamples} />
                 <SavedKeys providers={providers} keys={keys} />
               </TabsContent>
               <TabsContent value="runs">

@@ -50,5 +50,6 @@ export interface CatalogView {
   credentialWritesEnabled: boolean
   providers: Array<{ id: 'openai' | 'anthropic'; name: string }>
   models: CatalogModel[]
-  limits: { maxCases: number; configurations: number; minConfigurations: number; maxOutputTokens: number; reasoningHeadroomTokens: number; maxAttemptsPerGeneration: number; credentialTtlDays: number; dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number }
+  priceTable: { version: string; readOn: string; sources: Record<'openai' | 'anthropic', string> }
+  limits: { maxCases: number; configurations: number; samplesPerAnswer: number; minConfigurations: number; maxOutputTokens: number; reasoningHeadroomTokens: number; maxAttemptsPerGeneration: number; credentialTtlDays: number; dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number }
 }

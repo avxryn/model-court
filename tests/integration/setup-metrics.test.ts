@@ -63,6 +63,7 @@ describe('setup metrics on the record', () => {
     expect(openai.calls).toMatchObject({ planned: 5, succeeded: 5, failed: 0, retries: 0, providerCalls: 5, errorCodes: {} })
     expect(openai.tokens).toMatchObject({ medianInput: 120, medianOutput: 24, totalInput: 600, totalOutput: 120 })
     expect(openai.latency.n).toBe(5)
+    expect(openai.consistency).toBeNull() // no repeats
     expect(openai.latency.slowestMs).toBeGreaterThanOrEqual(openai.latency.medianMs)
     // The coverage table keeps its fields (median latency included) for API compatibility.
     expect(results.coverage[results.configurations[0].key].medianLatencyMs).not.toBeUndefined()

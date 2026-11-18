@@ -357,6 +357,10 @@ describe('repeats: pipeline, primary sample and eligibility', () => {
     expect(response.text).toBe(response.samples[1].text)
     expect(results.coverage[openaiKey]).toMatchObject({ planned: 10, succeeded: 8, failed: 2 })
     expect(results.setupMetrics[openaiKey].calls).toMatchObject({ planned: 10, succeeded: 8, failed: 2, retries: 1 })
+    // Consistency (D-66): OpenAI's stub words every answer differently; Anthropic's repeats itself.
+    expect(results.setupMetrics[openaiKey].consistency).toMatchObject({ compared: 3, sameAnswer: 0, answeredEveryTime: 3, planned: 5 })
+    const anthropicKey = results.configurations.find((c: any) => c.provider === 'anthropic').key
+    expect(results.setupMetrics[anthropicKey].consistency).toMatchObject({ compared: 5, sameAnswer: 5, medianOverlap: 1, answeredEveryTime: 5, planned: 5 })
     const exported = (await h.request('GET', `/runs/${runId}/export?format=json`, { as: OWNER })).json.data
     expect(exported.run.samplesPerAnswer).toBe(2)
     expect(exported.responses.find((r: any) => r.caseKey === caseWithOneFailed && r.configurationKey === openaiKey).samples).toHaveLength(2)
