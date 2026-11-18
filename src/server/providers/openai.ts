@@ -8,7 +8,7 @@
 
 import type { TranscriptMessage } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
-import { classifyHttpError, finishText, isFailure, isRecord, nonNegativeInt, postJson, type Adapter } from './common'
+import { classifyHttpError, finishText, isFailure, isRecord, nonNegativeInt, postJson, subRecord, type Adapter } from './common'
 
 export const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
 
@@ -80,6 +80,9 @@ export const makeOpenAiAdapter = (reasoning: OpenAiReasoning): Adapter => async 
     finishReason: body.status === 'incomplete' ? `incomplete:${incompleteReason ?? 'unknown'}` : typeof body.status === 'string' ? body.status : null,
     inputTokens: nonNegativeInt(usage.input_tokens),
     outputTokens: nonNegativeInt(usage.output_tokens),
+    // Included in input_tokens (OpenAI prompt caching guide); reasoning is included in output_tokens.
+    cachedInputTokens: nonNegativeInt(subRecord(usage, 'input_tokens_details').cached_tokens),
+    reasoningTokens: nonNegativeInt(subRecord(usage, 'output_tokens_details').reasoning_tokens),
     observedModel: typeof body.model === 'string' ? body.model : null,
     truncated: incompleteReason === 'max_output_tokens',
   })

@@ -262,9 +262,9 @@ async function finishAttempt(deps: Deps, ref: AttemptRef, outcome: ProviderOutco
           db
             .prepare(
               `UPDATE generation_attempts SET status = 'succeeded', finished_at = ?, output_text = ?, finish_reason = ?, input_tokens = ?, output_tokens = ?,
-                 duration_ms = ?, provider_request_id = ?, observed_model = ?, truncated = ? WHERE id = ?`,
+                 cached_input_tokens = ?, reasoning_tokens = ?, duration_ms = ?, provider_request_id = ?, observed_model = ?, truncated = ? WHERE id = ?`,
             )
-            .bind(now, outcome.text, outcome.finishReason, outcome.inputTokens, outcome.outputTokens, outcome.durationMs, outcome.providerRequestId, outcome.observedModel, outcome.truncated ? 1 : 0, ref.attemptId),
+            .bind(now, outcome.text, outcome.finishReason, outcome.inputTokens, outcome.outputTokens, outcome.cachedInputTokens, outcome.reasoningTokens, outcome.durationMs, outcome.providerRequestId, outcome.observedModel, outcome.truncated ? 1 : 0, ref.attemptId),
           db.prepare(`UPDATE generations SET status = 'succeeded', accepted_attempt_id = ?, last_error_code = NULL, updated_at = ? WHERE id = ?`).bind(ref.attemptId, now, job.generationId),
           terminalOutbox,
           touchRunStatement(db, context.runId, now),

@@ -45,6 +45,10 @@ export interface ProviderSuccess {
   finishReason: string | null
   inputTokens: number | null
   outputTokens: number | null
+  /** Cached input tokens as the provider reports them; null when not reported (D-64). */
+  cachedInputTokens: number | null
+  /** Reasoning or thinking tokens, already counted in `outputTokens`; null when not reported. */
+  reasoningTokens: number | null
   providerRequestId: string | null
   observedModel: string | null
   durationMs: number
@@ -179,6 +183,12 @@ export function finishText(
 
 export function nonNegativeInt(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null
+}
+
+/** `parent[key]` when it is a JSON object, else an empty one. */
+export function subRecord(parent: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = parent[key]
+  return isRecord(value) ? value : {}
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

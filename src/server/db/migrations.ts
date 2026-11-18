@@ -429,6 +429,15 @@ export const MIGRATIONS: Migration[] = [
        BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_RUN_CREDENTIALS'); END`,
     ],
   },
+  {
+    // D-64: cached-input and reasoning usage as the providers report them, for cost estimates.
+    // Additive; rows before this read null ("not recorded"). The id 0007 is left for roadmap item 2.
+    id: '0008_attempt_usage_details',
+    statements: [
+      `ALTER TABLE generation_attempts ADD COLUMN cached_input_tokens INTEGER CHECK (cached_input_tokens IS NULL OR cached_input_tokens >= 0)`,
+      `ALTER TABLE generation_attempts ADD COLUMN reasoning_tokens INTEGER CHECK (reasoning_tokens IS NULL OR reasoning_tokens >= 0)`,
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`

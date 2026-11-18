@@ -7,7 +7,7 @@
 
 import type { TranscriptMessage } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
-import { classifyHttpError, finishText, isFailure, isRecord, nonNegativeInt, postJson, type Adapter } from './common'
+import { classifyHttpError, finishText, isFailure, isRecord, nonNegativeInt, postJson, subRecord, type Adapter } from './common'
 
 export const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages'
 export const ANTHROPIC_VERSION = '2026-10-21'
@@ -78,6 +78,9 @@ export const makeAnthropicAdapter = (thinking: AnthropicThinking): Adapter => as
     finishReason: stopReason,
     inputTokens: nonNegativeInt(usage.input_tokens),
     outputTokens: nonNegativeInt(usage.output_tokens),
+    // Reported apart from input_tokens (Anthropic prompt caching guide); thinking is included in output_tokens.
+    cachedInputTokens: nonNegativeInt(usage.cache_read_input_tokens),
+    reasoningTokens: nonNegativeInt(subRecord(usage, 'output_tokens_details').thinking_tokens),
     observedModel: typeof body.model === 'string' ? body.model : null,
     truncated: stopReason === 'max_tokens',
   })

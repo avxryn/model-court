@@ -28,6 +28,8 @@ interface AttemptRow {
   finish_reason: string | null
   input_tokens: number | null
   output_tokens: number | null
+  cached_input_tokens: number | null
+  reasoning_tokens: number | null
   duration_ms: number | null
   error_code: string | null
   truncated: number
@@ -46,7 +48,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
   const attempts = (
     await db
       .prepare(
-        `SELECT a.id, a.generation_id, a.attempt_no, a.status, a.output_text, a.finish_reason, a.input_tokens, a.output_tokens, a.duration_ms, a.error_code, a.truncated, a.observed_model
+        `SELECT a.id, a.generation_id, a.attempt_no, a.status, a.output_text, a.finish_reason, a.input_tokens, a.output_tokens, a.cached_input_tokens, a.reasoning_tokens, a.duration_ms, a.error_code, a.truncated, a.observed_model
          FROM generation_attempts a JOIN generations g ON g.id = a.generation_id WHERE g.run_id = ? ORDER BY a.attempt_no`,
       )
       .bind(runId)
@@ -136,6 +138,8 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
             finishReason: null,
             inputTokens: null,
             outputTokens: null,
+            cachedInputTokens: null,
+            reasoningTokens: null,
             durationMs: null,
             observedModel: null,
             sha256: output?.text_sha256 ?? null,
@@ -153,6 +157,8 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
           finishReason: accepted?.finish_reason ?? null,
           inputTokens: accepted?.input_tokens ?? null,
           outputTokens: accepted?.output_tokens ?? null,
+          cachedInputTokens: accepted?.cached_input_tokens ?? null,
+          reasoningTokens: accepted?.reasoning_tokens ?? null,
           durationMs: accepted?.duration_ms ?? null,
           observedModel: accepted?.observed_model ?? null,
         }
@@ -197,8 +203,8 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
         definite: attempt.status === 'failed' ? true : attempt.status === 'uncertain' ? false : null,
         inputTokens: attempt.input_tokens,
         outputTokens: attempt.output_tokens,
-        cachedInputTokens: null,
-        reasoningTokens: null,
+        cachedInputTokens: attempt.cached_input_tokens,
+        reasoningTokens: attempt.reasoning_tokens,
         durationMs: attempt.duration_ms,
       })),
   }))

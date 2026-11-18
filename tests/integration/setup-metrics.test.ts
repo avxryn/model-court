@@ -110,6 +110,43 @@ describe('setup metrics on the record', () => {
     expect(anthropic.calls.planned).toBe(5)
   })
 
+  it('stores cached and reasoning usage and prices cached input at the cached rate (D-64)', async () => {
+    h = await createHarness({ priceTables: [FIXTURE] })
+    const setup = await setupOwner(h)
+    h.setProvider(async (call) => {
+      if (call.url.includes('openai')) {
+        return new Response(
+          JSON.stringify({ status: 'completed', model: 'gpt-6-luna', output: [{ type: 'message', content: [{ type: 'output_text', text: 'Within 30 days with a receipt.' }] }], usage: { input_tokens: 1000, output_tokens: 100, input_tokens_details: { cached_tokens: 400 }, output_tokens_details: { reasoning_tokens: 30 } } }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      return new Response(
+        JSON.stringify({ model: 'claude-haiku-5-5', content: [{ type: 'text', text: 'Yes, within 30 days.' }], stop_reason: 'end_turn', usage: { input_tokens: 600, output_tokens: 80, cache_read_input_tokens: 400, output_tokens_details: { thinking_tokens: 20 } } }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    })
+    const runId = (await startRun(h, setup)).json.data.runId as string
+    await h.drainJobs()
+    const stored = (
+      await h.db
+        .prepare('SELECT g.provider, a.input_tokens, a.output_tokens, a.cached_input_tokens, a.reasoning_tokens FROM generation_attempts a JOIN generations g ON g.id = a.generation_id WHERE g.run_id = ?')
+        .bind(runId)
+        .all<{ provider: string; input_tokens: number; output_tokens: number; cached_input_tokens: number; reasoning_tokens: number }>()
+    ).results
+    expect(stored.find((row) => row.provider === 'openai')).toEqual({ provider: 'openai', input_tokens: 1000, output_tokens: 100, cached_input_tokens: 400, reasoning_tokens: 30 })
+    expect(stored.find((row) => row.provider === 'anthropic')).toEqual({ provider: 'anthropic', input_tokens: 600, output_tokens: 80, cached_input_tokens: 400, reasoning_tokens: 20 })
+    await unseal(runId)
+
+    const results = (await h.request('GET', `/runs/${runId}/results`, { as: OWNER })).json.data
+    const key = (provider: string) => results.configurations.find((c: any) => c.provider === provider).key
+    // OpenAI: (1000 − 400) × 2 + 400 × 0.5 + 100 × 10 = 2400 µUSD; cached input is known, so not an upper bound.
+    expect(results.setupMetrics[key('openai')].cost).toMatchObject({ perAnswerMedianMicroUsd: 2400, cachedAssumedFull: 0 })
+    expect(results.setupMetrics[key('openai')].tokens).toMatchObject({ totalCachedInput: 2000, totalReasoning: 150 })
+    // Anthropic: 600 × 1 + 400 × 0.1 + 80 × 5 = 1040 µUSD.
+    expect(results.setupMetrics[key('anthropic')].cost.perAnswerMedianMicroUsd).toBe(1040)
+    expect(results.cases[0].responses.find((r: any) => r.configurationKey === key('openai'))).toMatchObject({ cachedInputTokens: 400, reasoningTokens: 30 })
+  })
+
   it('labels hearings that predate the first price table', async () => {
     h = await createHarness({ priceTables: [{ ...FIXTURE, effectiveFrom: '2026-12-01' }] })
     const setup = await setupOwner(h)
