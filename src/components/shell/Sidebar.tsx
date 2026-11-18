@@ -117,6 +117,17 @@ function SidebarView({ rail = false, onToggleRail, isSignedIn, account }: Sideba
             </NavItem>
           </NavGroup>
         </nav>
+        <nav aria-label="Legal" className={cn('flex flex-wrap gap-x-3 gap-y-1 px-5 pb-2 text-caption text-muted-foreground', rail && 'lg:hidden')}>
+          <Link to="/privacy" className="rounded-sm outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+            Privacy
+          </Link>
+          <Link to="/terms" className="rounded-sm outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+            Terms
+          </Link>
+          <Link to="/accessibility" className="rounded-sm outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+            Accessibility
+          </Link>
+        </nav>
         <div className={cn('space-y-1 border-t border-drawer-edge p-3', rail && 'lg:flex lg:flex-col lg:items-center lg:px-2')}>
           {onToggleRail && <RailToggle rail={rail} onToggle={onToggleRail} />}
           {account}

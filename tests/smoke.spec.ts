@@ -92,7 +92,7 @@ test.describe('public sample (F19/T19)', () => {
 // pages need an account and are checked by hand.
 test.describe('accessibility (axe, WCAG 2.2 AA)', () => {
   const axeSource = readFileSync(fileURLToPath(new URL('../node_modules/axe-core/axe.min.js', import.meta.url)), 'utf8')
-  for (const path of ['/', '/sample', '/glossary', '/join']) {
+  for (const path of ['/', '/sample', '/glossary', '/join', '/privacy', '/terms', '/accessibility']) {
     for (const theme of ['light', 'dark']) {
       test(`${path} (${theme}) has no WCAG A/AA violations`, async ({ browser }) => {
         const context = await browser.newContext({ reducedMotion: 'reduce' })

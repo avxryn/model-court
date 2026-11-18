@@ -151,7 +151,20 @@ export default function Landing() {
       <footer className="border-t border-border">
         <div className={cn(CONTAINER, 'flex flex-col items-start justify-between gap-3 py-6 text-small text-muted-foreground sm:flex-row sm:items-center')}>
           <BrandMark />
-          <p>A decision aid, not a benchmark or certification.</p>
+          <div className="space-y-1.5 sm:text-right">
+            <p>A decision aid, not a benchmark or certification. Not affiliated with or endorsed by OpenAI or Anthropic.</p>
+            <nav aria-label="Legal" className="flex flex-wrap gap-x-4 gap-y-1 sm:justify-end">
+              <Link to="/privacy" className={NAV_LINK}>
+                Privacy
+              </Link>
+              <Link to="/terms" className={NAV_LINK}>
+                Terms
+              </Link>
+              <Link to="/accessibility" className={NAV_LINK}>
+                Accessibility
+              </Link>
+            </nav>
+          </div>
         </div>
       </footer>
     </div>

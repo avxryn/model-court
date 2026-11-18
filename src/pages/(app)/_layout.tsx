@@ -16,7 +16,7 @@ import { pendingInviteToken } from '../../lib/invite-token'
 import { schemas } from '../../schemas'
 
 /** Pages that work signed out and need nothing from the server. */
-const PUBLIC_PAGES = new Set(['/sample', '/glossary'])
+const PUBLIC_PAGES = new Set(['/sample', '/glossary', '/privacy', '/terms', '/accessibility'])
 
 export default function AppLayout() {
   // People who arrive by a summons or a guest juror's link see only that task.
