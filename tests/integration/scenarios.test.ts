@@ -302,3 +302,78 @@ describe('starting a re-hearing (D-69)', () => {
     expect(await count('SELECT COUNT(*) AS n FROM runs WHERE evaluation_id = ?', setup.evaluationId)).toBe(20)
   })
 })
+
+/** A hearing with REVIEWER as juror: fake providers answer, juror and judge file, the judge unseals. */
+async function hearWithJury(setup: Setup, score = (index: number) => ({ correctness: 2, completeness: 1, grounding: 2, index })) {
+  const started = await start(setup)
+  expect(started.status, JSON.stringify(started.json)).toBe(202)
+  const runId = started.json.data.runId as string
+  await h.drainJobs()
+  await openDeliberation(h, runId)
+  await seatJuror(runId)
+  for (const user of [REVIEWER, OWNER]) {
+    const review = (await h.request('GET', `/runs/${runId}/review`, { as: user })).json.data
+    const ratings = review.cases.flatMap((c: any) => c.responses.map((r: any, i: number) => {
+      const { index: _i, ...lines } = score(i)
+      return { responseId: r.responseId, ...lines, note: '', suspectedIdentityClue: false }
+    }))
+    const saved = await h.request('PUT', `/runs/${runId}/review`, { as: user, ifMatch: review.sessionRevision, body: { ratings } })
+    expect(saved.status).toBe(200)
+    expect((await h.request('POST', `/runs/${runId}/review/submit`, { as: user, ifMatch: saved.json.data.sessionRevision, body: {} })).status).toBe(200)
+  }
+  const view = (await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data
+  const revealed = await h.request('POST', `/runs/${runId}/reveal`, { as: OWNER, ifMatch: view.revision, body: { acknowledgePendingCount: view.review.pendingCount } })
+  expect(revealed.status, JSON.stringify(revealed.json)).toBe(200)
+  return runId
+}
+
+describe('comparing hearings (D-70)', () => {
+  it('lines up unsealed hearings through the anchor, marks the repeat juror, and leaks no account id', async () => {
+    const setup = await setupOwner(h)
+    const first = await hearWithJury(setup)
+    const draft = (await evaluation(setup)).draft
+    draft.comparisonMode = 'configuration'
+    draft.configurations[1].systemPrompt = 'Answer in one sentence.'
+    await saveDraft(setup, draft)
+    const second = await hearWithJury(setup)
+
+    const res = await h.request('GET', `/evaluations/${setup.evaluationId}/comparison?runIds=${second},${first}`, { as: OWNER })
+    expect(res.status, JSON.stringify(res.json)).toBe(200)
+    const data = res.json.data
+    expect(data.hearings.map((hearing: any) => hearing.runId)).toEqual([first, second])
+    expect(data.hearings.map((hearing: any) => hearing.raterSource)).toEqual(['jury', 'jury'])
+    expect(data.hearings.map((hearing: any) => hearing.repeatJurorCount)).toEqual([0, 1])
+    expect(data.comparable).toMatchObject({ sameQuestions: true, sameRubric: true, sameTemplate: true, sameRaterSource: true })
+    expect(data.commonQuestionCount).toBe(5)
+    expect(data.anchors).toHaveLength(1)
+    expect(data.anchors[0].label).toBe('Candidate 1')
+    // Every line scored 2/1/2 = 5 points, so the anchor difference is 0 on every question.
+    expect(data.anchors[0].byHearing[first]).toMatchObject({ meanPoints: 5, questions: 5, raters: 1 })
+    expect(data.relative).toEqual([
+      expect.objectContaining({ runId: first, label: 'Candidate 2', meanDiff: 0, tied: 5, questions: 5, raters: 1 }),
+      expect.objectContaining({ runId: second, label: 'Candidate 2', meanDiff: 0, tied: 5, questions: 5, raters: 1 }),
+    ])
+    expect(data.jurorOverlap).toEqual([{ runIds: [first, second], shared: 1, knowable: 1, guests: 0 }])
+    expect(data.caveats).toEqual(expect.arrayContaining(['different_juries', 'few_raters', 'repeat_jurors']))
+    expect(data.setupMetrics[first]).toBeDefined()
+    expect(Object.keys(data.setupMetrics[first]).sort()).toEqual(data.hearings[0].parties.map((p: any) => p.key).sort())
+    const body = JSON.stringify(res.json)
+    for (const secret of [REVIEWER, OWNER, setup.openaiKeyId, setup.anthropicKeyId, 'sk-']) expect(body).not.toContain(secret)
+  })
+
+  it('refuses sealed hearings (409), bad lists (422), other cases (404), jurors and strangers (404)', async () => {
+    const setup = await setupOwner(h)
+    const first = await hearWithJury(setup)
+    const sealed = (await start(setup)).json.data.runId as string
+    await h.drainJobs()
+    const path = (ids: string[]) => `/evaluations/${setup.evaluationId}/comparison?runIds=${ids.join(',')}`
+    const refused = await h.request('GET', path([first, sealed]), { as: OWNER })
+    expect(refused.status).toBe(409)
+    expect(refused.json.error.details).toEqual({ sealedRunId: sealed })
+    expect((await h.request('GET', path([first]), { as: OWNER })).status).toBe(422)
+    expect((await h.request('GET', path([first, first]), { as: OWNER })).status).toBe(422)
+    expect((await h.request('GET', path([first, crypto.randomUUID()]), { as: OWNER })).status).toBe(404)
+    expect((await h.request('GET', path([first, sealed]), { as: REVIEWER })).status).toBe(404)
+    expect((await h.request('GET', path([first, sealed]), { as: OTHER })).status).toBe(404)
+  })
+})

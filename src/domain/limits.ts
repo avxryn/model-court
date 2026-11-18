@@ -11,6 +11,8 @@ export const LIMITS = {
   sampleStaggerMs: 60_000,
   /** Spec 02 (D-69, Q2): hearings a case may hold, canceled ones included. Duplicate the case to keep going. */
   hearingsPerEvaluation: 20,
+  /** Spec 02 (D-70): hearings in one comparison, so one read loads at most five records. */
+  compareHearingsMax: 5,
   caseTitle: { min: 1, max: 100 },
   caseInput: { min: 1, max: 4_000 },
   caseReference: { min: 0, max: 8_000 },

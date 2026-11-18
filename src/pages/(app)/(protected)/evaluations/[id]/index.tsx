@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, Repeat } from 'lucide-react'
+import { AlertTriangle, Columns2, Repeat } from 'lucide-react'
 import { Caption, CaseStage, DocketNumber, Sheet, Stamp } from '@/components/court/CaseFile'
 import { CaseFolder, DividerTabs } from '@/components/court/Folder'
 import { CaseActionBar } from '@/components/evaluations/CaseActionBar'
@@ -221,6 +221,13 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                 <SavedKeys providers={providers} keys={keys} />
               </TabsContent>
               <TabsContent value="runs">
+                {evaluation.runs.filter((run) => run.status === 'revealed' || run.status === 'decided').length >= 2 && (
+                  <div className="mb-4 flex justify-end">
+                    <Button size="sm" variant="outline" render={<Link to={`/evaluations/${evaluation.id}/compare`} />} nativeButton={false}>
+                      <Columns2 aria-hidden /> Compare hearings
+                    </Button>
+                  </div>
+                )}
                 <HearingList runs={evaluation.runs} to={(run) => `/runs/${run.id}`} versions={{
                     rows: evaluation.runs,
                     draft: draftStanding,

@@ -34,6 +34,7 @@ import { getResults, recordVerdict } from './services/results'
 import { createInvite, fileAndUnseal, getReview, redeemInvite, reveal, revokeInvite, revokeSession, saveReview, submitReview } from './services/reviews'
 import { getQuota } from './services/quota'
 import { cancelRun, getRun, openReview, retryGenerations, startRun } from './services/runs'
+import { getComparison, parseRunIds } from './services/comparison'
 import { restoreDraft } from './services/scenarios'
 import { cancelSpecialMaster, getSpecialMaster, startSpecialMaster } from './services/special-master'
 import {
@@ -247,6 +248,8 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     const input = await readBody(c, restoreDraftSchema)
     return ok(c, await restoreDraft(deps(c), user(c), pathId(c, 'id'), input, ifMatch, rid(c)))
   })
+  // Spec 02 (D-70): unsealed hearings of one case side by side, owner only.
+  api.get('/evaluations/:id/comparison', async (c) => ok(c, await getComparison(deps(c), user(c), pathId(c, 'id'), parseRunIds(c.req.query('runIds')))))
   api.delete('/evaluations/:id', async (c) => {
     const ifMatch = ifMatchRevision(c)
     const input = await readBody(c, deleteEvaluationSchema)
