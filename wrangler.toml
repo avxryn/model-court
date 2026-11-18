@@ -46,7 +46,7 @@ MAX_LIFETIME_CALLS_GLOBAL = "500"
 # Exact https origin used for invitation links; empty = the request origin.
 PUBLIC_APP_ORIGIN = ""
 # Shipped revision recorded in run snapshots; set to the commit you deploy.
-APP_COMMIT = "479aaf5"
+APP_COMMIT = "db3f1c0"
 
 [[migrations]]
 tag = "v1"
