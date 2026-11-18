@@ -54,7 +54,7 @@ export function Sidebar({ rail = false, onToggleRail }: { rail?: boolean; onTogg
         <Button
           variant="ghost"
           size="icon-lg"
-          className="text-muted-foreground hover:bg-paper/70 lg:hidden"
+          className="text-muted-foreground hover:bg-accent/70 lg:hidden"
           onClick={() => setOpen((value) => !value)}
           aria-label={open ? 'Close menu' : 'Open menu'}
           aria-expanded={open}
@@ -129,7 +129,7 @@ function RailToggle({ rail, onToggle }: { rail: boolean; onToggle: () => void })
     <Tooltip>
       <TooltipTrigger
         render={
-          <Button variant="ghost" className={cn('hidden h-8 w-full justify-start gap-2.5 px-2 font-normal text-muted-foreground hover:bg-paper/60 lg:flex', rail && 'lg:size-8 lg:justify-center lg:px-0')} onClick={onToggle} aria-label={label} aria-keyshortcuts="Meta+B Control+B" />
+          <Button variant="ghost" className={cn('hidden h-8 w-full justify-start gap-2.5 px-2 font-normal text-muted-foreground hover:bg-accent/70 lg:flex', rail && 'lg:size-8 lg:justify-center lg:px-0')} onClick={onToggle} aria-label={label} aria-keyshortcuts="Meta+B Control+B" />
         }
       >
         <Icon className="size-4" strokeWidth={1.75} aria-hidden />
@@ -164,8 +164,8 @@ function rowClass(active: boolean, rail = false) {
   return cn(
     'relative flex h-8 min-w-0 items-center gap-2.5 rounded-md px-2 text-sm outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50',
     active
-      ? 'bg-paper font-medium text-foreground ring-1 ring-paper-edge before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-stamp'
-      : 'text-foreground/80 hover:bg-paper/60 hover:text-foreground',
+      ? 'bg-accent font-medium text-accent-foreground'
+      : 'text-foreground/80 hover:bg-accent/70 hover:text-foreground',
     rail && 'lg:justify-center lg:px-0',
   )
 }
@@ -216,7 +216,7 @@ function CaseFiles({ rail }: { rail: boolean }) {
       action={
         <NewCaseDialog
           trigger={
-            <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:bg-paper/60" aria-label="Open a new case">
+            <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:bg-accent/70" aria-label="Open a new case">
               <Plus aria-hidden />
             </Button>
           }
@@ -227,7 +227,7 @@ function CaseFiles({ rail }: { rail: boolean }) {
         <li className="hidden lg:block">
           <NewCaseDialog
             trigger={
-              <Button variant="ghost" className="h-8 w-full px-0 text-muted-foreground hover:bg-paper/60" aria-label="Open a new case" title="Open a new case">
+              <Button variant="ghost" className="h-8 w-full px-0 text-muted-foreground hover:bg-accent/70" aria-label="Open a new case" title="Open a new case">
                 <Plus className="size-4" aria-hidden />
               </Button>
             }
@@ -237,7 +237,7 @@ function CaseFiles({ rail }: { rail: boolean }) {
       {list.loading && !list.data && (
         <li className="space-y-1 px-2 py-1" aria-label="Loading case files">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-6 animate-pulse rounded bg-paper/60 motion-reduce:animate-none" />
+            <div key={i} className="h-6 animate-pulse rounded bg-muted motion-reduce:animate-none" />
           ))}
         </li>
       )}
@@ -316,7 +316,7 @@ function CaseFolder({ item, rail, open, current, currentRunId, onToggle }: { ite
         </div>
         {open && (
           <ul className="mt-0.5 ml-4 space-y-0.5 border-l border-drawer-edge pl-2" aria-label={`Hearings in ${item.title}`}>
-            {detail.loading && !detail.data && <li className="h-7 animate-pulse rounded bg-paper/60 motion-reduce:animate-none" aria-label="Loading hearings" />}
+            {detail.loading && !detail.data && <li className="h-7 animate-pulse rounded bg-muted motion-reduce:animate-none" aria-label="Loading hearings" />}
             {detail.data && runs.length === 0 && <li className="flex h-7 items-center px-2 text-xs text-muted-foreground">No hearings yet</li>}
             {runs.map((run) => {
               const info = statusInfo(run.status)

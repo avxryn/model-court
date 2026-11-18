@@ -26,7 +26,7 @@ export default function SpecialMasterPage() {
                   <div className="court-label">
                     Special master <Plain>an advisory AI grader, visible only to you</Plain>
                   </div>
-                  <h1 className="font-heading text-2xl leading-tight font-bold sm:text-3xl">Check an AI grader against the jury</h1>
+                  <h1 className="font-display text-2xl leading-tight font-medium tracking-tight sm:text-3xl">Check an AI grader against the jury</h1>
                   <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">An AI model scores each testimony on the same rubric, one testimony at a time, without knowing which party gave it. It uses your own API key. Its scores are advisory: they never change the jury’s findings or your judgment. Check how often it agrees with the jury before relying on it.</p>
                 </header>
                 <SpecialMasterPanel results={data} />

@@ -55,7 +55,7 @@ function DeleteCaseDialog({ open, onOpenChange, evaluationId, title, revision }:
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-heading text-xl">Delete “{title}”?</DialogTitle>
+          <DialogTitle className="font-display text-xl font-medium">Delete “{title}”?</DialogTitle>
           <DialogDescription>
             Access stops immediately for you and every juror. Hearings, responses, ratings, and judgments are permanently removed within 24 hours and cannot be recovered. A provider request already in flight may still be charged. Your saved API keys are not affected. Deleting here cannot remove data the providers already received.
           </DialogDescription>

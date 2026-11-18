@@ -64,7 +64,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-heading text-xl">Start a hearing</DialogTitle>
+          <DialogTitle className="font-display text-xl font-medium">Start a hearing</DialogTitle>
           <DialogDescription>
             {needsConsent
               ? `This freezes the saved draft into an unchangeable hearing (a run) and sends one request per question and model party, using your own provider keys.${modelParties < draft.configurations.length ? ' Imported answers are not sent.' : ''}`

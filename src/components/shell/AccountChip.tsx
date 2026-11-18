@@ -13,7 +13,7 @@ export function AccountAvatar({ imageUrl, initial, className }: { imageUrl?: str
   return (
     <Avatar className={cn('size-7 ring-1 ring-paper-edge', className)}>
       {imageUrl && <AvatarImage src={imageUrl} referrerPolicy="no-referrer" alt="" />}
-      <AvatarFallback className="bg-manila text-xs font-medium text-manila-foreground">{initial}</AvatarFallback>
+      <AvatarFallback className="bg-primary text-xs font-medium text-primary-foreground">{initial}</AvatarFallback>
     </Avatar>
   )
 }

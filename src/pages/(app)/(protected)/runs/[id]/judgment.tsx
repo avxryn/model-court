@@ -86,13 +86,13 @@ function Judgment({ data, reload }: { data: ResultsView; reload: () => Promise<v
               {data.eligibleCaseKeys.length} of {data.plannedCaseCount} questions were eligible for scoring. Means are on a 0–2 scale. {data.disagreements.length > 0 && `Ratings disagreed by a point or more on ${plural(data.disagreements.length, 'judgment')}.`}
             </p>
 
-            <section aria-labelledby="j-judgment" className="border-t-4 border-double border-foreground pt-5">
+            <section aria-labelledby="j-judgment" className="border-t border-border pt-5">
               <h2 id="j-judgment" className="court-label">
                 Judgment
               </h2>
               {latest ? (
                 <>
-                  <p className="mt-2 font-heading text-2xl font-bold">{outcomeText(latest, data.configurations)}</p>
+                  <p className="mt-2 font-display text-2xl font-medium">{outcomeText(latest, data.configurations)}</p>
                   <p className="mt-2 font-heading leading-relaxed whitespace-pre-wrap">{latest.rationale}</p>
                   {latest.limitations && <p className="mt-2 text-sm whitespace-pre-wrap text-muted-foreground">Limitations: {latest.limitations}</p>}
                   <div className="mt-10 grid gap-8 sm:grid-cols-2 print:break-inside-avoid">

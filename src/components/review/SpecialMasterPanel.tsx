@@ -44,7 +44,7 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
         {[...runs].reverse().map((run) => (
           <article key={run.id} className="exhibit-panel px-5 py-4">
             <header className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="flex items-center gap-2 font-heading text-lg font-bold">
+              <h3 className="flex items-center gap-2 text-base font-semibold">
                 <Bot aria-hidden className="size-4" /> {PROVIDER_NAMES[run.model.provider as ProviderId]} <span className="typewriter text-sm font-normal">{run.model.modelId}</span>
               </h3>
               <span className="text-sm text-muted-foreground tabular-nums">
@@ -115,7 +115,7 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
                   <Fold summary={<>Where the grader falls outside the jury’s range ({run.calibration.disagreements.length})</>}>
                     <ul className="space-y-1.5 text-sm">
                       {run.calibration.disagreements.map((d, i) => (
-                        <li key={i} className="rounded-[2px] bg-slip px-3 py-2">
+                        <li key={i} className="rounded-md bg-slip px-3 py-2">
                           <span className="font-medium">{results.cases.find((c) => c.key === d.caseKey)?.title}</span> · {labels[d.configurationKey]} · {lines[d.dimension].label}: grader {d.grader}, jury {d.juryMin === d.juryMax ? d.juryMin : `${d.juryMin}–${d.juryMax}`}
                           {d.note && <span className="block text-xs text-muted-foreground">Grader’s note: {d.note}</span>}
                         </li>
@@ -214,7 +214,7 @@ function StartForm({ runId, catalog, keys, plannedCalls, partyProviders, onStart
   }
 
   return (
-    <div className="mt-4 space-y-3 rounded-[2px] border border-dashed border-slip-edge bg-slip/60 px-4 py-4">
+    <div className="mt-4 space-y-3 rounded-md border border-border bg-slip/60 px-4 py-4">
       <div className="space-y-1.5 sm:max-w-sm">
         <Label htmlFor="special-master-model">Grader model</Label>
         <Select value={modelKey || null} onValueChange={(value) => setModelKey(String(value))} items={models.map((m) => ({ value: m.key, label: m.label }))}>

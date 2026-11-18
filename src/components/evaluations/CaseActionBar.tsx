@@ -37,7 +37,7 @@ function Blockers({ blockers }: { blockers: string[] }) {
         <span className="sm:hidden"> to do</span>
         <span className="hidden sm:inline"> {blockers.length === 1 ? 'thing' : 'things'} to do before the hearing</span>
       </PopoverTrigger>
-      <PopoverContent side="top" align="end" className="w-[min(26rem,calc(100vw-2rem))] gap-2 rounded-[2px] border border-dashed border-slip-edge bg-slip px-5 py-4 shadow-lg ring-0">
+      <PopoverContent side="top" align="end" className="w-[min(26rem,calc(100vw-2rem))] gap-2 rounded-md border border-border bg-slip px-5 py-4 shadow-lg ring-0">
         <PopoverTitle className="court-label">Before the hearing can start</PopoverTitle>
         <SlipList items={blockers} className="text-foreground/80" />
       </PopoverContent>

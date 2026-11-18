@@ -30,7 +30,7 @@ export function QuestionsEditor({ cases, onChange, errors, newId, disabled }: { 
       <legend className="sr-only">Questions</legend>
       <CaseImport currentCount={cases.length} newId={newId} onImport={onChange} disabled={disabled} />
       {cases.map((testCase, index) => (
-        <Card key={testCase.key} className="rounded-[2px] bg-exhibit ring-exhibit-edge">
+        <Card key={testCase.key} className="rounded-md bg-card ring-border">
           <CardHeader>
             <CardTitle className="court-label">
               Question presented <span className="typewriter font-normal tracking-normal">· Q{index + 1}</span>

@@ -64,7 +64,7 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
       )}
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="font-heading text-xl">Open a new case</DialogTitle>
+          <DialogTitle className="font-display text-xl font-medium">Open a new case</DialogTitle>
           <DialogDescription>Start from a template. You can edit every question, exhibit, and party before the first hearing.</DialogDescription>
         </DialogHeader>
         <form

@@ -15,7 +15,7 @@ export function Panel({ as: Tag = 'div', className, children }: { as?: 'div' | '
 
 /** A quiet note on a slip: empty lists and short explanations. */
 export function Note({ className, children }: { className?: string; children: ReactNode }) {
-  return <p className={cn('rounded-[2px] bg-slip px-5 py-4 text-sm text-muted-foreground', className)}>{children}</p>
+  return <p className={cn('rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground', className)}>{children}</p>
 }
 
 /**
@@ -24,9 +24,9 @@ export function Note({ className, children }: { className?: string; children: Re
  */
 export function Slip({ title, icon, className, children, ...rest }: { title?: ReactNode; icon?: ReactNode; className?: string; children: ReactNode } & Record<`aria-${string}`, string | undefined>) {
   return (
-    <section {...rest} className={cn('rounded-[2px] border border-dashed border-slip-edge bg-slip px-5 py-4', className)}>
+    <section {...rest} className={cn('rounded-lg border border-border bg-slip px-4 py-3.5', className)}>
       {title && (
-        <h3 className="flex items-center gap-2 font-heading text-sm font-bold">
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
           {icon}
           {title}
         </h3>
@@ -39,7 +39,7 @@ export function Slip({ title, icon, className, children, ...rest }: { title?: Re
 /** A bulleted list on a slip, with stamp-red markers. */
 export function SlipList({ items, className }: { items: ReactNode[]; className?: string }) {
   return (
-    <ul className={cn('list-disc space-y-1 pl-5 marker:text-stamp', className)}>
+    <ul className={cn('list-disc space-y-1 pl-5 marker:text-mark', className)}>
       {items.map((item, i) => (
         <li key={i}>{item}</li>
       ))}

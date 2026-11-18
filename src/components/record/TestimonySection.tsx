@@ -55,11 +55,11 @@ function QuestionRecord({ testCase, labels, rubricVersion }: { testCase: Questio
               </span>
             </div>
             {response.text ? (
-              <div className="max-h-72 overflow-y-auto rounded-[2px] bg-paper px-4 py-3 font-heading text-reading leading-relaxed break-words whitespace-pre-wrap ring-1 ring-paper-rule outline-none ring-inset focus-visible:ring-3 focus-visible:ring-ring/50" tabIndex={0} role="region" aria-label={`${labels[response.configurationKey]} testimony`}>
+              <div className="max-h-72 overflow-y-auto rounded-md bg-paper px-4 py-3 font-heading text-reading leading-relaxed break-words whitespace-pre-wrap ring-1 ring-border outline-none ring-inset focus-visible:ring-3 focus-visible:ring-ring/50" tabIndex={0} role="region" aria-label={`${labels[response.configurationKey]} testimony`}>
                 {response.text}
               </div>
             ) : (
-              <p className="rounded-[2px] border border-dashed border-paper-edge p-3 text-sm text-muted-foreground">
+              <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
                 No accepted response ({response.status}). {response.errorCode ? ERROR_TEXT[response.errorCode] ?? response.errorCode : ''}
               </p>
             )}

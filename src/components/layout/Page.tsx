@@ -7,7 +7,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbP
 import { cn } from '@/lib/utils'
 
 export function Page({ children, width = 'default' }: { children: ReactNode; width?: 'default' | 'wide' | 'narrow' }) {
-  return <div className={cn('mx-auto w-full px-4 py-6 sm:px-6 lg:px-10 lg:py-10', width === 'wide' ? 'max-w-6xl' : width === 'narrow' ? 'max-w-2xl' : 'max-w-4xl')}>{children}</div>
+  return <div className={cn('mx-auto w-full px-4 py-6 sm:px-6 lg:px-8 lg:py-8 xl:px-10', width === 'wide' ? 'max-w-7xl' : width === 'narrow' ? 'max-w-2xl' : 'max-w-4xl')}>{children}</div>
 }
 
 export interface Crumb {
@@ -59,7 +59,7 @@ export function PageHeader({ crumbs, eyebrow, title, description, actions }: { c
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
         <div className="min-w-0 space-y-1.5">
           {eyebrow && <div className="text-sm font-medium text-muted-foreground">{eyebrow}</div>}
-          <h1 className="font-heading text-3xl leading-tight font-bold text-foreground">{title}</h1>
+          <h1 className="font-display text-3xl leading-tight font-medium tracking-tight text-foreground">{title}</h1>
           {description && <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}

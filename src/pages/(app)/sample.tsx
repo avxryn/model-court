@@ -188,7 +188,7 @@ export default function SamplePage() {
                   <h2 id="sample-verdict" className="court-label">
                     Example judgment
                   </h2>
-                  <p className="mt-3 font-heading text-2xl leading-snug font-bold">{SAMPLE_VERDICT.outcome}</p>
+                  <p className="mt-3 font-display text-2xl leading-snug font-medium">{SAMPLE_VERDICT.outcome}</p>
                   <p className="mt-3 max-w-3xl font-heading leading-relaxed">{SAMPLE_VERDICT.rationale}</p>
                   <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">Limitations: {SAMPLE_VERDICT.limitations}</p>
                   <div className="mt-8">

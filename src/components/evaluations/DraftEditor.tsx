@@ -90,7 +90,7 @@ export function ConfigurationsEditor({
 
       <div className={cn('grid items-start gap-4 md:grid-cols-2', draft.configurations.length > 2 && 'xl:grid-cols-3')}>
         {draft.configurations.map((configuration, index) => (
-          <Card key={configuration.key} className="rounded-[2px] bg-exhibit ring-exhibit-edge">
+          <Card key={configuration.key} className="rounded-md bg-card ring-border">
             <CardHeader>
               <CardTitle className="court-label">
                 Party <span className="typewriter font-normal tracking-normal">{index + 1}</span>

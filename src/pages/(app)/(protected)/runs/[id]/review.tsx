@@ -73,7 +73,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
                   <Term name="worksheet" />
                 )}
               </div>
-              <h1 className="font-heading text-2xl leading-tight font-bold sm:text-3xl">Score the testimony</h1>
+              <h1 className="font-display text-2xl leading-tight font-medium tracking-tight sm:text-3xl">Score the testimony</h1>
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Score each testimony against the exhibit and the jury instructions. Labels are shuffled for every question and every person.</p>
               {isOwner && w.editable && (
                 <p className="flex max-w-2xl items-start gap-1.5 text-sm leading-relaxed text-muted-foreground">

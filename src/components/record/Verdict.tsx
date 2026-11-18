@@ -28,7 +28,7 @@ export function JudgmentSummary({ data }: { data: ResultsView }) {
   const latest = data.verdicts.at(-1)
   const judgmentPage = `/runs/${data.runId}/judgment`
   return (
-    <section aria-labelledby="verdict" className="relative border-t-4 border-double border-foreground px-5 pt-6 pb-10 sm:px-8">
+    <section aria-labelledby="verdict" className="relative border-t border-border px-5 pt-6 pb-10 sm:px-8">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="verdict" className="court-label">
           <Term name="judgment" />
@@ -41,7 +41,7 @@ export function JudgmentSummary({ data }: { data: ResultsView }) {
       </div>
       {latest ? (
         <div className="mt-3 space-y-2">
-          <p className="font-heading text-2xl leading-snug font-bold">{outcomeText(latest, data.configurations)}</p>
+          <p className="font-display text-2xl leading-snug font-medium">{outcomeText(latest, data.configurations)}</p>
           <p className="max-w-3xl font-heading leading-relaxed whitespace-pre-wrap">{latest.rationale}</p>
           {latest.limitations && <p className="max-w-3xl text-sm whitespace-pre-wrap text-muted-foreground">Limitations: {latest.limitations}</p>}
           <div className="pt-4">
@@ -64,7 +64,7 @@ export function EarlierRevisions({ verdicts }: { verdicts: ResultsView['verdicts
           .slice(0, -1)
           .reverse()
           .map((v) => (
-            <li key={v.revision} className="rounded-[2px] bg-slip px-3 py-2">
+            <li key={v.revision} className="rounded-md bg-slip px-3 py-2">
               <span className="font-medium">
                 Revision {v.revision}: {v.outcome}
               </span>{' '}
@@ -117,7 +117,7 @@ export function VerdictForm({ data, reload }: { data: ResultsView; reload: () =>
         void submit()
       }}
     >
-      <h2 id="verdict-form-heading" className="font-heading text-lg font-bold">
+      <h2 id="verdict-form-heading" className="text-base font-semibold">
         {revising ? 'Revise the judgment' : 'Enter judgment'}
       </h2>
       <ChoiceCardGroup aria-label="Decision" value={choice || null} onValueChange={setChoice} className="sm:grid-cols-2">

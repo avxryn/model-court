@@ -7,7 +7,7 @@
 import { Plain } from '@/components/court/Paper'
 import { useId } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
-import { FieldDescription, FieldLegend, FieldSet } from '@/components/ui/field'
+import { FieldDescription, FieldSet } from '@/components/ui/field'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
@@ -29,68 +29,69 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
   const noteInvalid = needsNote && noteLength < LIMITS.ratingNote.min
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="court-label">
         Juror’s worksheet <Plain>your ratings</Plain>
       </div>
-      {DIMENSIONS.map((dimension) => (
-        <FieldSet
-          key={dimension}
-          className="space-y-1.5 border-b border-dotted border-paper-edge pb-4"
-          disabled={disabled}
-          // 0, 1 or 2 scores the line that has focus (the worksheet's keyboard flow, D-47).
-          onKeyDown={(event) => {
-            if (disabled || event.metaKey || event.ctrlKey || event.altKey || !['0', '1', '2'].includes(event.key) || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) return
-            event.preventDefault()
-            onChange({ ...rating, [dimension]: Number(event.key) as Score })
-          }}
-        >
-          <FieldLegend id={`${id}-${dimension}-legend`} className="mb-0 font-heading text-base font-bold">
-            {RUBRIC[dimension].label} <span className="sr-only">for testimony {label}</span>
-          </FieldLegend>
-          <RadioGroup
-            value={rating[dimension] === null ? null : String(rating[dimension])}
-            onValueChange={(value) => onChange({ ...rating, [dimension]: Number(value) as Score })}
-            className="grid gap-1.5"
-            disabled={disabled}
-            aria-labelledby={`${id}-${dimension}-legend`}
-          >
-            {([0, 1, 2] as const).map((score) => {
-              const itemId = `${id}-${dimension}-${score}`
-              const checked = rating[dimension] === score
-              return (
-                <Label
-                  key={score}
-                  htmlFor={itemId}
-                  className={cn(
-                    'relative -mx-1.5 flex cursor-pointer items-center gap-3 rounded-md px-1.5 py-1 text-sm leading-snug font-normal transition-colors focus-within:ring-3 focus-within:ring-ring/50',
-                    checked ? 'bg-slip' : 'hover:bg-slip/60',
-                    disabled && 'cursor-not-allowed opacity-70',
-                  )}
+      <div>
+        {DIMENSIONS.map((dimension) => {
+          const value = rating[dimension]
+          return (
+            <FieldSet
+              key={dimension}
+              className="gap-0 border-b border-dashed border-border py-2.5 last:border-b-0"
+              disabled={disabled}
+              // 0, 1 or 2 scores the line that has focus (the worksheet's keyboard flow, D-47).
+              onKeyDown={(event) => {
+                if (disabled || event.metaKey || event.ctrlKey || event.altKey || !['0', '1', '2'].includes(event.key) || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) return
+                event.preventDefault()
+                onChange({ ...rating, [dimension]: Number(event.key) as Score })
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <span id={`${id}-${dimension}-legend`} className="block text-sm font-medium">
+                    {RUBRIC[dimension].label} <span className="sr-only">for testimony {label}</span>
+                  </span>
+                  <span aria-live="polite" className={cn('block text-xs leading-snug', value === null ? 'text-muted-foreground/80' : 'text-muted-foreground')}>
+                    {value === null ? 'Not scored yet' : RUBRIC[dimension].anchors[value]}
+                  </span>
+                </div>
+                <RadioGroup
+                  value={value === null ? null : String(value)}
+                  onValueChange={(next) => onChange({ ...rating, [dimension]: Number(next) as Score })}
+                  className="flex w-auto shrink-0 gap-0 overflow-hidden rounded-md ring-1 ring-input"
+                  disabled={disabled}
+                  aria-labelledby={`${id}-${dimension}-legend`}
                 >
-                  <RadioGroupItem id={itemId} value={String(score)} className="absolute sr-only" aria-labelledby={`${itemId}-text`} />
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'typewriter grid size-9 shrink-0 place-items-center rounded-full text-base tabular-nums transition-colors',
-                      checked ? 'bg-foreground font-bold text-paper' : 'bg-paper text-foreground ring-[1.5px] ring-mark',
-                    )}
-                  >
-                    {score}
-                  </span>
-                  <span id={`${itemId}-text`}>
-                    <span className="sr-only">{score} — </span>
-                    <span className={checked ? 'text-foreground' : 'text-muted-foreground'}>{RUBRIC[dimension].anchors[score]}</span>
-                  </span>
-                </Label>
-              )
-            })}
-          </RadioGroup>
-        </FieldSet>
-      ))}
+                  {([0, 1, 2] as const).map((score) => {
+                    const itemId = `${id}-${dimension}-${score}`
+                    const checked = value === score
+                    return (
+                      <Label
+                        key={score}
+                        htmlFor={itemId}
+                        title={RUBRIC[dimension].anchors[score]}
+                        className={cn(
+                          'relative grid h-8 w-9 cursor-pointer place-items-center border-r border-input text-sm font-medium tabular-nums transition-colors last:border-r-0 focus-within:z-[1] focus-within:ring-3 focus-within:ring-ring/50',
+                          checked ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
+                          disabled && 'cursor-not-allowed opacity-70',
+                        )}
+                      >
+                        <RadioGroupItem id={itemId} value={String(score)} className="absolute sr-only" aria-label={`${score}: ${RUBRIC[dimension].anchors[score]}`} />
+                        <span aria-hidden>{score}</span>
+                      </Label>
+                    )
+                  })}
+                </RadioGroup>
+              </div>
+            </FieldSet>
+          )
+        })}
+      </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor={`${id}-note`} className="flex-wrap gap-x-2 gap-y-1 font-heading text-base leading-snug font-bold">
+        <Label htmlFor={`${id}-note`} className="flex-wrap gap-x-2 gap-y-1 text-sm leading-snug font-medium">
           Evidence note {needsNote ? <span className="text-destructive">(required for any 0)</span> : <span className="font-normal text-muted-foreground">(optional)</span>}
         </Label>
         <Textarea
@@ -102,15 +103,15 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
           aria-describedby={`${id}-note-help`}
           onChange={(event) => onChange({ ...rating, note: event.target.value })}
           placeholder="What in the testimony supports your scores?"
-          className="bg-exhibit font-heading"
-          rows={3}
+          className="bg-card"
+          rows={2}
         />
         <FieldDescription id={`${id}-note-help`} className={cn('text-xs', noteInvalid && 'text-destructive')}>
           {noteInvalid ? `Explain the 0 in at least ${LIMITS.ratingNote.min} characters.` : `${noteLength}/${LIMITS.ratingNote.max} characters`}
         </FieldDescription>
       </div>
 
-      <div className="flex items-start gap-3 rounded-md bg-slip px-3 py-3">
+      <div className="flex items-start gap-3 rounded-lg bg-muted px-3 py-2.5">
         <Checkbox
           id={`${id}-clue`}
           checked={rating.suspectedIdentityClue}

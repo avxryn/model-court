@@ -24,7 +24,7 @@ export function ChoiceCard({ id, value, title, description, disabled, className 
       htmlFor={id}
       className={cn(
         'flex cursor-pointer items-start gap-3 rounded-md border border-paper-edge bg-exhibit px-3 py-2.5 font-normal transition-colors duration-150 hover:bg-slip/60',
-        'has-[[data-checked]]:border-foreground has-[[data-checked]]:bg-slip',
+        'has-[[data-checked]]:border-primary has-[[data-checked]]:bg-accent',
         // Unavailable: no hover, muted title, but the reason stays readable (no opacity fade).
         disabled && 'cursor-not-allowed border-paper-rule bg-transparent text-muted-foreground hover:bg-transparent',
         className,

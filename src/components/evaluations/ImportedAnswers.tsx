@@ -77,7 +77,7 @@ export function ImportedAnswers({
         </span>
       </div>
       {!saved ? (
-        <p className="rounded-[2px] bg-slip px-3 py-2 text-sm text-muted-foreground">Save the draft to add answers for this party.</p>
+        <p className="rounded-md bg-slip px-3 py-2 text-sm text-muted-foreground">Save the draft to add answers for this party.</p>
       ) : (
         <>
           {cases.map((testCase, index) => {
@@ -104,7 +104,7 @@ export function ImportedAnswers({
               </div>
             )
           })}
-          <div className="flex items-start gap-3 rounded-[2px] bg-slip px-3 py-3">
+          <div className="flex items-start gap-3 rounded-md bg-slip px-3 py-3">
             <Checkbox id={`import-${party.key}-consent`} checked={consent} onCheckedChange={(checked) => setConsent(checked === true)} />
             <Label htmlFor={`import-${party.key}-consent`} className="flex-col items-start gap-0.5 font-normal leading-snug">
               I may share these answers with the jurors I invite

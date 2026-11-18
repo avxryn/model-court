@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { cn } from '@/lib/utils'
 
-/** Q1…Qn, the current one inked in, finished ones ticked. */
+/** 1…n, the current one filled, finished ones ticked. */
 export function QuestionPager({ count, current, isDone, onSelect, className }: { count: number; current: number; isDone: (index: number) => boolean; onSelect: (index: number) => void; className?: string }) {
   return (
     <nav aria-label="Questions" className={cn('flex max-w-full flex-wrap gap-1', className)}>
@@ -22,11 +22,11 @@ export function QuestionPager({ count, current, isDone, onSelect, className }: {
             key={index}
             size="sm"
             variant="ghost"
-            className={cn('h-9 px-3 font-heading', open ? 'bg-foreground text-paper hover:bg-foreground hover:text-paper' : 'text-muted-foreground hover:bg-slip')}
+            className={cn('h-8 min-w-8 px-2.5 ring-1 ring-border', open ? 'bg-primary text-primary-foreground ring-primary hover:bg-primary hover:text-primary-foreground' : isDone(index) ? 'bg-success/10 text-success ring-success/20 hover:bg-success/15' : 'bg-card text-muted-foreground hover:bg-muted')}
             aria-current={open ? 'step' : undefined}
             onClick={() => onSelect(index)}
           >
-            {isDone(index) && <CheckCircle2 aria-label="scored" className={open ? 'text-paper' : 'text-success'} />}Q{index + 1}
+            {isDone(index) && <CheckCircle2 aria-label="scored" className={open ? 'text-primary-foreground' : 'text-success'} />}Q{index + 1}
           </Button>
         )
       })}
@@ -34,16 +34,19 @@ export function QuestionPager({ count, current, isDone, onSelect, className }: {
   )
 }
 
-/** The question on the left (sticky on wide screens), the testimony cards on the right. */
+/**
+ * The question in a fixed-width rail on the left (sticky on wide screens),
+ * the testimony cards side by side on the right with most of the width.
+ */
 export function WorksheetGrid({ material, children, columns = 2 }: { material: ReactNode; children: ReactNode; columns?: number }) {
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="lg:sticky lg:top-4 lg:self-start">{material}</div>
-      <div className="space-y-3">
+    <div className="grid gap-6 xl:grid-cols-[18rem_minmax(0,1fr)]">
+      <div className="xl:sticky xl:top-4 xl:self-start">{material}</div>
+      <div className="min-w-0 space-y-3">
         <h2 className="court-label">
           <Term name="testimony" />
         </h2>
-        <div className={cn('grid gap-6', columns > 1 && 'xl:grid-cols-2')}>{children}</div>
+        <div className={cn('grid gap-4', columns > 1 && 'md:grid-cols-2')}>{children}</div>
       </div>
     </div>
   )
@@ -52,7 +55,7 @@ export function WorksheetGrid({ material, children, columns = 2 }: { material: R
 /** Previous / Next question, and on the right the page's own action (file, unseal) with its progress. */
 export function QuestionStepper({ current, count, onGo, children }: { current: number; count: number; onGo: (index: number) => void; children?: ReactNode }) {
   return (
-    <div className="flex flex-col gap-4 border-t border-foreground pt-6 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" disabled={current === 0} onClick={() => onGo(current - 1)}>
           <ChevronLeft aria-hidden /> Previous question

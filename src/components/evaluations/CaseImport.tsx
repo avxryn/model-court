@@ -38,7 +38,7 @@ export function CaseImport({ currentCount, newId, onImport, disabled }: { curren
   }
 
   return (
-    <div className="space-y-3 rounded-[2px] border border-dashed border-slip-edge bg-slip px-4 py-3">
+    <div className="space-y-3 rounded-md border border-border bg-slip px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" disabled={disabled} onClick={() => input.current?.click()}>
           <Upload aria-hidden /> Import questions from CSV

@@ -11,20 +11,20 @@ export function PartiesSection({ data }: { data: ResultsView }) {
       <div className="grid gap-4 md:grid-cols-2">
         {data.configurations.map((c) => (
           <Panel key={c.key} className="px-5 py-4">
-            <h3 className="font-heading text-lg font-bold">{c.label}</h3>
+            <h3 className="text-base font-semibold">{c.label}</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               {partySource(c)}
               {c.maxOutputTokens && <> · {c.maxOutputTokens}-token cap</>}
             </p>
             {c.provenance ? (
-              <p className="mt-3 rounded-[2px] bg-slip p-3 font-heading text-sm leading-relaxed">
+              <p className="mt-3 rounded-md bg-slip p-3 font-heading text-sm leading-relaxed">
                 {c.provenance.description}
                 {c.provenance.collectedOn && <span className="text-muted-foreground"> · collected {c.provenance.collectedOn}</span>}
                 {c.provenance.redacted && <span className="text-muted-foreground"> · redacted before review</span>}
               </p>
             ) : (
               <Fold className="mt-2" summary="System instructions">
-                <p className="rounded-[2px] bg-slip p-3 font-heading text-sm leading-relaxed whitespace-pre-wrap">{c.systemPrompt}</p>
+                <p className="rounded-md bg-slip p-3 font-heading text-sm leading-relaxed whitespace-pre-wrap">{c.systemPrompt}</p>
               </Fold>
             )}
           </Panel>

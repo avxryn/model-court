@@ -11,7 +11,7 @@ export function BrandMark({ size = 'sm', textClassName }: { size?: 'sm' | 'lg'; 
           <circle cx="12" cy="4" r="1.4" fill="currentColor" stroke="none" />
         </svg>
       </span>
-      <span className={`font-heading font-semibold tracking-tight ${size === 'lg' ? 'text-xl' : 'text-base'} ${textClassName ?? ''}`}>Model Court</span>
+      <span className={`font-display font-medium tracking-[-0.01em] ${size === 'lg' ? 'text-2xl' : 'text-lg'} ${textClassName ?? ''}`}>Model Court</span>
     </span>
   )
 }

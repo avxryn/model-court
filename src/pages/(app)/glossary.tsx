@@ -40,7 +40,7 @@ export default function GlossaryPage() {
             <ol className="mt-3 grid gap-2 sm:grid-cols-5">
               {CASE_STEPS.map((step, index) => (
                 <Panel as="li" key={step.key} className="px-3 py-2.5">
-                  <div className="typewriter text-caption font-bold text-stamp">STEP {index + 1}</div>
+                  <div className="typewriter text-caption font-medium text-muted-foreground">STEP {index + 1}</div>
                   <div className="font-heading font-bold">{step.name}</div>
                   <div className="text-xs text-muted-foreground">{step.plain}</div>
                 </Panel>

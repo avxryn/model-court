@@ -139,8 +139,8 @@ function JurySummonsDialog({ url, onClose }: { url: string | null; onClose: () =
     <Dialog open={url !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="border-t-4 border-dashed border-t-paper-edge sm:max-w-lg">
         <DialogHeader>
-          <div className="typewriter text-xs font-bold text-stamp">JURY SUMMONS</div>
-          <DialogTitle className="font-heading text-xl">You are summoned to serve as a juror</DialogTitle>
+          <div className="typewriter text-xs font-medium text-muted-foreground">JURY SUMMONS</div>
+          <DialogTitle className="font-display text-xl font-medium">You are summoned to serve as a juror</DialogTitle>
           <DialogDescription>Send this invitation link to one person. It works once, expires in 24 hours, and anyone holding it can take the seat, so share it directly. It is shown only once. Jurors need no API key.</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">

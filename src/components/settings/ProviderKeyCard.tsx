@@ -51,7 +51,7 @@ export function ProviderKeyCard({ provider, current, writesEnabled, ttlDays, onC
   return (
     <Card className="paper rounded-sm ring-paper-edge">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2.5 font-heading text-lg font-bold">
+        <CardTitle className="flex items-center gap-2.5 text-base font-semibold">
           <span aria-hidden className="grid size-8 place-items-center rounded-full bg-secondary text-muted-foreground ring-1 ring-foreground/5">
             <KeyRound className="size-4" />
           </span>

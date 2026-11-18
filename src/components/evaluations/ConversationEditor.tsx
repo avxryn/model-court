@@ -16,14 +16,14 @@ export function ConversationEditor({ caseKey, messages, error, onChange }: { cas
   const canAdd = messages.length + 2 <= LIMITS.historyMessages
   const set = (index: number, content: string) => onChange(messages.map((message, i) => (i === index ? { ...message, content } : message)))
   return (
-    <div className="space-y-3 rounded-[2px] border border-dashed border-slip-edge bg-slip/60 px-4 py-3">
+    <div className="space-y-3 rounded-md border border-border bg-slip/60 px-4 py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="text-sm font-medium">Conversation so far</div>
         <span className="text-xs text-muted-foreground">Every party sees the same earlier turns and writes the next reply.</span>
       </div>
       {messages.map((message, i) => (
         <div key={i} className="space-y-1">
-          <Label htmlFor={`case-${caseKey}-msg-${i}`} className={cn('typewriter text-xs font-bold', message.role === 'user' ? 'text-stamp' : 'text-primary')}>
+          <Label htmlFor={`case-${caseKey}-msg-${i}`} className={cn('typewriter text-xs font-bold', message.role === 'user' ? 'text-muted-foreground' : 'text-primary')}>
             {message.role === 'user' ? 'USER' : 'ASSISTANT'} · TURN {Math.floor(i / 2) + 1}
           </Label>
           <Textarea id={`case-${caseKey}-msg-${i}`} rows={2} className="bg-exhibit" value={message.content} onChange={(e) => set(i, e.target.value)} />

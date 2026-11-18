@@ -109,7 +109,7 @@ export default function JoinPage() {
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4 py-16">
-      <Card className="paper w-full max-w-md rounded-[2px] border-t-4 border-dashed border-t-paper-edge py-7">
+      <Card className="w-full max-w-md py-7">
         <CardHeader>
           <div className="typewriter mb-2 text-xs font-bold text-stamp">JURY SUMMONS · MODEL COURT</div>
           <CardTitle className="font-heading text-2xl font-bold">You are summoned to serve as a juror</CardTitle>
@@ -135,7 +135,7 @@ export default function JoinPage() {
             </p>
           )}
           {pendingResume && !guest && (
-            <div className="space-y-3 rounded-[2px] bg-slip p-4 text-sm">
+            <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
               <p className="font-medium">Continue your review on this device?</p>
               <p>Use this only with a resume link you saved yourself. Anyone else’s link would put you in their seat.</p>
               <Button className="w-full" disabled={guestBusy} onClick={() => void resume()}>
@@ -144,7 +144,7 @@ export default function JoinPage() {
             </div>
           )}
           {guest && (
-            <div className="space-y-3 rounded-[2px] bg-slip p-4 text-sm">
+            <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
               <p className="font-medium">You are seated as a juror.</p>
               {guest.resumeLink && (
                 <div className="space-y-1.5">
