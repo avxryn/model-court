@@ -18,14 +18,14 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [templateId, setTemplateId] = useState(CASE_TEMPLATES[0].id)
-  const [title, setTitle] = useState(CASE_TEMPLATES[0].title)
-  const [task, setTask] = useState(CASE_TEMPLATES[0].task)
+  // Empty fields with the template's example as the placeholder: typing replaces
+  // the example instead of being appended to it. Left empty, the example is used.
+  const [title, setTitle] = useState('')
+  const [task, setTask] = useState('')
   const template = CASE_TEMPLATES.find((t) => t.id === templateId) ?? CASE_TEMPLATES[0]
   const pickTemplate = (id: string) => {
     const next = CASE_TEMPLATES.find((t) => t.id === id) ?? CASE_TEMPLATES[0]
     setTemplateId(next.id)
-    setTitle(next.title)
-    setTask(next.task)
   }
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -34,7 +34,7 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
     setBusy(true)
     setError(null)
     try {
-      const result = await api<{ id: string }>('POST', '/evaluations', { body: { title: title.trim(), taskDescription: task.trim() } })
+      const result = await api<{ id: string }>('POST', '/evaluations', { body: { title: title.trim() || template.title, taskDescription: task.trim() || template.task } })
       if (template.apply) {
         try {
           const created = await api<OwnerEvaluationView>('GET', `/evaluations/${result.id}`)
@@ -54,7 +54,17 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next) {
+          setTitle('')
+          setTask('')
+          setError(null)
+        }
+      }}
+    >
       {trigger ? (
         <DialogTrigger render={trigger} />
       ) : (
@@ -84,15 +94,15 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
           </fieldset>
           <Field className="gap-1.5">
             <FieldLabel htmlFor="eval-title">Case title</FieldLabel>
-            <Input id="eval-title" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} required />
+            <Input id="eval-title" value={title} maxLength={120} placeholder={template.title} onChange={(e) => setTitle(e.target.value)} />
           </Field>
           <Field className="gap-1.5">
             <FieldLabel htmlFor="eval-task">Decision you want to make</FieldLabel>
-            <Textarea id="eval-task" value={task} maxLength={2000} rows={3} onChange={(e) => setTask(e.target.value)} />
+            <Textarea id="eval-task" value={task} maxLength={2000} rows={3} placeholder={template.task} onChange={(e) => setTask(e.target.value)} />
           </Field>
           {error && <FieldError>{error}</FieldError>}
           <DialogFooter>
-            <Button type="submit" disabled={busy || !title.trim()}>
+            <Button type="submit" disabled={busy}>
               {busy ? 'Opening…' : 'Open case'}
             </Button>
           </DialogFooter>
