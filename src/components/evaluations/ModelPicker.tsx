@@ -1,10 +1,11 @@
 /**
- * The model picker for a party or the special master (D-48): every catalog route grouped by
- * provider, with the facts a judge needs to compare them. Unverified routes stay choosable for
- * a draft; the case page's blocker list says a hearing waits for their live check.
+ * The model picker for a party or the special master (D-48): catalog routes grouped by
+ * provider, with the facts a judge needs to compare them. Only live-checked routes are listed
+ * by default, since a hearing refuses the rest (D-52); a toggle under the picker shows them for
+ * planning, and a route already chosen always stays listed.
  */
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Check, ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -45,42 +46,53 @@ export function ModelSelect({
   /** Keys that cannot be picked here (for example, a model another party already uses in a model comparison). */
   disabledKeys?: ReadonlySet<string>
 }) {
-  const groups = routesByProvider(models)
+  const [showAll, setShowAll] = useState(false)
+  const hiddenCount = models.filter((m) => !m.enabled && m.key !== value).length
+  const visible = showAll ? models : models.filter((m) => m.enabled || m.key === value)
+  const counts = new Map(routesByProvider(models).map((g) => [g.provider, { checked: g.routes.filter((m) => m.enabled).length, total: g.routes.length }]))
+  const groups = routesByProvider(visible).filter((g) => g.routes.length > 0)
   return (
-    <Select value={value || null} onValueChange={(next) => onChange(String(next))} items={models.map((m) => ({ value: m.key, label: modelTitle(m) }))}>
-      <SelectTrigger id={id} className={cn('w-full', className)}>
-        <SelectValue placeholder="Choose a model" />
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false} className="min-w-72">
-        {groups.map((group, index) => (
-          <SelectGroup key={group.provider}>
-            {index > 0 && <SelectSeparator />}
-            <SelectLabel className="flex items-baseline justify-between gap-2 pt-2">
-              <span className="court-label">{PROVIDER_NAMES[group.provider]}</span>
-              <span className="text-[0.6875rem]">
-                {group.routes.filter((m) => m.enabled).length} of {group.routes.length} live-checked
-              </span>
-            </SelectLabel>
-            {group.routes.map((model) => (
-              <SelectItem key={model.key} value={model.key} disabled={disabledKeys?.has(model.key)}>
-                <span className="min-w-0 flex-1 truncate">{model.label}</span>
-                <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                  {disabledKeys?.has(model.key) && <span>in use</span>}
-                  {model.reasoning === 'low' && <span>reasons</span>}
-                  <span className="tabular-nums">{formatTokens(model.contextTokens)}</span>
-                  {model.enabled && (
-                    <Badge variant="secondary" className="h-4 px-1.5 text-[0.625rem]">
-                      <Check aria-hidden />
-                      checked
-                    </Badge>
-                  )}
+    <div className="space-y-1">
+      <Select value={value || null} onValueChange={(next) => onChange(String(next))} items={models.map((m) => ({ value: m.key, label: modelTitle(m) }))}>
+        <SelectTrigger id={id} className={cn('w-full', className)}>
+          <SelectValue placeholder="Choose a model" />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false} className="min-w-72">
+          {groups.map((group, index) => (
+            <SelectGroup key={group.provider}>
+              {index > 0 && <SelectSeparator />}
+              <SelectLabel className="flex items-baseline justify-between gap-2 pt-2">
+                <span className="court-label">{PROVIDER_NAMES[group.provider]}</span>
+                <span className="text-[0.6875rem]">
+                  {counts.get(group.provider)?.checked} of {counts.get(group.provider)?.total} live-checked
                 </span>
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        ))}
-      </SelectContent>
-    </Select>
+              </SelectLabel>
+              {group.routes.map((model) => (
+                <SelectItem key={model.key} value={model.key} disabled={disabledKeys?.has(model.key)}>
+                  <span className="min-w-0 flex-1 truncate">{model.label}</span>
+                  <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    {disabledKeys?.has(model.key) && <span>in use</span>}
+                    {model.reasoning === 'low' && <span>reasons</span>}
+                    <span className="tabular-nums">{formatTokens(model.contextTokens)}</span>
+                    {model.enabled && (
+                      <Badge variant="secondary" className="h-4 px-1.5 text-[0.625rem]">
+                        <Check aria-hidden />
+                        checked
+                      </Badge>
+                    )}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          ))}
+        </SelectContent>
+      </Select>
+      {(hiddenCount > 0 || showAll) && (
+        <button type="button" onClick={() => setShowAll((v) => !v)} aria-pressed={showAll} className="rounded-sm text-xs text-muted-foreground underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
+          {showAll ? 'Hide models not yet live-checked' : `Show ${hiddenCount} more not yet live-checked (a hearing can’t use them yet)`}
+        </button>
+      )}
+    </div>
   )
 }
 
