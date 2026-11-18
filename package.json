@@ -18,7 +18,7 @@
     "undeploy": "deepspace app undeploy",
     "add": "deepspace add",
     "test": "deepspace test run",
-    "test:smoke": "deepspace test run smoke",
+    "test:smoke": "deepspace test run smoke --port 5181",
     "test:api": "deepspace test run api",
     "test:e2e": "deepspace test run e2e",
     "test:unit": "vitest run --passWithNoTests",
@@ -29,7 +29,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:integration": "vitest run -c vitest.integration.config.ts",
-    "check": "tsc --noEmit && eslint . && vitest run && vitest run -c vitest.integration.config.ts && vitest run -c vitest.integration.store.config.ts",
+    "check": "tsc --noEmit && eslint . && vitest run && vitest run -c vitest.integration.config.ts && vitest run -c vitest.integration.store.config.ts && npm run test:smoke",
     "secrets:provision": "node scripts/provision-app-secrets.mjs",
     "smoke:providers": "esbuild scripts/provider-smoke.ts --bundle --platform=node --format=esm --outfile=.smoke/provider-smoke.mjs --log-level=warning && node .smoke/provider-smoke.mjs",
     "test:integration:store": "vitest run -c vitest.integration.store.config.ts"

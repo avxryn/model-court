@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from 'deepspace'
-import { BookOpen, ChevronRight, FileText, Folder, FolderOpen, KeyRound, Library, Menu, PanelLeftClose, PanelLeftOpen, Plus, Scale, X, type LucideIcon } from 'lucide-react'
+import { BookOpen, ChevronRight, FileText, Folder, FolderOpen, KeyRound, Library, LogIn, Menu, PanelLeftClose, PanelLeftOpen, Plus, Scale, X, type LucideIcon } from 'lucide-react'
 import { BrandMark } from '@/components/BrandMark'
 import { NewCaseDialog } from '@/components/evaluations/NewCaseDialog'
 import { AccountMenu } from '@/components/shell/AccountMenu'
@@ -30,8 +30,31 @@ import { cn } from '@/lib/utils'
 
 const CASE_LIMIT = 8
 
-export function Sidebar({ rail = false, onToggleRail }: { rail?: boolean; onToggleRail?: () => void }) {
+type SidebarProps = { rail?: boolean; onToggleRail?: () => void }
+
+/** The signed-in-aware sidebar. Needs DeepSpaceAuthProvider above it. */
+export function Sidebar(props: SidebarProps) {
   const { isSignedIn } = useAuth()
+  return <SidebarView {...props} isSignedIn={!!isSignedIn} account={<AccountMenu compact={props.rail} />} />
+}
+
+/**
+ * The same sidebar for a browser that has never signed in, on the public
+ * pages (sample, glossary). It makes no auth request: F19 promises the sample
+ * sends nothing to the server. "Sign in" goes to the protected area, which
+ * opens the sign-in dialog.
+ */
+export function AnonymousSidebar(props: SidebarProps) {
+  const account = (
+    <Button data-testid="nav-sign-in-button" variant="outline" className={cn('w-full bg-card', props.rail && 'lg:size-9 lg:px-0')} render={<Link to="/evaluations?signin=1" />} nativeButton={false} aria-label={props.rail ? 'Sign in' : undefined}>
+      <LogIn aria-hidden />
+      <span className={cn(props.rail && 'lg:sr-only')}>Sign in</span>
+    </Button>
+  )
+  return <SidebarView {...props} isSignedIn={false} account={account} />
+}
+
+function SidebarView({ rail = false, onToggleRail, isSignedIn, account }: SidebarProps & { isSignedIn: boolean; account: ReactNode }) {
   const location = useLocation()
   const [open, setOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -96,7 +119,7 @@ export function Sidebar({ rail = false, onToggleRail }: { rail?: boolean; onTogg
         </nav>
         <div className={cn('space-y-1 border-t border-drawer-edge p-3', rail && 'lg:flex lg:flex-col lg:items-center lg:px-2')}>
           {onToggleRail && <RailToggle rail={rail} onToggle={onToggleRail} />}
-          <AccountMenu compact={rail} />
+          {account}
         </div>
       </div>
     </aside>

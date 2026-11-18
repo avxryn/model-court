@@ -11,13 +11,32 @@ import { DeepSpaceAuthProvider, RecordProvider, RecordScope, useAuth, useAuthSta
 import { AppShell } from '../../components/shell/AppShell'
 import { ShellProvider } from '../../components/shell/ShellContext'
 import { APP_NAME, SCOPE_ID } from '../../constants'
+import { readAccountHint } from '../../lib/account-hint'
 import { pendingInviteToken } from '../../lib/invite-token'
 import { schemas } from '../../schemas'
+
+/** Pages that work signed out and need nothing from the server. */
+const PUBLIC_PAGES = new Set(['/sample', '/glossary'])
 
 export default function AppLayout() {
   // People who arrive by a summons or a guest juror's link see only that task.
   const { pathname } = useLocation()
   const focused = pathname === '/join' || pathname.startsWith('/juror/')
+  // A browser that has never signed in gets the public pages without the auth
+  // provider, so they make no request at all (F19). Once this browser has
+  // signed in (the display-only account hint), they keep the full shell.
+  if (PUBLIC_PAGES.has(pathname) && !readAccountHint()) {
+    return (
+      <ShellProvider>
+        <title>{APP_NAME}</title>
+        <AppShell anonymous>
+          <Suspense fallback={<div className="flex h-64 items-center justify-center text-muted-foreground">Loading…</div>}>
+            <Outlet />
+          </Suspense>
+        </AppShell>
+      </ShellProvider>
+    )
+  }
   return (
     <DeepSpaceAuthProvider>
       <title>{APP_NAME}</title>
