@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from 'deepspace'
-import { BookOpen, ChevronRight, FileText, Folder, FolderOpen, KeyRound, Library, Menu, PanelLeftClose, PanelLeftOpen, Plus, Scale, X, type LucideIcon } from 'lucide-react'
+import { ChevronRight, FileText, Folder, FolderOpen, KeyRound, Menu, PanelLeftClose, PanelLeftOpen, Plus, Scale, X, type LucideIcon } from 'lucide-react'
 import { BrandMark } from '@/components/BrandMark'
 import { NewCaseDialog } from '@/components/evaluations/NewCaseDialog'
 import { AccountMenu } from '@/components/shell/AccountMenu'
@@ -92,25 +92,6 @@ function SidebarView({ rail = false, onToggleRail, isSignedIn, account }: Sideba
             )}
           </NavGroup>
           {isSignedIn && <CaseFiles rail={rail} />}
-          <NavGroup label="Learn" rail={rail}>
-            <NavItem to="/sample" icon={BookOpen} rail={rail}>
-              Sample case
-            </NavItem>
-            <NavItem to="/glossary" icon={Library} rail={rail}>
-              Glossary
-            </NavItem>
-          </NavGroup>
-        </nav>
-        <nav aria-label="Legal" className={cn('flex flex-wrap gap-x-3 gap-y-1 px-5 pb-2 text-caption text-muted-foreground', rail && 'lg:hidden')}>
-          <Link to="/privacy" className="rounded-sm outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
-            Privacy
-          </Link>
-          <Link to="/terms" className="rounded-sm outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
-            Terms
-          </Link>
-          <Link to="/accessibility" className="rounded-sm outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
-            Accessibility
-          </Link>
         </nav>
         <div className={cn('space-y-1 border-t border-drawer-edge p-3', rail && 'lg:flex lg:flex-col lg:items-center lg:px-2')}>
           {onToggleRail && <RailToggle rail={rail} onToggle={onToggleRail} />}
