@@ -20,6 +20,7 @@ import { idempotent, requestHash } from '../receipts'
 import { caseQuotaError, configurationCapError, parseStoredDraft, samplesCapError } from './evaluations'
 import { parseSnapshot } from './runs'
 import { listDraftDocuments, listRunDocuments, withDocumentRefs } from './documents'
+import { copySourceStatements, listDraftSources, listRunSources, restoreSourceStatements, withSourceRefs, type StoredSource } from './sources'
 
 export interface HearingPartyView {
   key: string
@@ -187,6 +188,8 @@ export async function restoreDraft(deps: Deps, userId: string, evaluationId: str
                SELECT ?, case_key, blob_id, delivery, ? FROM run_documents WHERE run_id = ? AND case_key IN (${caseKeys.map(() => '?').join(',')})`,
             )
             .bind(evaluationId, now, run.id, ...caseKeys),
+          // Spec 05 (D-93): and the hearing's own sources, whose hashes the restored questions carry.
+          ...restoreSourceStatements(db, evaluationId, run.id, caseKeys, now),
         ]
       : []),
     auditStatement(db, { eventType: 'evaluation.restore', requestId, outcome: 'ok', actorUserId: userId, evaluationId, runId: run.id, metadata: { fromRunId: run.id, questions: input.questions, parties: input.parties } }, now),
@@ -282,7 +285,10 @@ export async function duplicateEvaluation(deps: Deps, userId: string, evaluation
     // Spec 04 (D-87): the copy takes the source's documents (the same owner's blobs), under the new question keys.
     const sourceDocuments = input.fromRunId ? await listRunDocuments(db, input.fromRunId) : await listDraftDocuments(db, evaluationId)
     const copiedDocuments = sourceDocuments.flatMap((document) => (caseKeys.has(document.caseKey) && document.available ? [{ ...document, caseKey: caseKeys.get(document.caseKey)! }] : []))
-    const draft: Draft = withDocumentRefs({ schemaVersion: 1, ...parsed.data }, copiedDocuments)
+    // Spec 05 (D-93): and its sources, re-keyed; the references are the same hashes.
+    const sourceSources = input.fromRunId ? await listRunSources(db, input.fromRunId) : await listDraftSources(db, evaluationId)
+    const copiedSources = new Map<string, StoredSource[]>([...sourceSources.entries()].flatMap(([caseKey, items]) => (caseKeys.has(caseKey) ? [[caseKeys.get(caseKey)!, items] as [string, StoredSource[]]] : [])))
+    const draft: Draft = withSourceRefs(withDocumentRefs({ schemaVersion: 1, ...parsed.data }, copiedDocuments), copiedSources)
     const imported = new Set(draft.configurations.filter(isImported).map((party) => party.key))
     const copiedImports = input.includeImportedAnswers
       ? source.imports
@@ -312,6 +318,7 @@ export async function duplicateEvaluation(deps: Deps, userId: string, evaluation
             )
             .bind(id, document.caseKey, document.delivery, now, userId, document.sha256),
         ),
+        ...copySourceStatements(db, id, copiedSources, now),
         ...copiedImports.map((row) =>
           db
             .prepare('INSERT INTO evaluation_imports (evaluation_id, configuration_key, case_key, text, text_sha256, byte_length, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')

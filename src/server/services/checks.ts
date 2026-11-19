@@ -12,7 +12,7 @@ import type { CaseInput } from '../../domain/contracts'
 import { KITS, kitFor, type KitTable } from '../../domain/kits/registry'
 import { runChecks } from '../../domain/kits/runner'
 import { kitConsistency, summarizeChecks, type ChecksSummary } from '../../domain/kits/summary'
-import type { CheckResult, CheckRow, TaskKit, Testimony } from '../../domain/kits/types'
+import type { CheckMaterials, CheckResult, CheckRow, TaskKit, Testimony } from '../../domain/kits/types'
 import { isImportedSnapshot, type RunSnapshot } from '../../domain/snapshot'
 import type { Deps } from '../deps'
 
@@ -34,10 +34,10 @@ export interface CheckSet {
  * Run the hearing's checks on one accepted testimony. Null for a kit without checks (general-v1),
  * so default hearings store nothing new. Logs a fault by kit version and check id only.
  */
-export function checkRowFor(deps: Pick<Deps, 'kits' | 'log'>, snapshot: Pick<RunSnapshot, 'kit'>, testCase: CaseInput, testimony: Testimony): CheckSet | null {
+export function checkRowFor(deps: Pick<Deps, 'kits' | 'log'>, snapshot: Pick<RunSnapshot, 'kit'>, testCase: CaseInput, testimony: Testimony, materials?: CheckMaterials): CheckSet | null {
   const kit = hearingKit(deps, snapshot)
   if (kit.checks.length === 0) return null
-  const set = runChecks(kit, snapshot.kit?.settings, testCase, testimony)
+  const set = runChecks(kit, snapshot.kit?.settings, testCase, testimony, materials)
   for (const result of set.results) if (result.status === 'error') deps.log({ event: 'checks.error', kitVersion: set.kitVersion, checkId: result.checkId })
   return set
 }
@@ -72,10 +72,12 @@ export function importedCheckStatements(
   runId: string,
   imported: ReadonlyArray<{ id: string; configurationKey: string; caseKey: string; text: string }>,
   now: number,
+  /** Spec 05 (D-93): the question's frozen materials (a grounded question's verified sources). */
+  materialsFor: (caseKey: string) => CheckMaterials | undefined = () => undefined,
 ): D1PreparedStatement[] {
   return imported.flatMap((item) => {
     const testCase = snapshot.cases.find((candidate) => candidate.key === item.caseKey)
-    const set = testCase ? checkRowFor(deps, snapshot, testCase, { kind: 'text', text: item.text }) : null
+    const set = testCase ? checkRowFor(deps, snapshot, testCase, { kind: 'text', text: item.text }, materialsFor(item.caseKey)) : null
     return set ? [insertTestimonyChecksStatement(deps.db, { id: deps.newId(), runId, caseKey: item.caseKey, configurationKey: item.configurationKey, importedOutputId: item.id, ...set }, now)] : []
   })
 }

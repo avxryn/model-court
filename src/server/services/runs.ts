@@ -21,6 +21,7 @@ import { configurationCapError, parseStoredDraft, samplesCapError } from './eval
 import { dispatchOutbox, notifyRun, reconcileLeases } from './generation'
 import { guestNames } from './guest-jurors'
 import { admissionDocuments, unavailableDocuments } from './documents'
+import { admissionSources, listDraftSources, sourceRefsOf, verifiedPromptSources } from './sources'
 
 export interface GenerationRow {
   id: string
@@ -233,6 +234,18 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
     const subjects = budgetSubjects(userId, now)
     // Spec 04 §4.3: each question's document is copied to the hearing in this same batch.
     const documents = admissionDocuments(db, evaluationId, runId, snapshot.cases, now)
+    // Spec 05 §4.5 (D-93): and its sources, guarded on the hashes the snapshot commits to. Imported
+    // answers are checked against exactly those sources, verified here before anything is written.
+    const sources = admissionSources(db, deps.newId, evaluationId, runId, snapshot.cases, now)
+    const draftSources = snapshot.kit?.version === 'grounded-v1' ? await listDraftSources(db, evaluationId) : null
+    const materials = new Map<string, { sources: NonNullable<Awaited<ReturnType<typeof verifiedPromptSources>>> }>()
+    if (draftSources) {
+      for (const testCase of snapshot.cases) {
+        const verified = await verifiedPromptSources(draftSources.get(testCase.key), sourceRefsOf(testCase))
+        if (!verified) throw revisionConflict()
+        materials.set(testCase.key, { sources: verified })
+      }
+    }
 
     // D-65: one generation per (question, party, sample). Sample k is first dispatched (k − 1) minutes
     // later, so the minute cron spreads a repeated hearing's burst instead of sending it all at once.
@@ -270,6 +283,7 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
       ),
       ...(generations.length > 0 ? reserveBudget(db, subjects, generations.length, deps.config.limits, now) : []),
       ...documents.statements,
+      ...sources.statements,
       // Freeze each imported answer exactly as hashed into the snapshot (D-38).
       ...imported.map((item) =>
         db
@@ -281,7 +295,7 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
           .bind(item.id, runId, now, evaluationId, item.configurationKey, item.caseKey, item.sha256),
       ),
       // Spec 03 (D-76): automatic checks on each frozen imported answer, the same text the snapshot hashes.
-      ...importedCheckStatements(deps, snapshot, runId, imported.map((item) => ({ ...item, text: importRows.find((row) => row.configuration_key === item.configurationKey && row.case_key === item.caseKey)?.text ?? '' })), now),
+      ...importedCheckStatements(deps, snapshot, runId, imported.map((item) => ({ ...item, text: importRows.find((row) => row.configuration_key === item.configurationKey && row.case_key === item.caseKey)?.text ?? '' })), now, (caseKey) => materials.get(caseKey)),
       ...generations.flatMap((generation) => [
         db
           .prepare(
@@ -312,6 +326,7 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
           cond('(SELECT COUNT(*) FROM runs WHERE evaluation_id = ?) < ?', evaluationId, LIMITS.hearingsPerEvaluation),
           ...credentialChecks,
           ...documents.conditions,
+          ...sources.conditions,
           ...(generations.length > 0 ? [capacity(userId, null)] : []),
           ...imported.map((item) =>
             cond('EXISTS (SELECT 1 FROM evaluation_imports WHERE evaluation_id = ? AND configuration_key = ? AND case_key = ? AND text_sha256 = ?)', evaluationId, item.configurationKey, item.caseKey, item.sha256),

@@ -9,7 +9,7 @@ import {
   createCredentialSchema,
   createEvaluationSchema,
   deleteEvaluationSchema,
-  putImportsSchema, putTextDocumentSchema,
+  putImportsSchema, putSourcesSchema, putTextDocumentSchema,
   draftInputSchema,
   duplicateEvaluationSchema,
   emptySchema,
@@ -39,6 +39,7 @@ import { cancelRun, getRun, openReview, retryGenerations, startRun } from './ser
 import { getComparison, parseRunIds } from './services/comparison'
 import { duplicateEvaluation, exportScenario, restoreDraft } from './services/scenarios'
 import { deleteDocument, getDraftDocument, getRunDocument, putPdfDocument, putTextDocument } from './services/documents'
+import { deleteSources, putSources } from './services/sources'
 import { cancelSpecialMaster, getSpecialMaster, startSpecialMaster } from './services/special-master'
 import {
   GUEST_COOKIE_PREFIX,
@@ -305,6 +306,16 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     const document = await getDraftDocument(deps(c), user(c), pathId(c, 'id'), pathId(c, 'caseKey'))
     if (document.kind === 'text') return ok(c, document, 200, { 'Cache-Control': 'private, no-store' })
     return documentBytes(document.bytes)
+  })
+  // Spec 05 §5.1 (D-93): the numbered sources of one grounded question, replaced as a whole.
+  api.put('/evaluations/:id/sources/:caseKey', async (c) => {
+    const ifMatch = ifMatchRevision(c)
+    const input = await readBody(c, putSourcesSchema)
+    return ok(c, await putSources(deps(c), user(c), pathId(c, 'id'), pathId(c, 'caseKey'), input, ifMatch, rid(c)))
+  })
+  api.delete('/evaluations/:id/sources/:caseKey', async (c) => {
+    const ifMatch = ifMatchRevision(c)
+    return ok(c, await deleteSources(deps(c), user(c), pathId(c, 'id'), pathId(c, 'caseKey'), ifMatch, rid(c)))
   })
   api.delete('/evaluations/:id/imports/:configurationKey', async (c) => {
     const ifMatch = ifMatchRevision(c)

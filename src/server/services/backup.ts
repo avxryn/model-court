@@ -42,8 +42,11 @@ export const BACKUP_TABLES = [
   'evaluation_documents',
   'document_storage_buckets',
   'evaluation_imports',
+  // Spec 05 (D-93): grounded sources; text only, no secrets. After their parents.
+  'evaluation_sources',
   'runs',
   'run_documents',
+  'run_sources',
   'run_imported_outputs',
   'grader_runs',
   'grader_credentials',

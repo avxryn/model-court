@@ -648,6 +648,42 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX evaluation_documents_by_blob ON evaluation_documents(blob_id)`,
     ],
   },
+  {
+    // Spec 05 §4.2 (D-93): numbered sources of grounded questions. A draft copy (replaceable per
+    // question) and an immutable per-hearing copy, mirroring 0003_imported_evidence. Additive only:
+    // no table is rebuilt. Each source's sha256 is of canonicalJson({number, title, origin, text}).
+    id: '0013_grounded_sources',
+    statements: [
+      `CREATE TABLE evaluation_sources (
+        evaluation_id TEXT NOT NULL REFERENCES evaluations(id) ON DELETE CASCADE,
+        case_key TEXT NOT NULL,
+        number INTEGER NOT NULL CHECK (number BETWEEN 1 AND 10),
+        title TEXT,
+        origin TEXT,
+        text TEXT NOT NULL,
+        sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
+        byte_length INTEGER NOT NULL CHECK (byte_length > 0),
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (evaluation_id, case_key, number)
+      )`,
+      `CREATE TABLE run_sources (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        case_key TEXT NOT NULL,
+        number INTEGER NOT NULL CHECK (number BETWEEN 1 AND 10),
+        title TEXT,
+        origin TEXT,
+        text TEXT NOT NULL,
+        sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
+        byte_length INTEGER NOT NULL CHECK (byte_length > 0),
+        created_at INTEGER NOT NULL,
+        UNIQUE (run_id, case_key, number)
+      )`,
+      `CREATE TRIGGER run_sources_immutable BEFORE UPDATE ON run_sources
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_RUN_SOURCES'); END`,
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`
