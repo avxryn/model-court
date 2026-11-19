@@ -462,11 +462,12 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
   const attempts = (
     await db
       .prepare(
-        `SELECT a.generation_id, a.attempt_no, a.status, a.error_code, a.duration_ms, a.queue_wait_ms, a.truncated
+        `SELECT a.generation_id, a.attempt_no, a.status, a.error_code, a.duration_ms, a.queue_wait_ms, a.truncated, a.steps_used,
+           (SELECT COUNT(*) FROM generation_steps s WHERE s.attempt_id = a.id AND s.status <> 'pending') AS steps_started
          FROM generation_attempts a JOIN generations g ON g.id = a.generation_id WHERE g.run_id = ? ORDER BY a.attempt_no`,
       )
       .bind(run.id)
-      .all<{ generation_id: string; attempt_no: number; status: string; error_code: string | null; duration_ms: number | null; queue_wait_ms: number | null; truncated: number }>()
+      .all<{ generation_id: string; attempt_no: number; status: string; error_code: string | null; duration_ms: number | null; queue_wait_ms: number | null; truncated: number; steps_used: number | null; steps_started: number }>()
   ).results
   const sessions = (
     await db
@@ -482,6 +483,7 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
   const importedOutputs = await loadImportedOutputs(db, run.id)
   const manifest: EligibleManifest = run.eligible_manifest_json ? (JSON.parse(run.eligible_manifest_json) as EligibleManifest) : computeEligibility(snapshot, generations, importedOutputs)
   const counts: Record<GenerationStatus, number> = { pending: 0, running: 0, succeeded: 0, failed: 0, uncertain: 0, canceled: 0 }
+  const toolHearing = isToolHearing(snapshot)
   for (const generation of generations) counts[generation.status]++
 
   let invitedIndex = 0
@@ -521,6 +523,8 @@ async function ownerRunView(deps: Deps, access: RunAccess) {
         retryable: canRun('retry', run.status) && isRetryable(generation.status, generation.attempt_count, LIMITS.maxAttemptsPerGeneration),
         durationMs: last?.duration_ms ?? null,
         queueWaitMs: last?.queue_wait_ms ?? null,
+        // Spec 06 §5.2 (D-102): "Step 2 of up to 4" on tool hearings; counts only, never tokens before unsealing.
+        steps: toolHearing ? { used: last ? (last.steps_used ?? Number(last.steps_started)) : 0, max: callsPerAnswer(snapshot.cases.find((testCase) => testCase.key === generation.case_key)) } : null,
       }
     }),
     counts: { planned: generations.length, ...counts },

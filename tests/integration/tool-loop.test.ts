@@ -10,7 +10,7 @@ import { exportSnapshot, restoreSnapshot } from '../../src/server/services/backu
 import { reconcileLeases } from '../../src/server/services/generation'
 import { runMaintenance } from '../../src/server/services/maintenance'
 import { handleToolStepJob, reconcileStepLeases } from '../../src/server/services/tool-loop'
-import { anthropicOk, createHarness, openAiOk, OWNER, setupOwner, type Harness, type ProviderCall } from './harness'
+import { anthropicOk, createHarness, openAiOk, OWNER, REVIEWER, setupOwner, type Harness, type ProviderCall } from './harness'
 
 let h: Harness
 beforeEach(async () => {
@@ -497,3 +497,93 @@ describe('tool loop: records (spec 06 §4.3, §11.2)', () => {
   })
 })
 
+const PROVIDER_ID_PREFIXES = ['call_', 'fc_', 'rs_', 'msg_', 'toolu_', 'srvtoolu_', 'req_openai_tool', 'req_anthropic_tool']
+
+async function seatJuror(runId: string) {
+  const invite = await h.request('POST', `/runs/${runId}/invites`, { as: OWNER, body: {} })
+  const token = new URL(invite.json.data.url).hash.replace('#token=', '')
+  expect((await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token } })).status).toBe(200)
+}
+
+async function reveal(runId: string) {
+  const review = (await h.request('GET', `/runs/${runId}/review`, { as: REVIEWER })).json.data
+  const ratings = review.cases.flatMap((c: { responses: Array<{ responseId: string }> }) => c.responses.map((r) => ({ responseId: r.responseId, correctness: 2, completeness: 2, grounding: 2, note: '', suspectedIdentityClue: false })))
+  const saved = await h.request('PUT', `/runs/${runId}/review`, { as: REVIEWER, ifMatch: review.sessionRevision, body: { ratings } })
+  expect(saved.status, JSON.stringify(saved.json)).toBe(200)
+  expect((await h.request('POST', `/runs/${runId}/review/submit`, { as: REVIEWER, ifMatch: saved.json.data.sessionRevision, body: {} })).status).toBe(200)
+  const view = await runView(runId)
+  const revealed = await h.request('POST', `/runs/${runId}/reveal`, { as: OWNER, ifMatch: view.revision, body: { acknowledgePendingCount: view.review?.pendingCount ?? 0 } })
+  expect(revealed.status, JSON.stringify(revealed.json)).toBe(200)
+}
+
+describe('tool hearings: read paths (spec 06 §5, D-102)', () => {
+  it('jurors get the tools and an allowlisted trace, and nothing that tells the providers apart', async () => {
+    const { setup } = await toolCase()
+    script([callsStep([LOOKUP]), callsStep([REFUND]), answerStep()])
+    const runId = (await start(setup)).json.data.runId
+    await h.drainJobs()
+    await seatJuror(runId)
+    for (const who of [REVIEWER, OWNER]) {
+      const review = await h.request('GET', `/runs/${runId}/review`, { as: who })
+      expect(review.status).toBe(200)
+      const testCase = review.json.data.cases[0]
+      expect(testCase.kitView).toEqual({ kind: 'tools', tools: EXAMPLE_TOOL_TASK.tools.map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters })), maxSteps: 4 })
+      for (const response of testCase.responses) {
+        expect(response.text).toBe(ANSWER)
+        expect(Object.keys(response.trace).sort()).toEqual(['ended', 'finalAnswer', 'steps'])
+        expect(response.trace.ended).toBe('answered')
+        expect(response.trace.steps[0].calls[0]).toEqual({ callNo: 1, tool: 'lookup_order', knownTool: true, arguments: '{\n  "order_id": "A-1042"\n}', result: { text: EXAMPLE_TOOL_TASK.tools[0].responses[0].output, isError: false } })
+      }
+      // The two parties' traces differ only in their own narration.
+      const [a, b] = testCase.responses.map((response: { trace: { steps: Array<{ calls: unknown[] }> } }) => response.trace.steps.map((step) => step.calls))
+      expect(a).toEqual(b)
+      const json = JSON.stringify(review.json.data)
+      for (const prefix of PROVIDER_ID_PREFIXES) expect(json).not.toContain(prefix)
+      for (const hidden of ['source', 'responseIndex', 'finishReason', 'tool_use', 'end_turn', 'SENTINEL-EXPECTED', 'required-calls', 'inputTokens', 'durationMs', 'gpt-6', 'claude']) expect(json).not.toContain(hidden)
+    }
+    expect((await h.request('GET', `/runs/${runId}/results`, { as: OWNER })).status).toBe(409)
+  })
+
+  it('the owner sees step counts while generating; results and the record carry the full trace after unsealing', async () => {
+    const { setup } = await toolCase()
+    script([callsStep([LOOKUP]), callsStep([REFUND]), answerStep()])
+    const runId = (await start(setup)).json.data.runId
+    const { handleGenerationJob } = await import('../../src/server/services/generation')
+    for (const job of h.jobs.splice(0)) await handleGenerationJob(h.deps, job, new AbortController().signal, 'r')
+    const during = await runView(runId)
+    expect(during.generations.map((generation: { steps: unknown }) => generation.steps)).toEqual([{ used: 1, max: 4 }, { used: 1, max: 4 }])
+    expect(JSON.stringify(during)).not.toContain('inputTokens')
+    await h.drainJobs()
+    expect((await runView(runId)).generations[0].steps).toEqual({ used: 3, max: 4 })
+    await seatJuror(runId)
+    await reveal(runId)
+    const results = await h.request('GET', `/runs/${runId}/results`, { as: OWNER })
+    expect(results.status).toBe(200)
+    const response = results.json.data.cases[0].responses[0]
+    expect(response.trace).toMatchObject({ version: 'tool-trace-v1', ended: 'answered' })
+    expect(response.trace.steps[0].calls[0]).toMatchObject({ source: 'match', responseIndex: 0 })
+    expect(response.steps.map((step: { stepNo: number }) => step.stepNo)).toEqual([1, 2, 3])
+    expect(response.steps[0]).toMatchObject({ inputTokens: expect.any(Number), outputTokens: expect.any(Number), truncated: false })
+    expect(response.checks.map((check: { checkId: string }) => check.checkId)).toEqual(['required-calls', 'forbidden-not-called', 'arguments-valid', 'steps-used', 'finished', 'final-answer'])
+    const record = await h.request('GET', `/runs/${runId}/export?format=json`, { as: OWNER })
+    expect(record.status).toBe(200)
+    const text = record.text
+    expect(text).toContain('tool-trace-v1')
+    expect(text).toContain('"kind":"tools"')
+    for (const prefix of PROVIDER_ID_PREFIXES) expect(text).not.toContain(prefix)
+    expect(text).not.toContain('replay')
+    expect(text).not.toContain('SENTINEL-REASONING')
+  })
+
+  it('the special master is not offered for tool hearings', async () => {
+    const { setup } = await toolCase()
+    script([answerStep()])
+    const runId = (await start(setup)).json.data.runId
+    await h.drainJobs()
+    await seatJuror(runId)
+    await reveal(runId)
+    const refused = await h.request('POST', `/runs/${runId}/special-master`, { as: OWNER, body: { modelKey: 'openai-gpt-6-luna', credentialIdsByProvider: { openai: setup.openaiKeyId }, consentToProviderProcessing: true, acknowledgeProviderCharges: true } })
+    expect(refused.status).toBe(409)
+    expect(refused.json.error.message).toBe("The AI grader isn't available for tool-use cases yet.")
+  })
+})
