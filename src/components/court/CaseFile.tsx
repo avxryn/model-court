@@ -196,7 +196,7 @@ export function JuryInstructions({ children }: { children: ReactNode }) {
  * Testimony transcript: one numbered line per paragraph, rendered as plain
  * text in a labelled, scrollable region (model text is never HTML).
  */
-export function Testimony({ label, text, children }: { label: string; text: string; children?: ReactNode }) {
+export function Testimony({ label, text, children, renderLine }: { label: string; text: string; children?: ReactNode; /** Spec 05 (D-96): renders one line (e.g. with citation chips); must be a pure function of shared data so every party renders alike. */ renderLine?: (line: string, index: number) => ReactNode }) {
   const lines = text.split('\n')
   let n = 0
   return (
@@ -215,7 +215,7 @@ export function Testimony({ label, text, children }: { label: string; text: stri
                 <span aria-hidden className="typewriter w-5 shrink-0 pt-[0.2rem] text-right text-caption text-mark">
                   {blank ? '' : n}
                 </span>
-                <span className="min-w-0 break-words whitespace-pre-wrap">{line}</span>
+                <span className="min-w-0 break-words whitespace-pre-wrap">{renderLine && !blank ? renderLine(line, i) : line}</span>
               </li>
             )
           })}

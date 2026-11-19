@@ -16,6 +16,7 @@ import { UnsealButton } from '@/components/hearing/JuryPanel'
 import { useHearingAction } from '@/components/hearing/use-hearing-action'
 import { Page } from '@/components/layout/Page'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
+import { CitedTestimony } from '@/components/review/CitedTestimony'
 import { ExtractionTestimony } from '@/components/review/ExtractionTestimony'
 import { PdfViewer } from '@/components/review/PdfViewer'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
@@ -180,7 +181,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
             <WorksheetGrid
               columns={current.responses.length}
               wideMaterial={current.document !== undefined}
-              material={<CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={review.cases.length} messages={current.messages} kitView={current.kitView} kitName={review.kit?.name} {...(current.document !== undefined ? { document: current.document } : {})} pdf={current.document?.kind === 'pdf' ? <PdfViewer key={current.caseKey} runId={review.runId} caseKey={current.caseKey} pageCount={current.document.pageCount} /> : undefined} />}
+              material={<CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={review.cases.length} messages={current.messages} kitView={current.kitView} kitName={review.kit?.name} {...(current.document !== undefined ? { document: current.document } : {})} {...(current.sources !== undefined ? { sources: current.sources, caseKey: current.caseKey } : {})} pdf={current.document?.kind === 'pdf' ? <PdfViewer key={current.caseKey} runId={review.runId} caseKey={current.caseKey} pageCount={current.document.pageCount} /> : undefined} />}
             >
               {current.responses.map((response) => {
                 const rating = w.ratings[response.responseId] ?? emptyRating(response.responseId)
@@ -190,6 +191,11 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
                   <ExtractionTestimony key={response.responseId} label={response.label} text={response.text} extraction={response.extraction} flags={rating.fieldFlags ?? []} disabled={!w.editable} onFlagsChange={(fieldFlags) => w.update({ ...rating, fieldFlags })}>
                     {form}
                   </ExtractionTestimony>
+                ) : current.sources !== undefined ? (
+                  // Spec 05 (D-96): citations as chips, the same rendering for every party; no check result.
+                  <CitedTestimony key={response.responseId} label={response.label} text={response.text} caseKey={current.caseKey} sources={current.sources}>
+                    {form}
+                  </CitedTestimony>
                 ) : (
                   <ResponseCard key={response.responseId} label={response.label} text={response.text}>
                     {form}
