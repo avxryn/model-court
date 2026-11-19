@@ -40,6 +40,9 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
   const samples = modelParties > 0 ? (draft.samplesPerAnswer ?? 1) : 1
   const calls = plannedCalls(draft)
   const kit = draftKit(draft)
+  // Spec 04 §3.1 (D-90): a PDF file sent to the providers needs its own tick.
+  const pdf = estimateExtractionInput(draft.cases, draft.configurations, samples).pdfPages
+  const [sendsDocuments, setSendsDocuments] = useState(false)
   // Imported-only hearings send nothing to a provider and charge nothing, so there is nothing to consent to.
   const needsConsent = calls > 0
   const providerNames = providers.map((p) => PROVIDER_NAMES[p]).join(' and ')
@@ -54,7 +57,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
     try {
       const credentialIdsByProvider = Object.fromEntries(providers.map((provider) => [provider, keys.find((k) => k.provider === provider)?.id]))
       const result = await api<{ runId: string }>('POST', `/evaluations/${evaluationId}/runs`, {
-        body: { draftRevision: revision, credentialIdsByProvider, consentToProviderProcessing: true, acknowledgeProviderCharges: true, ...(scenario?.hash ? { expectedScenarioHash: scenario.hash } : {}) },
+        body: { draftRevision: revision, credentialIdsByProvider, consentToProviderProcessing: true, acknowledgeProviderCharges: true, ...(pdf > 0 ? { acknowledgeSendsDocuments: true } : {}), ...(scenario?.hash ? { expectedScenarioHash: scenario.hash } : {}) },
         idempotencyKey: intent.current,
       })
       setOpen(false)
@@ -157,6 +160,14 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
                 Send each question, its exhibit, and the system instructions to {providerNames}. Scoring guides, ratings, and identities stay in Model Court.
               </FieldLabel>
             </Field>
+            {pdf > 0 && (
+              <Field orientation="horizontal" className="items-start">
+                <Checkbox id="consent-documents" checked={sendsDocuments} onCheckedChange={(c) => setSendsDocuments(c === true)} />
+                <FieldLabel htmlFor="consent-documents" className="font-normal">
+                  Each call sends the PDF file itself to {providerNames} ({pdf} {pdf === 1 ? 'page' : 'pages'} in all). The provider reads its text and an image of each page.
+                </FieldLabel>
+              </Field>
+            )}
             <Field orientation="horizontal" className="items-start">
               <Checkbox id="consent-charges" checked={charges} onCheckedChange={(c) => setCharges(c === true)} />
               <FieldLabel htmlFor="consent-charges" className="font-normal">
@@ -169,7 +180,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
         )}
         {error && <FieldError>{error}</FieldError>}
         <DialogFooter>
-          <Button disabled={(needsConsent && (!consent || !charges || block !== null)) || busy} aria-describedby={block ? 'start-blocked' : undefined} onClick={() => void start()}>
+          <Button disabled={(needsConsent && (!consent || !charges || block !== null || (pdf > 0 && !sendsDocuments))) || busy} aria-describedby={block ? 'start-blocked' : undefined} onClick={() => void start()}>
             {busy ? 'Starting…' : calls > 0 ? `Start ${calls} calls` : 'Start the hearing'}
           </Button>
         </DialogFooter>

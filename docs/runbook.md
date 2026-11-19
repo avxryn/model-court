@@ -13,6 +13,7 @@ Never paste secret values into commands, chats, or documents.
 | `CREDENTIAL_ACTIVE_KEY_VERSION` | `[vars]` | `"v1"` |
 | `CREDENTIAL_TTL_DAYS` | `[vars]` | `"7"`; saved keys expire this long after saving or renewal (1–90) |
 | `MAX_DAILY_CALLS_PER_USER` / `_GLOBAL` / `MAX_LIFETIME_CALLS_GLOBAL` | `[vars]` | 20 / 100 / 500 |
+| `MAX_DOCUMENT_BYTES_PER_USER` / `MAX_DOCUMENT_BYTES_GLOBAL` (spec 04, D-87) | `[vars]` | 33554432 (32 MiB) / 268435456 (256 MiB) |
 | `PUBLIC_APP_ORIGIN` | `[vars]` | empty → the request origin is used for invite links |
 | `APP_COMMIT` | `[vars]` | set to the shipped commit before each deploy |
 | `CREDENTIAL_ENCRYPTION_KEY_V1`, `CREDENTIAL_REQUEST_HMAC_KEY` | DeepSpace secrets store | create with `npm run secrets:provision -- --apply` |
@@ -126,6 +127,20 @@ default of 1. The schema itself is not rolled back; restore the backup for that.
 `0010_case_origin` adds four nullable columns to `evaluations` and one trigger that keeps them unchanged once set.
 It is additive and fast, but it ships after 0008/0009, so the 0009 rules above apply to the release that carries it.
 Rolling the app back is safe: older code never names the columns. Backups taken before it restore after it.
+
+## Migration 0012 (extraction documents, spec 04, D-87)
+
+`0012_extraction_documents` only creates five tables, three indexes and three triggers; no existing table changes, so it
+needs no backup first (unlike 0009). Older code never names the tables. A store backup (D-32) now carries text documents
+whole and leaves PDF bytes out (`redactions.pdfChunksOmitted`); after a restore those PDFs read "Source file not restored"
+until the judge uploads the same file again on the draft, which restores the hearing's copy too.
+
+## pdf.js (spec 04 decision 9, D-90)
+
+`pdfjs-dist` is pinned to an exact version (6.5.438) and loaded only on PDF screens, from the app's own origin. Treat every
+update as a security change: read its release notes for security fixes, keep `src/lib/pdf.ts`'s options (XFA off, annotations
+not rendered, no scripting; 6.x has no eval path), run `npm run check` (`src/lib/pdf.test.ts` opens the fixture with the real
+library) and look at a PDF worksheet before deploying. Check for a new release at least once a month while extraction is live.
 
 ## Backup and restore (V9)
 

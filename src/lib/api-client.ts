@@ -77,6 +77,28 @@ export async function api<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: st
   return payload.data as T
 }
 
+/** Spec 04 (D-90): PUT a PDF as raw bytes with its page count; the reply is the normal JSON envelope. */
+export async function apiUploadPdf<T>(path: string, bytes: ArrayBuffer, pageCount: number, revision: number): Promise<T> {
+  const token = await getAuthToken().catch(() => null)
+  let response: Response
+  try {
+    response = await fetch(`/api/v1${path}`, {
+      method: 'PUT',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/pdf', 'If-Match': `"${revision}"`, 'X-Page-Count': String(pageCount) },
+      body: bytes,
+      cache: 'no-store',
+    })
+  } catch {
+    throw new ApiClientError(0, 'NETWORK', 'Could not reach Model Court. Check your connection and try again.')
+  }
+  const payload = (await response.json().catch(() => ({}))) as { data?: T; error?: { code: string; message: string; fields?: FieldIssue[]; details?: Record<string, unknown> }; requestId?: string }
+  if (!response.ok || payload.error) {
+    const error = payload.error ?? { code: 'HTTP_ERROR', message: `Request failed (${response.status}).` }
+    throw new ApiClientError(response.status, error.code, error.message, error.fields ?? [], error.details ?? {}, payload.requestId ?? null)
+  }
+  return payload.data as T
+}
+
 /** GET a non-JSON body (e.g. a CSV export) with the bearer token; errors use the normal JSON envelope. */
 export async function apiDownload(path: string): Promise<{ blob: Blob; filename: string | null }> {
   const token = await getAuthToken().catch(() => null)

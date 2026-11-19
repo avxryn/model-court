@@ -18,8 +18,13 @@ import { validateAgainstSchema } from '@/domain/extraction/validate'
 import type { ExtractionFields, ExtractionSettings } from '@/domain/kits/extraction'
 import { LIMITS } from '@/domain/limits'
 import { utf8ByteLength } from '@/domain/text'
-import { api, ApiClientError, describeError } from '@/lib/api-client'
+import { ChoiceCard, ChoiceCardGroup } from '@/components/court/ChoiceCard'
+import { Label } from '@/components/ui/label'
+import { api, ApiClientError, apiUploadPdf, describeError } from '@/lib/api-client'
+import type { PdfFacts } from '@/lib/pdf'
 import { cn } from '@/lib/utils'
+
+export const NO_TEXT_LAYER = 'This PDF has no text layer (probably a scan). Send the file instead, or the parties will get almost nothing.'
 
 export interface DraftDocument {
   caseKey: string
@@ -69,7 +74,8 @@ function DocumentEditor({ testCase }: { testCase: CaseInput }) {
   const id = `case-${testCase.key}-document`
 
   const evaluationId = context?.evaluationId
-  const hasSaved = !!saved
+  // A saved PDF has no text to load into the box; its bytes stay on the server.
+  const hasSaved = saved?.kind === 'text'
   useEffect(() => {
     if (!evaluationId || !hasSaved || loaded) return
     let live = true
@@ -83,6 +89,41 @@ function DocumentEditor({ testCase }: { testCase: CaseInput }) {
   }, [evaluationId, hasSaved, loaded, testCase.key])
 
   const bytes = utf8ByteLength(text ?? '')
+  const [pdf, setPdf] = useState<{ bytes: ArrayBuffer; facts: PdfFacts } | null>(null)
+  const [delivery, setDelivery] = useState<'pdf_native' | 'text'>('pdf_native')
+
+  // Spec 04 §3.3 (D-90): the browser reads the PDF (pages, that it opens, its text layer); nothing is uploaded yet.
+  const choosePdf = async (file: File | undefined) => {
+    setError(null)
+    setPdf(null)
+    if (!file) return
+    if (file.size > LIMITS.extraction.pdfBytes) return setError(`A PDF is at most ${LIMITS.extraction.pdfBytes / 1024 / 1024} MiB.`)
+    try {
+      const data = await file.arrayBuffer()
+      const { readPdf } = await import('@/lib/pdf')
+      const facts = await readPdf(data)
+      if (facts.pageCount > LIMITS.extraction.pdfPages) return setError(`This PDF has ${facts.pageCount} pages; at most ${LIMITS.extraction.pdfPages}.`)
+      setPdf({ bytes: data, facts })
+      setDelivery('pdf_native')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "This file couldn't be opened as a PDF.")
+    }
+  }
+
+  const savePdf = async () => {
+    if (!context || !pdf) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await apiUploadPdf<{ revision: number; draft: DraftInput; document: Omit<DraftDocument, 'caseKey' | 'available'> }>(`/evaluations/${context.evaluationId}/documents/${testCase.key}`, pdf.bytes, pdf.facts.pageCount, context.revision)
+      context.onSaved(result.revision, result.draft, [...context.documents.filter((document) => document.caseKey !== testCase.key), { caseKey: testCase.key, available: true, ...result.document }])
+      toast.success('PDF saved')
+    } catch (caught) {
+      setError(describeError(caught))
+    } finally {
+      setBusy(false)
+    }
+  }
   const save = async () => {
     if (!context || text === null) return
     setBusy(true)
@@ -109,12 +150,45 @@ function DocumentEditor({ testCase }: { testCase: CaseInput }) {
         <>
           <Textarea id={id} rows={8} value={text ?? ''} placeholder={saved && !loaded ? 'Loading…' : 'Paste the document text here.'} aria-describedby={`${id}-help`} aria-invalid={error || bytes > LIMITS.extraction.textDocumentBytes ? true : undefined} onChange={(event) => setText(event.target.value)} />
           <div className="flex flex-wrap items-center gap-3">
-            <Button size="sm" variant="outline" disabled={busy || !text?.trim() || bytes > LIMITS.extraction.textDocumentBytes || !context?.saved} onClick={() => void save()}>
-              {saved ? 'Replace document' : 'Save document'}
+            <Button size="sm" variant="outline" disabled={busy || !text?.trim() || bytes > LIMITS.extraction.textDocumentBytes || !context?.saved || (pdf !== null && delivery === 'pdf_native')} onClick={() => void save()}>
+              {saved ? 'Replace with this text' : 'Save document'}
             </Button>
             <FieldDescription id={`${id}-help`} className={cn('text-xs tabular-nums', (error || bytes > LIMITS.extraction.textDocumentBytes) && 'text-destructive')}>
-              {error ?? (ref ? `Saved · ${ref.byteLength.toLocaleString('en-US')} bytes. ` : 'Not saved yet. ') + `Up to ${LIMITS.extraction.textDocumentBytes / 1024} KiB of text.`}
+              {error ??
+                (ref ? (ref.delivery === 'pdf_native' ? `Saved: a PDF of ${ref.pageCount ?? '?'} ${ref.pageCount === 1 ? 'page' : 'pages'}, sent as the file. ` : `Saved · ${ref.byteLength.toLocaleString('en-US')} bytes of text. `) : 'Not saved yet. ') +
+                  `Up to ${LIMITS.extraction.textDocumentBytes / 1024} KiB of text.`}
             </FieldDescription>
+          </div>
+          <div className="space-y-2 rounded-md border border-paper-rule px-3 py-3">
+            <Label htmlFor={`${id}-pdf`} className="text-sm font-medium">
+              Or upload a PDF <span className="font-normal text-muted-foreground">(up to {LIMITS.extraction.pdfBytes / 1024 / 1024} MiB and {LIMITS.extraction.pdfPages} pages, no password)</span>
+            </Label>
+            <input id={`${id}-pdf`} type="file" accept="application/pdf" className="block text-sm" disabled={!context?.saved || busy} onChange={(event) => void choosePdf(event.target.files?.[0])} />
+            {pdf && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground tabular-nums">
+                  {pdf.facts.pageCount} {pdf.facts.pageCount === 1 ? 'page' : 'pages'} · {(pdf.bytes.byteLength / 1024).toLocaleString('en-US', { maximumFractionDigits: 0 })} KB · read in your browser, not uploaded yet
+                </p>
+                <ChoiceCardGroup aria-label="How parties get this PDF" value={delivery} onValueChange={(value) => {
+                  const next = value as 'pdf_native' | 'text'
+                  setDelivery(next)
+                  if (next === 'text') setText(pdf.facts.text)
+                }} className="sm:grid-cols-2">
+                  <ChoiceCard id={`${id}-native`} value="pdf_native" title="Send the PDF file" description="Each provider gets the file and reads its text and an image of each page, as in production." />
+                  <ChoiceCard id={`${id}-text`} value="text" title="Send the text only" description="You review the text below; every party gets exactly the same characters. Charts, stamps and scans are lost." />
+                </ChoiceCardGroup>
+                {delivery === 'text' && !pdf.facts.hasTextLayer && (
+                  <p className="text-sm text-warning">{NO_TEXT_LAYER}</p>
+                )}
+                {delivery === 'pdf_native' ? (
+                  <Button size="sm" variant="outline" disabled={busy || !context?.saved} onClick={() => void savePdf()}>
+                    Save the PDF file
+                  </Button>
+                ) : (
+                  <p className="text-xs text-muted-foreground">The PDF never leaves your browser. Edit the text above, then save it.</p>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}

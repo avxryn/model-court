@@ -418,3 +418,9 @@
   .ds-step { color: var(--foreground); }
   .ds-step > i { background: var(--primary); }
 }
+
+/* Spec 04 (D-90): the pdf.js text layer over a PDF page: invisible text that can be searched and selected. */
+.pdf-page .textLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; text-align: initial; forced-color-adjust: none; transform-origin: 0 0; }
+.pdf-page .textLayer :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.pdf-page .textLayer span { font-size: calc(var(--text-scale-factor, var(--scale-factor, 1)) * var(--font-height, 1em)); }
+.pdf-page .textLayer ::selection { background: color-mix(in oklch, var(--primary) 30%, transparent); }

@@ -24,13 +24,15 @@ flowchart LR
 | `src/domain/*` | Pure, browser-safe rules: Zod contracts, limits, rubric and scoring, transitions, prompt template `qa-v1`, canonical hashing, snapshot/readiness, registry. No React, SDK, or I/O (lint-enforced). |
 | `src/domain/scenario*.ts` | Spec 02 (D-67–D-71): scenario and party fingerprints and diffs (`scenario.ts`), the hearing comparison (`scenario-compare.ts`), and the scenario file parser (`scenario-file.ts`). Pure; nothing is stored: versions are recomputed from immutable snapshots. |
 | `src/domain/kits/*` | Task kits (spec 03, D-75–D-79): the kit contract (`types.ts`), registry (`KITS`, `kitFor`, kit and field schemas), versioned text helpers, the pure check runner, per-party check counts (`summary.ts`), and one file per kit (`general-v1`, `summarization-v1`, `classification-v1`). Message templates live in `messages.ts` (`MESSAGE_TEMPLATES`, `buildKitRequest`). |
+| `src/domain/extraction/*` | Structured extraction (spec 04, D-85–D-90): the portable JSON Schema subset and wire compiler (`schema.ts`), an interpreting validator (`validate.ts`; no Ajv, which needs `new Function`), comparison rules (`compare.ts`), canonical rendering for jurors (`render.ts`), starters, base64 chunking and PDF byte checks (`bytes.ts`), the start-dialog estimate. Kit `extraction-v1` is `src/domain/kits/extraction.ts`; template `extract-v1` is in `messages.ts`. |
 | `src/server/api.ts` | `/api/v1` boundary: identity, origin check, rate limits, body caps, HTTP mapping. |
 | `src/server/services/*` | Use cases: evaluations, credentials, runs (admission/retry/cancel/open review), generation (outbox/claim/commit/lease), reviews (invites/sessions/reveal), results (scoring/verdict), checks (automatic check rows, written in the batch that accepts a testimony and read only by results; D-76), maintenance (cron). |
+| `src/server/services/documents.ts`, `extraction.ts` | Spec 04 (D-87, D-89): document blobs (content-addressed per owner, base64 chunks, byte quotas in the same guarded batch, swept on the cron when unreferenced), draft and hearing references, the job's read of a hearing's copy after the claim; juror projections of extraction answers, field flags and the record's Extraction section. |
 | `src/server/db/*` | `ModelCourtStore` Durable Object + D1-compatible adapter, migrations, guarded-batch helper, budget/reservation statements, audit, rate buckets. |
 | `src/server/providers/*` | Two fixed-endpoint BYOK transports (OpenAI Responses, Anthropic Messages), dispatched by the adapter version a snapshot records (D-48), plus shared transport rules (no redirects, byte ceiling, normalized outcomes, no retries). |
 | `src/server/credential-crypto.ts` | AES-256-GCM seal/open with canonical AAD, plus HMAC. Web Crypto only. |
 | `src/server/platform.ts` | Production wiring: `verifyJwt`, `enqueueJob`, RecordRoom notice writes, `fetch`. |
-| `src/pages`, `src/components` | UI on shadcn/ui (`base-nova`, Base UI). Imports server modules for types only. |
+| `src/pages`, `src/components` | UI on shadcn/ui (`base-nova`, Base UI). Imports server modules for types only. PDFs are drawn by pdf.js (`src/lib/pdf.ts`, loaded lazily on PDF screens, eval and XFA off, annotations off) on a canvas, never in an iframe or the browser's viewer. |
 
 ## Trust boundaries and blinding
 
@@ -40,6 +42,8 @@ flowchart LR
 - Results exist only after reveal and use the cohort frozen in the reveal transaction (`reveal_cohort_json`).
 - Re-hearing, comparing, copying and scenario files (spec 02) are judge-only routes and fields; a hearing's parties appear in the case's hearing list only once it is unsealed, and jurors' projections are unchanged. Every hearing of a case is compared side by side, never pooled; an anchor party (same fingerprint in every hearing) is the only bridge (`src/server/services/scenarios.ts`, `comparison.ts`).
 - Automatic check results (`testimony_checks`, D-76) are read only through results and the export, after reveal, for every role including the judge; a source scan (`checks-isolation.test.ts`) keeps every other module from naming the table. Checks see testimony content, the question and the kit settings only, and never feed scores, the headline or the verdict.
+
+- Extraction (spec 04): before unsealing a juror sees an answer only as the server's canonical rendering in the field list's order (never the provider's bytes) or the same neutral line when it isn't JSON, and the question's document, identical for every party; never the answer key, comparison rules, schema hash or a check. Document bytes never enter a job payload, log, audit row or notice. A document's response always downloads (`Content-Disposition: attachment`, a `sandbox` CSP), and a guest cookie reaches one more route, the GET of its own hearing's document.
 
 ## State and durability
 

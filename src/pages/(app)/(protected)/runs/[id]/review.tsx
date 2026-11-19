@@ -17,6 +17,7 @@ import { useHearingAction } from '@/components/hearing/use-hearing-action'
 import { Page } from '@/components/layout/Page'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
 import { ExtractionTestimony } from '@/components/review/ExtractionTestimony'
+import { PdfViewer } from '@/components/review/PdfViewer'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
 import { isComplete, useWorksheet } from '@/components/review/use-worksheet'
 import { QuestionPager, QuestionStepper, useWorksheetKeys, WorksheetGrid, WorksheetKeyLegend } from '@/components/review/Worksheet'
@@ -167,6 +168,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
 
             <div className="flex flex-wrap items-center gap-3">
               <QuestionPager count={review.cases.length} current={caseIndex} isDone={(index) => review.cases[index].responses.every((r) => isComplete(w.ratings[r.responseId]))} onSelect={(index) => void goTo(index)} />
+              {review.cases.some((testCase) => testCase.document !== undefined) && <span className="text-xs text-muted-foreground">You’ll see the source documents for this case: the same file for every party.</span>}
               {review.cases.length === 1 && <span className="text-xs text-muted-foreground">Only one question was eligible — treat conclusions as exploratory.</span>}
               {w.editable && (
                 <div className="ml-auto">
@@ -178,7 +180,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
             <WorksheetGrid
               columns={current.responses.length}
               wideMaterial={current.document !== undefined}
-              material={<CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={review.cases.length} messages={current.messages} kitView={current.kitView} kitName={review.kit?.name} {...(current.document !== undefined ? { document: current.document } : {})} />}
+              material={<CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={review.cases.length} messages={current.messages} kitView={current.kitView} kitName={review.kit?.name} {...(current.document !== undefined ? { document: current.document } : {})} pdf={current.document?.kind === 'pdf' ? <PdfViewer key={current.caseKey} runId={review.runId} caseKey={current.caseKey} pageCount={current.document.pageCount} /> : undefined} />}
             >
               {current.responses.map((response) => {
                 const rating = w.ratings[response.responseId] ?? emptyRating(response.responseId)
