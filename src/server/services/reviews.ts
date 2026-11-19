@@ -20,6 +20,7 @@ import type { Deps } from '../deps'
 import { ApiError, notFound, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
 import { loadRunTextDocuments } from './documents'
+import { listRunSources } from './sources'
 import { extractionSettingsOf, fieldFlagIssues, jurorAnswer, type ExtractionView } from './extraction'
 import { notifyRun } from './generation'
 import { revokeGuestStatements } from './guest-jurors'
@@ -196,6 +197,11 @@ export interface AnonymousReview {
      */
     document?: { kind: 'text'; text: string } | { kind: 'pdf'; pageCount: number | null; byteLength: number; available: boolean } | null
     /**
+     * Spec 05 §5.2 (D-94): a grounded question's numbered sources, in order and identical for every
+     * party. Never the judge's origin notes or hashes; present only on grounded hearings.
+     */
+    sources?: Array<{ number: number; title: string | null; text: string }>
+    /**
      * `extraction` only on extraction hearings: the parsed answer as field rows (and `text` is then the
      * server's canonical JSON, never the provider's bytes), or `unparsed` with the raw text.
      */
@@ -248,6 +254,8 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
   const revealed = access.run.status === 'revealed' || access.run.status === 'decided'
   const extraction = extractionSettingsOf(snapshot)
   const documents = extraction ? await loadRunTextDocuments(deps.db, runId) : null
+  // Loaded once per hearing, not per response.
+  const sources = snapshot.kit?.version === 'grounded-v1' ? await listRunSources(deps.db, runId) : null
   return {
     runId: access.run.id,
     evaluationId: access.evaluation.id,
@@ -272,6 +280,7 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
         messages: testCase.messages ?? [],
         kitView: jurorKitView(snapshot, testCase),
         ...(extraction ? { document: documents?.get(item.caseKey) ?? null } : {}),
+        ...(sources ? { sources: (sources.get(item.caseKey) ?? []).map((source) => ({ number: source.number, title: source.title, text: source.text })) } : {}),
         responses: item.responses.map((response) => {
           const text = (response.importedOutputId ? outputs.get(`import:${response.importedOutputId}`) : response.acceptedAttemptId ? outputs.get(response.acceptedAttemptId) : undefined) ?? ''
           return { responseId: response.responseId, label: response.label, ...(extraction ? jurorAnswer(extraction.schema, text) : { text }) }

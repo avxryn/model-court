@@ -101,6 +101,8 @@ function buildRecordBody(results: Results, evaluationId: string) {
     // Spec 04 §5: authoring and wire schemas with their hash, answer keys, rules, document
     // metadata, text documents in full and the per-field table. PDF bytes are never embedded.
     ...('extraction' in results && results.extraction ? { extraction: results.extraction } : {}),
+    // Spec 05 §5.2 (D-94): every question's sources with their notes and hashes, only on grounded hearings.
+    ...('grounded' in results && results.grounded ? { grounded: results.grounded } : {}),
     verdicts: results.verdicts,
   }
 }

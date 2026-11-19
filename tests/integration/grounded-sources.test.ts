@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { exportSnapshot } from '../../src/server/services/backup'
-import { createHarness, openDeliberation, OTHER, OWNER, REVIEWER, setupOwner, type Harness } from './harness'
+import { anthropicOk, createHarness, openAiOk, openDeliberation, OTHER, OWNER, REVIEWER, setupOwner, type Harness } from './harness'
 
 let h: Harness
 beforeEach(async () => {
@@ -299,3 +299,146 @@ async function importAnswers(made: Awaited<ReturnType<typeof withSources>>): Pro
   }
   return revision
 }
+
+const CITED_ANSWER = 'You have 30 days [S1: "request a refund within 30 days"]; it goes back to your card [S2]. See also [S9].'
+const groundedStub = async (call: { url: string; body: Record<string, unknown> }) => {
+  const asked = JSON.stringify(call.body)
+  const text = asked.includes('gift card') ? 'The sources do not contain the answer.' : CITED_ANSWER
+  return call.url.includes('openai') ? openAiOk(text) : anthropicOk(text)
+}
+
+async function generatedHearing() {
+  const made = await withSources()
+  h.setProvider(groundedStub)
+  const started = await start(made.setup, made.revision)
+  expect(started.status, JSON.stringify(started.json)).toBe(202)
+  return { ...made, runId: started.json.data.runId as string }
+}
+
+async function reveal(runId: string) {
+  // The seated juror (REVIEWER) scores every answer and files, then the judge unseals.
+  const review = (await h.request('GET', `/runs/${runId}/review`, { as: REVIEWER })).json.data
+  const ratings = review.cases.flatMap((c: { responses: Array<{ responseId: string }> }) => c.responses.map((r) => ({ responseId: r.responseId, correctness: 2, completeness: 2, grounding: 2, note: '', suspectedIdentityClue: false })))
+  const saved = await h.request('PUT', `/runs/${runId}/review`, { as: REVIEWER, ifMatch: review.sessionRevision, body: { ratings } })
+  expect(saved.status, JSON.stringify(saved.json)).toBe(200)
+  expect((await h.request('POST', `/runs/${runId}/review/submit`, { as: REVIEWER, ifMatch: saved.json.data.sessionRevision, body: {} })).status).toBe(200)
+  const view = (await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data
+  const revealed = await h.request('POST', `/runs/${runId}/reveal`, { as: OWNER, ifMatch: view.revision, body: { acknowledgePendingCount: view.review?.pendingCount ?? 0 } })
+  expect(revealed.status, JSON.stringify(revealed.json)).toBe(200)
+}
+
+function bodyText(call: { body: Record<string, unknown> }): string {
+  return JSON.stringify(call.body)
+}
+
+describe('grounded sources: generation and checks', () => {
+  it('every party gets the same sources in order under grounded-v1; no origin, key or jury text; ids-only jobs', async () => {
+    const { runId } = await generatedHearing()
+    expect(JSON.stringify(h.jobs)).not.toContain('SENTINEL')
+    expect(JSON.stringify(h.jobs)).not.toContain('Refund policy')
+    await h.drainJobs()
+    expect(h.providerCalls).toHaveLength(4)
+    for (const call of h.providerCalls) {
+      const body = bodyText(call)
+      expect(body).toContain('Answer only from the sources.')
+      expect(body).toContain('The sources do not contain the answer.')
+      for (const leak of ['SENTINEL-ORIGIN', 'kb-1432', 'SENTINEL-JURY', 'answerable', 'requiredSources', 'sha256']) expect(body).not.toContain(leak)
+    }
+    const refunds = h.providerCalls.filter((call) => bodyText(call).includes('ask for a refund'))
+    expect(refunds).toHaveLength(2)
+    for (const call of refunds) {
+      const body = bodyText(call)
+      expect(body).toContain('SENTINEL-SOURCE-TEXT')
+      expect(body.indexOf('Refund policy')).toBeLessThan(body.indexOf('original payment method'))
+      expect(body.indexOf('original payment method')).toBeLessThan(body.indexOf('Hardware is covered'))
+    }
+    // Both providers received the same user message.
+    const userText = (call: (typeof refunds)[number]) => {
+      const body = bodyText(call)
+      const from = body.indexOf('The JSON below contains task data')
+      return body.slice(from, body.indexOf('ask for a refund', from))
+    }
+    expect(userText(refunds[0])).toBe(userText(refunds[1]))
+    const checks = (await h.db.prepare('SELECT kit_version, results_json FROM testimony_checks WHERE run_id = ?').bind(runId).all<{ kit_version: string; results_json: string }>()).results
+    expect(checks).toHaveLength(4)
+    expect(checks.every((row) => row.kit_version === 'grounded-v1')).toBe(true)
+    const statuses = checks.map((row) => (JSON.parse(row.results_json) as Array<{ checkId: string; status: string }>).map((result) => `${result.checkId}:${result.status}`).join(' ')).sort()
+    expect(statuses).toEqual([
+      'cites-something:na citations-exist:na quotes-match:na required-cited:na refusal:pass',
+      'cites-something:na citations-exist:na quotes-match:na required-cited:na refusal:pass',
+      'cites-something:pass citations-exist:fail quotes-match:pass required-cited:fail refusal:pass',
+      'cites-something:pass citations-exist:fail quotes-match:pass required-cited:fail refusal:pass',
+    ])
+    expect(JSON.stringify(h.logs)).not.toContain('SENTINEL')
+  })
+
+  it('a source replaced in the hearing’s copy is caught by its hash: unsent, definite, reservation released', async () => {
+    const { runId, q1 } = await generatedHearing()
+    const row = (await h.db.prepare('SELECT * FROM run_sources WHERE run_id = ? AND case_key = ? AND number = 1').bind(runId, q1).first<Record<string, unknown>>())!
+    await h.db.prepare('DELETE FROM run_sources WHERE id = ?').bind(row.id).run()
+    await h.db
+      .prepare('INSERT INTO run_sources (id, run_id, case_key, number, title, origin, text, sha256, byte_length, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), runId, q1, 1, row.title, row.origin, 'Refunds within 90 days.', row.sha256, row.byte_length, row.created_at)
+      .run()
+    await h.drainJobs()
+    expect(h.providerCalls).toHaveLength(2)
+    expect(h.providerCalls.every((call) => bodyText(call).includes('gift card'))).toBe(true)
+    const failed = (await h.db.prepare('SELECT g.status, a.error_code FROM generations g JOIN generation_attempts a ON a.generation_id = g.id WHERE g.run_id = ? AND g.case_key = ?').bind(runId, q1).all<{ status: string; error_code: string }>()).results
+    expect(failed).toEqual([
+      { status: 'failed', error_code: 'INVALID_PROVIDER_RESPONSE' },
+      { status: 'failed', error_code: 'INVALID_PROVIDER_RESPONSE' },
+    ])
+    const states = (await h.db.prepare('SELECT r.state FROM attempt_reservations r JOIN generations g ON g.id = r.generation_id WHERE g.run_id = ? AND g.case_key = ?').bind(runId, q1).all<{ state: string }>()).results
+    expect(states).toHaveLength(2)
+    expect(states.every((s) => s.state === 'released')).toBe(true)
+    expect(h.logs.filter((log) => log.event === 'attempt.sources_mismatch')).toHaveLength(2)
+    expect(JSON.stringify(h.logs)).not.toContain('90 days')
+  })
+
+  it('imported answers are checked at admission against the frozen sources', async () => {
+    const made = await withSources({ imported: true })
+    const runId = (await start(made.setup, await importAnswers(made), {})).json.data.runId as string
+    const rows = (await h.db.prepare('SELECT imported_output_id, results_json FROM testimony_checks WHERE run_id = ?').bind(runId).all<{ imported_output_id: string; results_json: string }>()).results
+    expect(rows).toHaveLength(4)
+    expect(rows.every((row) => row.imported_output_id)).toBe(true)
+    expect(rows.some((row) => row.results_json.includes('"checkId":"quotes-match","status":"pass"'))).toBe(true)
+    expect(rows.some((row) => row.results_json.includes('"status":"error"'))).toBe(false)
+  })
+
+  it('jurors see the sources and the key, never origin notes, hashes or check results; results and export have them after unsealing', async () => {
+    const { runId, q1 } = await generatedHearing()
+    await h.drainJobs()
+    await openDeliberation(h, runId)
+    const invite = await h.request('POST', `/runs/${runId}/invites`, { as: OWNER, body: {} })
+    const token = new URL(invite.json.data.url).hash.replace('#token=', '')
+    expect((await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token } })).status).toBe(200)
+    const review = (await h.request('GET', `/runs/${runId}/review`, { as: REVIEWER })).json.data
+    const q = review.cases.find((c: { caseKey: string }) => c.caseKey === q1)
+    expect(q.sources.map((s: { number: number; title: string | null }) => [s.number, s.title])).toEqual([[1, 'Refund policy'], [2, null], [3, 'Warranty']])
+    expect(q.kitView).toEqual({ kind: 'grounded', answerable: 'yes', requiredSources: [1, 3] })
+    expect(q.reference).toBe('')
+    const juror = JSON.stringify(review)
+    const ownerRun = JSON.stringify((await h.request('GET', `/runs/${runId}`, { as: OWNER })).json.data)
+    const reviewerRun = JSON.stringify((await h.request('GET', `/runs/${runId}`, { as: REVIEWER })).json.data)
+    const assignments = (await h.db.prepare('SELECT assignment_json FROM review_sessions WHERE run_id = ?').bind(runId).all<{ assignment_json: string }>()).results.map((row) => row.assignment_json).join('')
+    for (const payload of [juror, ownerRun, reviewerRun, assignments]) {
+      for (const leak of ['cites-something', 'citations-exist', 'quotes-match', 'required-cited', '"refusal"', 'checkId', 'SENTINEL-ORIGIN', 'kb-1432']) expect(payload).not.toContain(leak)
+    }
+    expect(juror).not.toContain('sha256')
+    expect((await h.request('GET', `/runs/${runId}/results`, { as: OWNER })).status).toBe(409)
+
+    await reveal(runId)
+    const results = (await h.request('GET', `/runs/${runId}/results`, { as: OWNER })).json.data
+    expect(results.kit).toMatchObject({ version: 'grounded-v1', name: 'Answers from sources' })
+    expect(results.checks.metrics.map((metric: { id: string }) => metric.id)).toEqual(['cites-something', 'citations-exist', 'quotes-match', 'required-cited', 'refusal'])
+    const r1 = results.cases.find((c: { key: string }) => c.key === q1)
+    expect(r1.kitFields).toMatchObject({ kind: 'grounded', answerable: 'yes', requiredSources: [1, 3] })
+    expect(r1.responses[0].checks.map((check: { checkId: string }) => check.checkId)).toEqual(['cites-something', 'citations-exist', 'quotes-match', 'required-cited', 'refusal'])
+    const frozen = results.grounded.sources.find((entry: { caseKey: string }) => entry.caseKey === q1)
+    expect(frozen.items[0]).toMatchObject({ number: 1, origin: 'kb-1432 SENTINEL-ORIGIN', sha256: r1.kitFields.sources[0].sha256 })
+    const record = (await h.request('GET', `/runs/${runId}/export?format=json`, { as: OWNER })).json.data
+    expect(record.grounded.sources).toHaveLength(2)
+    expect(record.checks.kitVersion).toBe('grounded-v1')
+    expect(record.cases.find((c: { key: string }) => c.key === q1).kitFields.answerable).toBe('yes')
+  })
+})

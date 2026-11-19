@@ -9,6 +9,7 @@
 
 import { LIMITS } from '../../domain/limits'
 import { buildKitRequest } from '../../domain/messages'
+import type { CheckMaterials } from '../../domain/kits/types'
 import type { ProviderId } from '../../domain/registry'
 import { isImportedSnapshot, type RunSnapshot } from '../../domain/snapshot'
 import { all, auditStatement, cond, GuardFailed, releaseReservations, runGuarded } from '../db/sql'
@@ -16,12 +17,15 @@ import type { Deps, GenerationJob } from '../deps'
 import { adapterFor, type ProviderOutcome } from '../providers'
 import { checkRowFor, insertTestimonyChecksStatement } from './checks'
 import { loadRunDocument } from './documents'
+import { loadRunPromptSources, sourceRefsOf } from './sources'
+import type { PromptSource } from '../../domain/grounded/sources'
 import { attemptStillCurrent, CredentialUnusable, withRunCredential } from './credentials'
 // Function-only cycle (runs.ts imports this module too); nothing runs at import time.
 import { autoOpenReview } from './runs'
 
 class AttemptFenced extends Error {}
 class DocumentUnavailable extends Error {}
+class SourcesUnavailable extends Error {}
 
 export const GENERATION_JOB_TYPE = 'mc.generate'
 
@@ -191,13 +195,18 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
   // dropped when the call returns; no byte ever travels in the job payload. Its adapter is chosen
   // first from the recorded delivery. A missing copy is a definite, unsent failure.
   const documentRef = (testCase.kitFields as { kind?: string; document?: { sha256: string; delivery: string } } | undefined)?.kind === 'extraction' ? (testCase.kitFields as { document?: { sha256: string; delivery: string } }).document : undefined
+  // Spec 05 §6.2 (D-94): a grounded question's sources are read from the hearing's own copy after the
+  // claim and the pre-send fence check, each hash recomputed against the snapshot; nothing travels in
+  // the job payload. A missing or changed source is a definite, unsent failure. One user message.
+  const sourceRefs = context.snapshot.messageTemplateVersion === 'grounded-v1' ? sourceRefsOf(testCase) : null
+  const deferred = documentRef !== undefined || sourceRefs !== null
   // The hearing's recorded template (spec 03, D-75); reviewer-only fields never reach the request.
-  const plain = documentRef ? null : buildKitRequest(context.snapshot, configuration.systemPrompt, testCase)
+  const plain = deferred ? null : buildKitRequest(context.snapshot, configuration.systemPrompt, testCase)
   const features = documentRef ? { structuredOutput: true, ...(documentRef.delivery === 'pdf_native' ? { pdfInput: true } : {}) } : plain?.requestOptions ? { structuredOutput: true } : {}
   // Dispatch by the adapter version this hearing recorded (D-39); refuse, unsent, if it cannot carry the messages or a feature.
   // An extract-v1 request is always one user message.
-  const adapter = documentRef || plain ? adapterFor(configuration.adapterVersion, context.provider, plain ? plain.messages.length : 1, features) : null
-  if ((!documentRef && !plain) || !adapter) {
+  const adapter = deferred || plain ? adapterFor(configuration.adapterVersion, context.provider, plain ? plain.messages.length : 1, features) : null
+  if ((!deferred && !plain) || !adapter) {
     return finishAttempt(deps, { attemptId, fence, job, context, requestId }, { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }, true)
   }
   const timeout = AbortSignal.timeout(deps.config.providerTimeoutMs)
@@ -205,12 +214,24 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
 
   let outcome: ProviderOutcome
   let unsent = false
+  let checkedSources: PromptSource[] | undefined
   try {
     outcome = await withRunCredential(deps, context.runId, context.provider, requestId, async (apiKey) => {
       // Canceled or deleted since claim: send nothing (the attempt is already fenced out).
       if (!(await attemptStillCurrent(deps.db, attemptId, fence, context.runId))) throw new AttemptFenced()
+      if (sourceRefs !== null) {
+        const sources = await loadRunPromptSources(deps.db, context.runId, testCase.key, sourceRefs)
+        if (!sources) throw new SourcesUnavailable()
+        checkedSources = sources
+      }
       const document = documentRef ? await loadRunDocument(deps.db, context.runId, testCase.key, documentRef.sha256) : undefined
-      const conversation = documentRef ? (document ? buildKitRequest(context.snapshot, configuration.systemPrompt, testCase, document) : null) : plain
+      const conversation = documentRef
+        ? document
+          ? buildKitRequest(context.snapshot, configuration.systemPrompt, testCase, document)
+          : null
+        : checkedSources
+          ? buildKitRequest(context.snapshot, configuration.systemPrompt, testCase, undefined, checkedSources)
+          : plain
       if (!conversation) throw new DocumentUnavailable()
       const options = conversation.requestOptions
       return adapter(
@@ -244,7 +265,12 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
       }
       return 'stale'
     }
-    if (error instanceof DocumentUnavailable) {
+    if (error instanceof SourcesUnavailable) {
+      // Spec 05 §6.2: never sent with sources the snapshot does not describe. Ids only.
+      deps.log({ event: 'attempt.sources_mismatch', generationId: job.generationId, attemptNo: job.attemptNo })
+      unsent = true
+      outcome = { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }
+    } else if (error instanceof DocumentUnavailable) {
       // Spec 04 §4.6: no call is ever sent without its document.
       unsent = true
       outcome = { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }
@@ -256,7 +282,7 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
       outcome = { kind: 'failure', code: 'PROVIDER_NETWORK_ERROR', definite: false, providerRequestId: null, durationMs: 0 }
     }
   }
-  return finishAttempt(deps, { attemptId, fence, job, context, requestId }, outcome, unsent)
+  return finishAttempt(deps, { attemptId, fence, job, context, requestId }, outcome, unsent, checkedSources ? { sources: checkedSources } : undefined)
 }
 
 interface AttemptRef {
@@ -267,7 +293,7 @@ interface AttemptRef {
   requestId: string
 }
 
-async function finishAttempt(deps: Deps, ref: AttemptRef, outcome: ProviderOutcome, unsent: boolean): Promise<JobOutcome> {
+async function finishAttempt(deps: Deps, ref: AttemptRef, outcome: ProviderOutcome, unsent: boolean, materials?: CheckMaterials): Promise<JobOutcome> {
   const db = deps.db
   const now = deps.now()
   const { job, context } = ref
@@ -282,7 +308,8 @@ async function finishAttempt(deps: Deps, ref: AttemptRef, outcome: ProviderOutco
       // Spec 03 (D-76): automatic checks on the accepted text, committed in the same guarded batch,
       // so a fenced or revoked completion writes neither the testimony nor its checks.
       const testCase = context.snapshot.cases.find((item) => item.key === context.caseKey)
-      const checks = testCase ? checkRowFor(deps, context.snapshot, testCase, { kind: 'text', text: outcome.text }) : null
+      // Spec 05 (D-94): a grounded answer is checked against the same verified sources it was sent.
+      const checks = testCase ? checkRowFor(deps, context.snapshot, testCase, { kind: 'text', text: outcome.text }, materials) : null
       await runGuarded(
         db,
         'generation.complete',

@@ -18,6 +18,7 @@ import { idempotent, requestHash } from '../receipts'
 import { loadKitResults, withKitResults } from './checks'
 import { listRunDocuments, loadRunTextDocuments } from './documents'
 import { extractionSection, isExtractionHearing } from './extraction'
+import { listRunSources } from './sources'
 import { notifyRun } from './generation'
 import { isImportedSnapshot, samplesPerAnswer } from '../../domain/snapshot'
 import { loadGenerations, parseSnapshot, primarySample, samplesFor, type AssignmentCase, type EligibleManifest } from './runs'
@@ -326,6 +327,8 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
   const kitResults = await loadKitResults(deps, { runId, snapshot, eligibleCaseKeys: manifest.caseKeys, generations, samplesPerAnswer: samples })
   // Spec 04 §3.4 (D-87): the Extraction section, from eligible questions' scored answers and the jury's flags.
   const extraction = isExtractionHearing(snapshot) ? await extractionResults(db, runId, snapshot, manifest.caseKeys, cases, scored, kitResults) : null
+  // Spec 05 §5.2 (D-94): a grounded hearing's frozen sources, with the judge's notes and hashes, after unsealing only.
+  const grounded = snapshot.kit?.version === 'grounded-v1' ? { sources: [...(await listRunSources(db, runId)).entries()].map(([caseKey, items]) => ({ caseKey, items: items.map((item) => ({ number: item.number, title: item.title, origin: item.origin, text: item.text, sha256: item.sha256, byteLength: item.byteLength })) })) } : null
   const withKit = withKitResults(kitResults, {
     runId,
     role: access.role,
@@ -372,7 +375,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
       createdAt: verdict.created_at,
     })),
   })
-  return extraction ? { ...withKit, extraction } : withKit
+  return { ...withKit, ...(extraction ? { extraction } : {}), ...(grounded ? { grounded } : {}) }
 }
 
 /**
