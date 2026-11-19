@@ -50,6 +50,8 @@ export interface CatalogModel {
   structuredVerifiedAt: string | null
   /** A recorded live PDF call; native-PDF questions need it. */
   pdfVerifiedAt: string | null
+  /** Spec 06 (D-99): a recorded live tool-loop call; tool-use hearings need it. */
+  toolsVerifiedAt: string | null
 }
 
 export interface CatalogView {

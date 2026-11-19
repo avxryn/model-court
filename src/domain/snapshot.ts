@@ -78,11 +78,20 @@ export type ReadinessIssue =
   | { kind: 'pdf_unverified'; configurationKey: string; modelKey: string }
   /** Spec 04 §4.6: the question's document is gone from the store (a PDF a restore left out) or changed under the draft. */
   | { kind: 'document_not_restored'; caseKey: string }
+  /** Spec 06 §5.1 (D-99): a tool-use hearing on a route without a recorded live tool check. */
+  | { kind: 'tools_unverified'; configurationKey: string; modelKey: string }
+  /** Spec 06 (D-99): imported answers have no tool calls, so a tool-use hearing takes generated parties only. */
+  | { kind: 'tools_imported_unsupported'; configurationKey: string }
   | KitReadinessIssue
 
 /** A kit whose parties answer in JSON (extraction) sends a structured-output schema. */
 export function needsStructuredOutput(draft: { kit?: { version: string } | undefined }): boolean {
   return kitFor(draft.kit?.version).outputContract.kind === 'json'
+}
+
+/** Spec 06 (D-99): a kit whose testimony is a tool trace runs a tool loop per answer. */
+export function usesTools(draft: { kit?: { version: string } | undefined }): boolean {
+  return kitFor(draft.kit?.version).outputContract.kind === 'toolTrace'
 }
 
 /** Spec 04 (D-89): a question whose document goes to the providers as the PDF file itself. */
@@ -99,6 +108,8 @@ export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configura
   const hasHistory = (draft.cases ?? []).some((testCase) => (testCase.messages?.length ?? 0) > 0)
   const structured = needsStructuredOutput(draft)
   const sendsPdf = sendsPdfFile(draft.cases ?? [])
+  const tools = usesTools(draft)
+  if (tools) for (const configuration of draft.configurations) if (isImported(configuration)) issues.push({ kind: 'tools_imported_unsupported', configurationKey: configuration.key })
   for (const configuration of models) {
     const route = findRoute(configuration.modelKey, routes)
     if (!route) issues.push({ kind: 'unknown_model', configurationKey: configuration.key })
@@ -106,6 +117,7 @@ export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configura
     else if (hasHistory && !route.multiTurnVerifiedAt) issues.push({ kind: 'history_unverified', configurationKey: configuration.key })
     else if (structured && (!route.structuredVerifiedAt || !adapterVersionFor(route.adapterVersion, FEATURES))) issues.push({ kind: 'structured_unverified', configurationKey: configuration.key, modelKey: route.key })
     else if (structured && sendsPdf && !route.pdfVerifiedAt) issues.push({ kind: 'pdf_unverified', configurationKey: configuration.key, modelKey: route.key })
+    else if (tools && !route.toolsVerifiedAt) issues.push({ kind: 'tools_unverified', configurationKey: configuration.key, modelKey: route.key })
   }
   if (draft.comparisonMode === 'model') {
     if (models.length < draft.configurations.length) issues.push({ kind: 'imported_requires_configuration_mode' })
@@ -170,6 +182,14 @@ export function describeIssue(issue: ReadinessIssue, cases?: ReadonlyArray<Pick<
       return kitFor(issue.kitVersion).inputKinds.includes('document')
         ? `Every question needs a document to pull fields from. Add one to ${questionName(issue.caseKey, cases)}.`
         : `${kitFor(issue.kitVersion).name} needs a document in the exhibit of every question. Add one to ${questionName(issue.caseKey, cases)}.`
+    case 'tools_unverified': {
+      const route = findRoute(issue.modelKey)
+      return `A question uses tools, but ${route ? `${PROVIDER_NAMES[route.provider]} ${route.label}` : 'a selected model'} hasn't passed a live tool check yet (one real tool call and its result, recorded). Choose a checked model or record that check first.`
+    }
+    case 'tools_imported_unsupported':
+      return "Imported answers have no tool calls, so a tool-use hearing can't include an imported party. Remove it or switch the task kit."
+    case 'kit_tools_missing':
+      return `Every tool-use question needs at least one tool. Add one to ${questionName(issue.caseKey, cases)}.`
     case 'kit_unknown':
       return 'This case uses a task kit this version of Model Court does not know. Choose another task kit.'
     case 'kit_sources_missing':

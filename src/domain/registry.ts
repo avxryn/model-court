@@ -117,6 +117,12 @@ export interface ModelRoute {
   structuredVerifiedAt: string | null
   /** ISO date of a recorded live PDF call (mode `pdf`). Native-PDF questions need it. */
   pdfVerifiedAt: string | null
+  /**
+   * ISO date of a recorded live tool-loop call (`smoke:providers` mode `tools`, spec 06 §6.4): a
+   * call, a result round trip and a final answer. Tool-use hearings run only on routes where this
+   * is set. Documentation never sets it.
+   */
+  toolsVerifiedAt: string | null
   /** One of `ADAPTER_VERSIONS` (unit-tested); typed as a string because snapshots keep whatever they recorded. */
   adapterVersion: string
 }
@@ -143,6 +149,7 @@ function openai(modelId: string, label: string, line: string, reasoning: Reasoni
     multiTurnVerifiedAt: null,
     structuredVerifiedAt: null,
     pdfVerifiedAt: null,
+    toolsVerifiedAt: null,
     adapterVersion: reasoning === 'low' ? 'openai-responses-reasoning-low-v1' : 'openai-responses-v2',
     ...extra,
   }
@@ -165,6 +172,7 @@ function anthropic(modelId: string, label: string, line: string, adapterVersion:
     multiTurnVerifiedAt: null,
     structuredVerifiedAt: null,
     pdfVerifiedAt: null,
+    toolsVerifiedAt: null,
     adapterVersion,
     ...extra,
   }

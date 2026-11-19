@@ -44,6 +44,13 @@ export function KitFacts({ view, kitName }: { view: KitJurorCaseView; kitName: s
         </dl>
       ) : view.kind === 'grounded' ? (
         <p className="mt-2 text-muted-foreground">{groundingKeyText(view)}</p>
+      ) : view.kind === 'tools' ? (
+        <dl className="mt-2 grid gap-x-4 gap-y-1.5 text-muted-foreground sm:grid-cols-[auto_1fr]">
+          <dt className="font-medium text-foreground">Tools</dt>
+          <dd>{view.tools.map((tool) => tool.name).join(' · ')}</dd>
+          <dt className="font-medium text-foreground">Step cap</dt>
+          <dd>Up to {view.maxSteps} {view.maxSteps === 1 ? 'call' : 'calls'} to its model per party</dd>
+        </dl>
       ) : view.kind === 'extraction' ? (
         <dl className="mt-2 grid gap-x-4 gap-y-1.5 text-muted-foreground sm:grid-cols-[auto_1fr]">
           <dt className="font-medium text-foreground">Fields</dt>

@@ -11,6 +11,7 @@
 import type { CaseInput } from '../contracts'
 import { LIMITS } from '../limits'
 import { utf8ByteLength } from '../text'
+import { jurorTrace } from '../tools/trace'
 import type { CheckCase, CheckContext, CheckDetail, CheckMaterials, CheckResult, CheckStatus, TaskKit, Testimony } from './types'
 
 export const CHECK_ERROR_REASON = 'This check could not run. That is a fault in Model Court, not in the answer.'
@@ -68,7 +69,8 @@ export function runChecks(kit: TaskKit<unknown, unknown>, settings: unknown, tes
     const checkCase = checkCaseOf(testCase)
     const raw = checkCase.kitFields as { kind?: string } | undefined
     const ctx: CheckContext<unknown, unknown> = {
-      testimony: { kind: testimony.kind, text: testimony.text },
+      // Spec 06 (D-99): a trace is re-projected through the juror allowlist, so a check never sees provider metadata.
+      testimony: testimony.kind === 'toolTrace' ? { kind: 'toolTrace', text: testimony.text, trace: jurorTrace(testimony.trace) } : { kind: testimony.kind, text: testimony.text },
       testCase: checkCase,
       fields: raw && raw.kind === kit.family ? raw : undefined,
       settings,

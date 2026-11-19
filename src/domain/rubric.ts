@@ -239,6 +239,37 @@ export const RUBRICS = {
       },
     },
   },
+  // Spec 06 §8.3 (D-99): the whole path of a tool-using answer, in the three existing slots (D-35).
+  'tools-trajectory-v1': {
+    name: 'Tool use',
+    description: 'A tool-using answer as a whole: the final answer, the path of calls, and how the tool results were used.',
+    lines: {
+      correctness: {
+        label: 'Final answer',
+        anchors: {
+          0: 'Wrong, unsupported, or missing when it was achievable',
+          1: 'Mostly right, with a gap or an unhedged guess',
+          2: 'Correct and supported by the tool results',
+        },
+      },
+      completeness: {
+        label: 'Path',
+        anchors: {
+          0: 'A wrong or forbidden tool, or a needed call missing',
+          1: 'Got there, but with needless, repeated or out-of-order calls',
+          2: 'The right calls, no waste, and stopped when done',
+        },
+      },
+      grounding: {
+        label: 'Use of results',
+        anchors: {
+          0: 'Ignored, misread or invented tool data, or ignored an error',
+          1: 'A minor misread, or an error handled poorly',
+          2: 'Every claim traces to a tool result, and errors are handled sensibly',
+        },
+      },
+    },
+  },
 } as const satisfies Record<string, { name: string; description: string; lines: RubricLines }>
 
 export type RubricVersion = keyof typeof RUBRICS
