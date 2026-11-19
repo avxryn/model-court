@@ -11,7 +11,7 @@ import type { CredentialMetadata } from '@/lib/dto'
  */
 export function MissingKeys({ missing }: { missing: ProviderId[] }) {
   if (missing.length === 0) return null
-  const names = missing.map((p) => PROVIDER_NAMES[p]).join(' and ')
+  const names = new Intl.ListFormat('en-GB', { style: 'long', type: 'conjunction' }).format(missing.map((p) => PROVIDER_NAMES[p]))
   return (
     <Alert className="mb-6 bg-slip">
       <KeyRound aria-hidden />

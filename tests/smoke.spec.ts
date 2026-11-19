@@ -86,6 +86,19 @@ test.describe('public site pages', () => {
   }
 })
 
+test.describe('Google on the public pages (spec 07 §8.5)', () => {
+  test('privacy, terms and the footer name Google and say what Google keeps', async ({ page }) => {
+    await page.goto('/privacy')
+    await expect(page.getByTestId('public-site')).toBeVisible()
+    await expect(page.getByText('Requests to Google’s Gemini API ask Google not to keep them')).toBeVisible()
+    await expect(page.getByText('If your key’s project is on Google’s free tier', { exact: false })).toBeVisible()
+    await expect(page.getByText('Not affiliated with or endorsed by OpenAI, Anthropic or Google.')).toBeVisible()
+    await page.goto('/terms')
+    await expect(page.getByText('Judges in the EEA, Switzerland or the UK must use a Gemini key from a paid-tier Google project.')).toBeVisible()
+    await expect(page.getByText('OpenAI, GPT, Anthropic, Claude, Google, and Gemini are trademarks of their owners.', { exact: false })).toBeVisible()
+  })
+})
+
 /** Scores every line of every sample testimony 2 (no notes needed), question by question. */
 async function scoreSample(page: import('@playwright/test').Page) {
   for (let question = 0; question < 5; question++) {

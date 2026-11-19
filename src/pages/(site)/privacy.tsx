@@ -41,13 +41,13 @@ export default function PrivacyPage() {
 
       <LegalSection id="providers" title="What is sent to AI providers">
         <p>
-          Only when a judge starts or retries a hearing (or runs the AI grader after unsealing), Model Court sends requests to OpenAI or Anthropic using <strong>the judge’s own API key</strong>. A hearing request contains the party’s system instructions, the exhibit, the question, and any earlier conversation on that question. A grader request also contains the scoring guide and one answer.
+          Only when a judge starts or retries a hearing (or runs the AI grader after unsealing), Model Court sends requests to OpenAI, Anthropic or Google using <strong>the judge’s own API key</strong>. A hearing request contains the party’s system instructions, the exhibit, the question, and any earlier conversation on that question. A grader request also contains the scoring guide and one answer.
         </p>
         <p>
           A task kit adds its fixed instructions to each hearing request, with the length limit and format for summaries or the list of allowed labels for classification. Its automatic checks run on Model Court’s server: nothing extra is sent to a provider, and answer keys (required points, phrases to avoid, expected labels) are never sent to a model.
         </p>
         <p>
-          <strong>Field lists and documents.</strong> For a “pull fields from documents” case, each request also contains the document for that question and your field list (field names, descriptions and allowed values). If you upload a PDF and choose <strong>Send the PDF file</strong>, the file itself is sent to OpenAI or Anthropic with your key, and the provider reads its text and an image of each page. If you choose <strong>Send the text only</strong>, the PDF never leaves your browser; only the text you reviewed is saved and sent. Answer keys and jury instructions are never sent to a model. Anthropic keeps a compiled copy of the field list (not the document) for up to 24 hours to speed up later requests, so don’t put personal data in field names, descriptions, or allowed values.
+          <strong>Field lists and documents.</strong> For a “pull fields from documents” case, each request also contains the document for that question and your field list (field names, descriptions and allowed values). If you upload a PDF and choose <strong>Send the PDF file</strong>, the file itself is sent to OpenAI or Anthropic with your key (Google parties can’t take part in these cases), and the provider reads its text and an image of each page. If you choose <strong>Send the text only</strong>, the PDF never leaves your browser; only the text you reviewed is saved and sent. Answer keys and jury instructions are never sent to a model. Anthropic keeps a compiled copy of the field list (not the document) for up to 24 hours to speed up later requests, so don’t put personal data in field names, descriptions, or allowed values.
         </p>
         <p>
           <strong>Sources.</strong> For an “answers from sources” case, each request also contains that question’s numbered sources, in your order, with their titles, and the same instructions on how to cite them. Every party’s provider gets the same sources. If you run the AI grader after unsealing, its request contains them and your grounding key too. Your notes on the sources (where a passage came from) and your grounding key (whether the sources answer the question, and which sources a good answer cites) are never sent to a model. Jurors of the hearing see the sources and the grounding key, but not your notes.
@@ -56,7 +56,10 @@ export default function PrivacyPage() {
           <strong>Tools.</strong> For a “tool use” case, each request also contains the tools you defined (their names, descriptions and argument schemas). When a model asks to call a tool, nothing real runs: Model Court picks your canned response for that call and sends it back to the same model in its next request, together with everything that model said and asked for earlier in that answer (including its own reasoning data when the model returns it). A model receives only the responses to calls it made, never your whole response table, and never the expectations you set (required and forbidden calls, target, expected answer). One answer may make up to your step cap of requests, each billed to your key. That reasoning data is kept only until the answer finishes. Jurors see the tools and each party’s calls and results; which canned response answered a call is shown only after unsealing.
         </p>
         <p>
-          When you choose <strong>Check key</strong> (or leave it on when saving a key), Model Court asks OpenAI or Anthropic to list its models using your key. This is free and sends no questions, answers, or case content.
+          When you choose <strong>Check key</strong> (or leave it on when saving a key), Model Court asks OpenAI, Anthropic or Google to list its models using your key. This is free and sends no questions, answers, or case content.
+        </p>
+        <p>
+          <strong>Google.</strong> Requests to Google’s Gemini API ask Google not to keep them in your Google project’s request logs (<code>store: false</code>). Google still keeps a copy for a limited time to detect abuse, which cannot be turned off. If your key’s project is on Google’s free tier, Google may use what is sent to improve its products, and people at Google may read it; use a paid-tier project for anything private. Model Court cannot see which tier a key belongs to. No tools, files or search are ever sent to Google.
         </p>
         <p>
           Scoring guides (for hearings), jurors’ scores and notes, juror identities, invitations, imported answers, and judgments are never sent to a model. What a provider does with requests is governed by your agreement with that provider; deleting a case here cannot delete what a provider already received.
@@ -67,7 +70,7 @@ export default function PrivacyPage() {
         <ul>
           <li>DeepSpace, which hosts the app, stores its data, and provides sign-in.</li>
           <li>Cloudflare, the network DeepSpace runs on.</li>
-          <li>OpenAI and Anthropic, only as described above and only with the judge’s key.</li>
+          <li>OpenAI, Anthropic and Google, only as described above and only with the judge’s key.</li>
         </ul>
         <p>These services may process data outside your country.</p>
       </LegalSection>

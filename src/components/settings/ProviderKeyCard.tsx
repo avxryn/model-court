@@ -5,6 +5,8 @@
  * advice on choosing a key sits in the form, where it is acted on.
  * "Check key" (D-57) asks the server to make the provider's free list-models
  * call with the stored key; only the result comes back.
+ * Spec 07 §3.1, §8.2 (D-109): a key that clearly belongs to another company is refused here before
+ * anything is sent (the server refuses it again), and the Google card says what Google keeps.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -18,6 +20,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { foreignKeyOwner, keyMismatchMessage } from '@/domain/contracts'
 import { PROVIDER_NAMES, type ProviderId } from '@/domain/registry'
 import { api, describeError, newIntentKey } from '@/lib/api-client'
 import type { CredentialMetadata, KeyCheckView } from '@/lib/dto'
@@ -33,11 +36,13 @@ const CHECK_BADGE: Record<CheckResult, { label: string; tone: 'good' | 'warn' | 
 }
 
 /** What the check found, in words the judge can act on. Never provider text. */
-export function checkMessage(name: string, view: Pick<KeyCheckView, 'result' | 'reason'>): string {
+export function checkMessage(name: string, view: Pick<KeyCheckView, 'result' | 'reason'>, provider?: ProviderId): string {
   switch (view.result) {
     case 'valid':
       return `${name} accepted the key. Balance and model access are confirmed on the first call.`
     case 'restricted':
+      // Spec 07 §8.6: Google refuses an unrestricted or unverified project's key with 403.
+      if (provider === 'google') return 'Google recognised this key but refused to list models. Make sure the key’s project has the Gemini API turned on and billing set up.'
       return `${name} recognised the key but would not list models with it. It may still work if it is limited to generation; if a hearing fails, replace it.`
     case 'invalid':
       return `${name} rejected the key. Replace it with a working key before you start a hearing.`
@@ -75,8 +80,8 @@ export function ProviderKeyCard({ provider, current, writesEnabled, ttlDays, onC
     setBusy(true)
     try {
       const view = await runKeyCheck(key.id)
-      if (view.result === 'valid') toast.success(checkMessage(name, view))
-      else toast.warning(checkMessage(name, view))
+      if (view.result === 'valid') toast.success(checkMessage(name, view, provider))
+      else toast.warning(checkMessage(name, view, provider))
     } catch (caught) {
       toast.error(describeError(caught))
     } finally {
@@ -125,6 +130,14 @@ export function ProviderKeyCard({ provider, current, writesEnabled, ttlDays, onC
           )}
         </CardDescription>
       </CardHeader>
+      {provider === 'google' && (
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>Gemini parties use your own Google AI Studio API key. Google bills your Google project. Model Court asks Google not to keep these requests in your project’s logs. Google still keeps a copy for a limited time to check for abuse.</p>
+          <p className="rounded-sm bg-warning/10 p-2.5 text-foreground ring-1 ring-warning/25" data-testid="google-free-tier">
+            On Google’s free tier, Google may use what you send to improve its products, and people at Google may read it. Use a paid-tier project for anything private. In the EEA, Switzerland or the UK, a paid-tier project is required.
+          </p>
+        </CardContent>
+      )}
       {editing ? (
         <CardContent>
           <KeyForm
@@ -188,7 +201,10 @@ function KeyForm({ provider, current, ttlDays, onDone }: { provider: ProviderId;
   const intent = useRef(newIntentKey())
   const name = PROVIDER_NAMES[provider]
   const keyId = `${provider}-api-key`
-  const ready = !!apiKey.trim() && consent && !busy
+  // Spec 07 §8.2: refused before anything is sent, because Check key would send it to the wrong company.
+  const owner = foreignKeyOwner(provider, apiKey.trim())
+  const mismatch = owner ? keyMismatchMessage(owner) : null
+  const ready = !!apiKey.trim() && consent && !busy && mismatch === null
   // Clear the secret from memory when the form closes or the page changes.
   useEffect(() => () => setApiKey(''), [])
 
@@ -206,8 +222,8 @@ function KeyForm({ provider, current, ttlDays, onDone }: { provider: ProviderId;
         // The key is already saved; a failed or negative check only changes the message.
         try {
           const view = await runKeyCheck(saved.id)
-          if (view.result === 'valid') toast.success(`${name} key saved. ${checkMessage(name, view)}`)
-          else toast.warning(`${name} key saved. ${checkMessage(name, view)}`)
+          if (view.result === 'valid') toast.success(`${name} key saved. ${checkMessage(name, view, provider)}`)
+          else toast.warning(`${name} key saved. ${checkMessage(name, view, provider)}`)
         } catch (caught) {
           toast.warning(`${name} key saved, but it could not be checked: ${describeError(caught)}`)
         }
@@ -234,8 +250,9 @@ function KeyForm({ provider, current, ttlDays, onDone }: { provider: ProviderId;
       <Slip title="Use a key you can afford to lose">
         <SlipList
           items={[
-            'A dedicated Model Court key with a low monthly spend cap and access only to the model you are testing.',
-            'Admin or organization keys are refused. Use an OpenAI project key or an Anthropic workspace key.',
+            ...(provider === 'google'
+              ? ['Create the key in Google AI Studio and restrict it to the Gemini API. Use a project only for Model Court, with billing alerts set.']
+              : ['A dedicated Model Court key with a low monthly spend cap and access only to the model you are testing.', 'Admin or organization keys are refused. Use an OpenAI project key or an Anthropic workspace key.']),
             `Saved keys expire after ${ttlDays} days unless you renew them. Expiry stops queued work exactly like removing the key.`,
           ]}
         />
@@ -246,7 +263,8 @@ function KeyForm({ provider, current, ttlDays, onDone }: { provider: ProviderId;
       </Field>
       <Field className="gap-1.5">
         <FieldLabel htmlFor={keyId}>API key</FieldLabel>
-        <Input id={keyId} type="password" value={apiKey} autoComplete="off" spellCheck={false} data-1p-ignore data-lpignore="true" aria-describedby={`${keyId}-help`} onChange={(e) => setApiKey(e.target.value)} />
+        <Input id={keyId} type="password" value={apiKey} autoComplete="off" spellCheck={false} data-1p-ignore data-lpignore="true" aria-invalid={mismatch !== null || undefined} aria-describedby={mismatch ? `${keyId}-mismatch ${keyId}-help` : `${keyId}-help`} onChange={(e) => setApiKey(e.target.value)} />
+        {mismatch && <FieldError id={`${keyId}-mismatch`}>{mismatch}</FieldError>}
         <FieldDescription id={`${keyId}-help`} className="text-xs">
           Saving alone does not contact {name}. Check key asks {name} to list its models with this key, which is free and generates nothing. Balance and model access are confirmed on the first hearing call.
         </FieldDescription>
