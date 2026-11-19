@@ -33,21 +33,28 @@ export type ReasoningMode = 'off' | 'low'
  * `src/server/providers/index.ts`.
  */
 export const ADAPTER_PROFILES = {
-  'openai-responses-v1': { provider: 'openai', multiTurn: false, reasoning: 'off', structuredOutput: false, pdfInput: false },
-  'openai-responses-v2': { provider: 'openai', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false },
-  'openai-responses-reasoning-low-v1': { provider: 'openai', multiTurn: true, reasoning: 'low', structuredOutput: false, pdfInput: false },
-  'anthropic-messages-v1': { provider: 'anthropic', multiTurn: false, reasoning: 'off', structuredOutput: false, pdfInput: false },
-  'anthropic-messages-v2': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false },
-  'anthropic-messages-between-tools-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false },
-  'anthropic-messages-adaptive-low-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'low', structuredOutput: false, pdfInput: false },
+  'openai-responses-v1': { provider: 'openai', multiTurn: false, reasoning: 'off', structuredOutput: false, pdfInput: false, toolUse: false },
+  'openai-responses-v2': { provider: 'openai', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false, toolUse: false },
+  'openai-responses-reasoning-low-v1': { provider: 'openai', multiTurn: true, reasoning: 'low', structuredOutput: false, pdfInput: false, toolUse: false },
+  'anthropic-messages-v1': { provider: 'anthropic', multiTurn: false, reasoning: 'off', structuredOutput: false, pdfInput: false, toolUse: false },
+  'anthropic-messages-v2': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false, toolUse: false },
+  'anthropic-messages-between-tools-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false, toolUse: false },
+  'anthropic-messages-adaptive-low-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'low', structuredOutput: false, pdfInput: false, toolUse: false },
   // Spec 04 §6.4 (D-86): structured output and PDF input. Without either feature each body is
   // byte-identical to its predecessor's (unit-tested).
-  'openai-responses-v3': { provider: 'openai', multiTurn: true, reasoning: 'off', structuredOutput: true, pdfInput: true },
-  'openai-responses-reasoning-low-v2': { provider: 'openai', multiTurn: true, reasoning: 'low', structuredOutput: true, pdfInput: true },
-  'anthropic-messages-v3': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: true, pdfInput: true },
-  'anthropic-messages-between-tools-v2': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: true, pdfInput: true },
-  'anthropic-messages-adaptive-low-v2': { provider: 'anthropic', multiTurn: true, reasoning: 'low', structuredOutput: true, pdfInput: true },
-} as const satisfies Record<string, { provider: ProviderId; multiTurn: boolean; reasoning: ReasoningMode; structuredOutput: boolean; pdfInput: boolean }>
+  'openai-responses-v3': { provider: 'openai', multiTurn: true, reasoning: 'off', structuredOutput: true, pdfInput: true, toolUse: false },
+  'openai-responses-reasoning-low-v2': { provider: 'openai', multiTurn: true, reasoning: 'low', structuredOutput: true, pdfInput: true, toolUse: false },
+  'anthropic-messages-v3': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: true, pdfInput: true, toolUse: false },
+  'anthropic-messages-between-tools-v2': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: true, pdfInput: true, toolUse: false },
+  'anthropic-messages-adaptive-low-v2': { provider: 'anthropic', multiTurn: true, reasoning: 'low', structuredOutput: true, pdfInput: true, toolUse: false },
+  // Spec 06 §6 (D-100): the tool loop, `tool-protocol-v1`. Each is its plain predecessor's reasoning
+  // profile plus tools, replayed steps and mock results; only the tool loop sends them.
+  'openai-responses-tool-loop-v1': { provider: 'openai', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false, toolUse: true },
+  'openai-responses-reasoning-low-tool-loop-v1': { provider: 'openai', multiTurn: true, reasoning: 'low', structuredOutput: false, pdfInput: false, toolUse: true },
+  'anthropic-messages-tool-loop-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false, toolUse: true },
+  'anthropic-messages-between-tools-tool-loop-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false, toolUse: true },
+  'anthropic-messages-adaptive-low-tool-loop-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'low', structuredOutput: false, pdfInput: false, toolUse: true },
+} as const satisfies Record<string, { provider: ProviderId; multiTurn: boolean; reasoning: ReasoningMode; structuredOutput: boolean; pdfInput: boolean; toolUse: boolean }>
 
 /**
  * The version that adds structured output and PDF input to a plain version (spec 04 §6.4, D-86).
@@ -62,19 +69,33 @@ export const FEATURE_SUCCESSOR: Partial<Record<AdapterVersion, AdapterVersion>> 
   'anthropic-messages-adaptive-low-v1': 'anthropic-messages-adaptive-low-v2',
 }
 
+/**
+ * The tool-loop version of a plain version (spec 06 §6.1, D-100). As with `FEATURE_SUCCESSOR`, routes
+ * keep their plain version; only a tool hearing records the tool-loop one.
+ */
+export const TOOL_SUCCESSOR: Partial<Record<AdapterVersion, AdapterVersion>> = {
+  'openai-responses-v2': 'openai-responses-tool-loop-v1',
+  'openai-responses-reasoning-low-v1': 'openai-responses-reasoning-low-tool-loop-v1',
+  'anthropic-messages-v2': 'anthropic-messages-tool-loop-v1',
+  'anthropic-messages-between-tools-v1': 'anthropic-messages-between-tools-tool-loop-v1',
+  'anthropic-messages-adaptive-low-v1': 'anthropic-messages-adaptive-low-tool-loop-v1',
+}
+
 /** Provider-request features a hearing needs from its adapter version. */
 export interface AdapterFeatures {
   structuredOutput?: boolean
   pdfInput?: boolean
+  /** Spec 06: the tool loop. */
+  toolUse?: boolean
 }
 
 /** The version a route records for a hearing with these features: itself, its successor, or null if none can carry them. */
 export function adapterVersionFor(adapterVersion: string, features: AdapterFeatures): string | null {
   const profile = adapterProfile(adapterVersion)
   if (!profile) return null
-  const fits = (p: (typeof ADAPTER_PROFILES)[AdapterVersion]) => (!features.structuredOutput || p.structuredOutput) && (!features.pdfInput || p.pdfInput)
+  const fits = (p: (typeof ADAPTER_PROFILES)[AdapterVersion]) => (!features.structuredOutput || p.structuredOutput) && (!features.pdfInput || p.pdfInput) && (features.toolUse === true) === p.toolUse
   if (fits(profile)) return adapterVersion
-  const next = FEATURE_SUCCESSOR[adapterVersion as AdapterVersion]
+  const next = (features.toolUse ? TOOL_SUCCESSOR : FEATURE_SUCCESSOR)[adapterVersion as AdapterVersion]
   return next && fits(ADAPTER_PROFILES[next]) ? next : null
 }
 

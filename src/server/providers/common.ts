@@ -65,6 +65,10 @@ export type ProviderErrorCode =
   | 'INVALID_PROVIDER_RESPONSE'
   | 'OUTPUT_TOO_LARGE'
   | 'EMPTY_OUTPUT'
+  /** Spec 06 §5.5 (D-100): a tool call Model Court cannot answer (no call id, a paused turn, a server tool). Definite. */
+  | 'TOOL_PROTOCOL_ERROR'
+  /** Spec 06 §5.5: a step's request, replay data or trace passed its cap. Definite; after a send the call may be billed. */
+  | 'TOOL_TRACE_TOO_LARGE'
   // Pre-send credential failures: these never reach the network.
   | 'CREDENTIAL_REVOKED'
   | 'CREDENTIAL_EXPIRED'

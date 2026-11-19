@@ -117,7 +117,7 @@ export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configura
     else if (hasHistory && !route.multiTurnVerifiedAt) issues.push({ kind: 'history_unverified', configurationKey: configuration.key })
     else if (structured && (!route.structuredVerifiedAt || !adapterVersionFor(route.adapterVersion, FEATURES))) issues.push({ kind: 'structured_unverified', configurationKey: configuration.key, modelKey: route.key })
     else if (structured && sendsPdf && !route.pdfVerifiedAt) issues.push({ kind: 'pdf_unverified', configurationKey: configuration.key, modelKey: route.key })
-    else if (tools && !route.toolsVerifiedAt) issues.push({ kind: 'tools_unverified', configurationKey: configuration.key, modelKey: route.key })
+    else if (tools && (!route.toolsVerifiedAt || !adapterVersionFor(route.adapterVersion, { toolUse: true }))) issues.push({ kind: 'tools_unverified', configurationKey: configuration.key, modelKey: route.key })
   }
   if (draft.comparisonMode === 'model') {
     if (models.length < draft.configurations.length) issues.push({ kind: 'imported_requires_configuration_mode' })
@@ -212,6 +212,7 @@ export function requiredProviders(configurations: readonly Configuration[], rout
 export function buildSnapshot(draft: Draft, routes: readonly ModelRoute[], appCommit: string, createdAt: number, imports: readonly ImportMeta[] = []): RunSnapshot {
   const kit = draft.kit as { version: string; settings: unknown } | undefined
   const structured = needsStructuredOutput(draft)
+  const tools = usesTools(draft)
   return {
     schemaVersion: 1,
     canonicalizationVersion: CANONICALIZATION_VERSION,
@@ -232,7 +233,8 @@ export function buildSnapshot(draft: Draft, routes: readonly ModelRoute[], appCo
       const route = findRoute(configuration.modelKey, routes)
       if (!route) throw new Error('buildSnapshot requires validated routes')
       // Spec 04 §6.4 (D-86): a structured hearing records the route's feature successor; a plain one the plain version.
-      const adapterVersion = structured ? (adapterVersionFor(route.adapterVersion, FEATURES) ?? route.adapterVersion) : route.adapterVersion
+      // Spec 06 §6.1 (D-100): a tool hearing records the route's tool-loop version.
+      const adapterVersion = structured ? (adapterVersionFor(route.adapterVersion, FEATURES) ?? route.adapterVersion) : tools ? (adapterVersionFor(route.adapterVersion, { toolUse: true }) ?? route.adapterVersion) : route.adapterVersion
       return { ...configuration, provider: route.provider, modelId: route.modelId, adapterVersion }
     }),
     rubricVersion: draft.rubricVersion ?? kitFor(kit?.version).defaultRubricVersion,

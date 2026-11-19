@@ -19,6 +19,9 @@ export const ERROR_TEXT: Record<string, string> = {
   INVALID_PROVIDER_RESPONSE: 'The provider returned a response Model Court could not read.',
   OUTPUT_TOO_LARGE: 'The response exceeded the 16 KiB storage limit and was not kept.',
   EMPTY_OUTPUT: 'The provider returned no text.',
+  // Spec 06 §5.5 (D-100).
+  TOOL_PROTOCOL_ERROR: 'The model asked for something Model Court can’t answer in a tool loop (a call without an id, a paused turn, or a provider-hosted tool). The call was made and may be billed.',
+  TOOL_TRACE_TOO_LARGE: 'This answer’s tool steps grew past Model Court’s size limit. If a call was already sent it may be billed; nothing further was sent.',
   CREDENTIAL_REVOKED: 'The key pinned to this hearing was removed or expired before this generation ran. Nothing was sent. Retry with your current key.',
   CREDENTIAL_EXPIRED: 'The key pinned to this hearing expired before this generation ran. Nothing was sent. Save a new key in Settings, then retry with it.',
   CREDENTIAL_UNAVAILABLE: 'The saved key could not be used. Nothing was sent.',
