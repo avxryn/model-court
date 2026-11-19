@@ -15,6 +15,7 @@ import { formatPoints, recordTally, type Tally, type TallySource } from '@/compo
 import type { ResultsView } from '@/lib/dto'
 import { plural } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { PairwiseTable } from '@/components/record/PairwiseTable'
 
 const linkClass = 'rounded-sm underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50'
 
@@ -193,6 +194,7 @@ export function HeadlineSection({ data }: { data: ResultsView }) {
             </p>
           </HeadlineSummary>
           <HeadToHeadTable tally={tally} questionHref={questionHref} />
+          <PairwiseTable tally={tally} />
         </div>
       )}
     </SheetSection>

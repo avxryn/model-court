@@ -8,7 +8,7 @@ import { partySource } from '@/lib/parties'
 export function PartiesSection({ data }: { data: ResultsView }) {
   return (
     <SheetSection id="mapping" label={<Term name="parties" />}>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {data.configurations.map((c) => (
           <Panel key={c.key} className="px-5 py-4">
             <h3 className="text-base font-semibold">{c.label}</h3>

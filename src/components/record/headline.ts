@@ -175,8 +175,36 @@ export function tallyQuestions(parties: ReadonlyArray<{ key: string; label: stri
     return { ...base, outcome: 'close', leader: null, sentence }
   }
 
-  const rest = [...others(winsLeader.key), ...(tiedText ? [tiedText] : [])]
-  return { ...base, outcome: 'lead', leader: winsLeader.key, sentence: `${winsLeader.label} won ${winsLeader.wins} of ${n} questions${rest.length ? `; ${rest.join('; ')}` : ''}.` }
+  // Spec 07 §9.4 (D-111): with four or five parties, name the leader and the runner-up only.
+  const rest = parties.length >= 4 ? runnerUpOnly(partyTallies, winsLeader.key) : others(winsLeader.key)
+  const tail = [...rest, ...(tiedText ? [tiedText] : [])]
+  return { ...base, outcome: 'lead', leader: winsLeader.key, sentence: `${winsLeader.label} won ${winsLeader.wins} of ${n} questions${tail.length ? `; ${tail.join('; ')}` : ''}.` }
+}
+
+/** "Party A won 1; the others none" (or "the others fewer"), after the leader. Record order breaks ties. */
+function runnerUpOnly(parties: readonly PartyTally[], leader: string): string[] {
+  const rest = parties.filter((p) => p.key !== leader)
+  const best = Math.max(0, ...rest.map((p) => p.wins))
+  if (best === 0) return ['the others none']
+  const runner = rest.find((p) => p.wins === best)!
+  const remaining = rest.filter((p) => p.key !== runner.key)
+  return [`${runner.label} won ${runner.wins}`, remaining.some((p) => p.wins > 0) ? 'the others fewer' : 'the others none']
+}
+
+/**
+ * Spec 07 §9.4: row beat column on k of n questions (strictly higher points), for every ordered
+ * pair. `beats[row][col] + beats[col][row] + ties = questions`.
+ */
+export function pairwiseWins(tally: Pick<Tally, 'questions' | 'parties'>): { beats: Record<string, Record<string, number>>; questions: number } {
+  const beats: Record<string, Record<string, number>> = {}
+  for (const row of tally.parties) {
+    beats[row.key] = {}
+    for (const col of tally.parties) {
+      if (row.key === col.key) continue
+      beats[row.key][col.key] = tally.questions.filter((q) => q.scores[row.key] - q.scores[col.key] > EPSILON).length
+    }
+  }
+  return { beats, questions: tally.questions.length }
 }
 
 export type TallySource = 'jury' | 'judge' | 'none'

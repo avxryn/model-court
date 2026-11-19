@@ -14,9 +14,12 @@ export function FindingsTable({ cohort, parties, rubricVersion, caption, print =
   const by = cohort.byConfiguration
   if (!by) return null
   const tie = cohort.highest.length > 1
+  // Spec 07 §9.4: with four or five parties the table scrolls sideways at narrow widths; the line names stay in view.
+  const wide = !print && parties.length >= 4
+  const hintId = `findings-hint-${cohort.contextType}`
   return (
     <div className={cn(!print && 'exhibit-panel overflow-hidden')}>
-      <Table className={cn(print && '[&_td]:px-0 [&_td]:py-1.5 [&_th]:h-auto [&_th]:px-0 [&_th]:py-1.5 [&_thead_tr]:border-foreground')}>
+      <Table aria-describedby={wide ? hintId : undefined} className={cn(print && '[&_td]:px-0 [&_td]:py-1.5 [&_th]:h-auto [&_th]:px-0 [&_th]:py-1.5 [&_thead_tr]:border-foreground', wide && '[&_tr>*:first-child]:sticky [&_tr>*:first-child]:left-0 [&_tr>*:first-child]:z-10 [&_tr>*:first-child]:bg-card')}>
         {caption && <caption className="sr-only">{caption}</caption>}
         <TableHeader>
           <TableRow>
@@ -55,6 +58,11 @@ export function FindingsTable({ cohort, parties, rubricVersion, caption, print =
           </TableRow>
         </TableBody>
       </Table>
+      {wide && (
+        <p id={hintId} className="border-t border-border px-3 py-2 text-xs text-muted-foreground md:hidden">
+          Scroll sideways for more parties.
+        </p>
+      )}
     </div>
   )
 }
