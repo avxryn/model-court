@@ -74,4 +74,29 @@ export const LIMITS = {
     checkDetailBytes: 1_024,
     checkResultsJsonBytes: 16 * 1_024,
   },
+  /** Structured extraction (spec 04 §7.2, §10, D-85). */
+  extraction: {
+    schemaBytes: 16 * 1024,
+    answerKeyBytes: 8 * 1024,
+    compareBytes: 4 * 1024,
+    compareRules: 60,
+    textDocumentBytes: 64 * 1024,
+    pdfBytes: 4 * 1024 * 1024,
+    pdfPages: 20,
+    maxOutputTokens: 2_048,
+    leafFields: 60,
+    nullableFields: 16,
+    depth: 4,
+    enumValues: 50,
+    enumValuesTotal: 200,
+    enumValueChars: 100,
+    describeChars: 300,
+    answerKeyArrayItems: 50,
+    validatorErrors: 10,
+    fieldFlags: 100,
+    /** Input-token estimate per native PDF page until the pdf smoke check records a real number (spec 04 §10.3). */
+    estimatedTokensPerPdfPage: 4_500,
+    /** Allowance for the provider's own schema prompt (spec 04 §10.3). */
+    estimatedSchemaPromptTokens: 300,
+  },
 } as const

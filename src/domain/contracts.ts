@@ -249,8 +249,18 @@ export const draftRatingSchema = z.strictObject({
     message: `Note must be at most ${LIMITS.ratingNote.max} characters`,
   }),
   suspectedIdentityClue: z.boolean(),
+  /**
+   * Spec 04 (D-85): per-field flags on an extraction answer. Extraction hearings only (422
+   * elsewhere); each path must name a value row of that answer. Counted on the record, never a score.
+   */
+  fieldFlags: z
+    .array(z.strictObject({ path: z.string().max(400).regex(/^(\/[^/]{1,64}){1,12}$/u, 'Invalid field path'), flag: z.enum(['invented', 'ambiguous']) }))
+    .max(LIMITS.extraction.fieldFlags, `At most ${LIMITS.extraction.fieldFlags} field flags per answer`)
+    .refine((flags) => new Set(flags.map((item) => `${item.flag}:${item.path}`)).size === flags.length, 'A field is flagged twice the same way')
+    .optional(),
 })
 export type DraftRating = z.infer<typeof draftRatingSchema>
+export type FieldFlag = NonNullable<DraftRating['fieldFlags']>[number]
 
 export const saveRatingsSchema = z.strictObject({
   ratings: z.array(draftRatingSchema).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun),

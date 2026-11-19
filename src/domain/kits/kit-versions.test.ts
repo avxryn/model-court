@@ -247,7 +247,131 @@ const PINNED: Record<string, unknown> = {
       "additionalProperties": false
     }
   },
+  'extraction-v1': {
+    "version": "extraction-v1",
+    "family": "extraction",
+    "name": "Pull fields from documents",
+    "listed": false,
+    "inputKinds": [
+      "document"
+    ],
+    "outputContract": {
+      "kind": "json",
+      "schemaSource": "kit-settings"
+    },
+    "template": "extract-v1",
+    "defaultRubricVersion": "extraction-v1",
+    "defaultJuryInstructions": "Check each value against the document. Mark a value Invented if the document doesn't support it, Ambiguous if the document could fairly be read another way.",
+    "checks": [
+      {
+        "id": "json-parse",
+        "label": "Valid JSON"
+      },
+      {
+        "id": "json-schema",
+        "label": "Fits the field list"
+      },
+      {
+        "id": "required-filled",
+        "label": "Must-fill fields filled"
+      },
+      {
+        "id": "answer-key",
+        "label": "Matches the answer key"
+      }
+    ],
+    "settingsSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "schema": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        },
+        "compare": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^(\\/([A-Za-z_][A-Za-z0-9_]{0,63}|\\*))+$"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "exact",
+                  "alnum",
+                  "date-only",
+                  "ordered",
+                  "set"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "tolerance": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "tolerance"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "matchBy": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                "required": [
+                  "matchBy"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "schema",
+        "compare"
+      ],
+      "additionalProperties": false
+    },
+    "caseFieldsSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extraction"
+        },
+        "answerKey": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    }
+  },
 }
+
+const extractionSettings = {"schema":{"type":"object","properties":{"vendor":{"type":"string","title":"Vendor"},"total":{"type":"number"},"po":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}}},"required":["vendor","total","tags"]},"compare":{"/total":{"tolerance":0.01}}}
+const extractionCase: CaseInput = {"key":"00000000-0000-4000-8000-000000000004","title":"Invoice","input":"Extract the fields from the document.","reference":"","expectedBehavior":"Check each value.","kitFields":{"kind":"extraction","answerKey":{"vendor":"Acme Ltd","total":10,"po":null,"tags":["office"]}}} as CaseInput
 
 const classificationCase: CaseInput = {
   key: '00000000-0000-4000-8000-000000000003',
@@ -282,6 +406,11 @@ const OUTPUTS: Record<string, Array<{ case: CaseInput; settings: unknown; text: 
     { case: summaryCase, settings: { lengthUnit: 'words', maxLength: 20, format: 'bullets', checkNumbers: true }, text: 'Ticket 4512:\n- Lamp arrived broken.\n- Refund within 30 days with a photo.', expected: [{"checkId":"length","status":"pass","reason":"12 words; the limit is 20.","detail":{"count":12,"unit":"words"}},{"checkId":"format","status":"pass","reason":"2 bullet points.","detail":{"line":null}},{"checkId":"required-points","status":"pass","reason":"Covers all 2 required points.","detail":{"matched":2,"total":2,"missing":[]}},{"checkId":"must-not-mention","status":"pass","reason":"None of the 1 listed phrase appears.","detail":{"found":[]}},{"checkId":"numbers-from-document","status":"pass","reason":"All 2 numbers appear in the document or the request.","detail":{"unsupported":[]}}] },
     { case: summaryCase, settings: { lengthUnit: 'words', maxLength: 8, minLength: 2, format: 'paragraph', checkNumbers: true }, text: '- Dana wants 45 dollars back by 2027.\nShe has a receipt.', expected: [{"checkId":"length","status":"fail","reason":"11 words; the limit is 8.","detail":{"count":11,"unit":"words"}},{"checkId":"format","status":"fail","reason":"Line 1 starts with a bullet marker; a paragraph was asked for.","detail":{"line":1}},{"checkId":"required-points","status":"fail","reason":"Missing 2 of 2: (1) Refund window; (2) Photo needed.","detail":{"matched":0,"total":2,"missing":[1,2]}},{"checkId":"must-not-mention","status":"fail","reason":"Mentions 'Dana'.","detail":{"found":["Dana"]}},{"checkId":"numbers-from-document","status":"fail","reason":"Not in the document: 45, 2027 (may be computed or reworded).","detail":{"unsupported":["45","2027"]}}] },
     { case: summaryCase, settings: { lengthUnit: 'characters', maxLength: 2000, format: 'any', checkNumbers: false }, text: '退款 within thirty days.', expected: [{"checkId":"length","status":"pass","reason":"19 characters; the limit is 2,000.","detail":{"count":19,"unit":"characters"}},{"checkId":"format","status":"na","reason":"Any format is allowed.","detail":{"line":null}},{"checkId":"required-points","status":"fail","reason":"Missing 2 of 2: (1) Refund window; (2) Photo needed.","detail":{"matched":0,"total":2,"missing":[1,2]}},{"checkId":"must-not-mention","status":"pass","reason":"None of the 1 listed phrase appears.","detail":{"found":[]}},{"checkId":"numbers-from-document","status":"na","reason":"The numbers check is off for this case.","detail":{"unsupported":[]}}] },
+  ],
+  'extraction-v1': [
+    { case: extractionCase, settings: extractionSettings, text: "{\"vendor\":\"ACME  ltd\",\"total\":10.004,\"po\":null,\"tags\":[\"Office\"]}", expected: [{"checkId":"json-parse","status":"pass","reason":"The answer is valid JSON.","detail":{}},{"checkId":"json-schema","status":"pass","reason":"Fits the field list.","detail":{"errors":0}},{"checkId":"required-filled","status":"pass","reason":"Every must-fill field is filled.","detail":{"blank":0}},{"checkId":"answer-key","status":"pass","reason":"4 of 4 match.","detail":{"compared":4,"matched":4,"mismatched":0,"missed":0,"invented":0}}] },
+    { case: extractionCase, settings: extractionSettings, text: "{\"vendor\":\"\",\"total\":\"10\",\"po\":\"PO-1\",\"tags\":[]}", expected: [{"checkId":"json-parse","status":"pass","reason":"The answer is valid JSON.","detail":{}},{"checkId":"json-schema","status":"fail","reason":"/total: expected number, got string.","detail":{"errors":1,"paths":["/total"]}},{"checkId":"required-filled","status":"fail","reason":"/vendor, /tags are empty.","detail":{"blank":2,"paths":["/vendor","/tags"]}},{"checkId":"answer-key","status":"fail","reason":"0 of 4 match; 1 wrong, 1 invented, 2 missed.","detail":{"compared":4,"matched":0,"mismatched":1,"missed":2,"invented":1}}] },
+    { case: extractionCase, settings: extractionSettings, text: "Sure! {\"vendor\":\"Acme\"}", expected: [{"checkId":"json-parse","status":"fail","reason":"Not JSON: the answer starts with text.","detail":{}},{"checkId":"json-schema","status":"na","reason":"No JSON to check.","detail":{}},{"checkId":"required-filled","status":"na","reason":"No JSON to check.","detail":{}},{"checkId":"answer-key","status":"na","reason":"No JSON to check.","detail":{}}] },
   ],
   'classification-v1': [
     { case: classificationCase, settings: classificationSettings, text: 'Label: Billing\nThe customer reports a duplicate charge on the plan.', expected: [{"checkId":"label-format","status":"pass","reason":"Names Billing.","detail":{"predicted":"Billing"}},{"checkId":"label-correct","status":"pass","reason":"Said Billing, the expected label.","detail":{"expected":"Billing","predicted":"Billing"}},{"checkId":"reasoning-given","status":"pass","reason":"9 words of reasoning.","detail":{"words":9}}] },

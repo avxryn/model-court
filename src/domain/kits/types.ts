@@ -102,6 +102,8 @@ export interface KitMetric {
 export type KitJurorCaseView =
   | { kind: 'summarization'; lengthLimit: string; format: 'paragraph' | 'bullets' | null; requiredPoints: string[]; mustNotMention: string[] }
   | { kind: 'classification'; labels: string[]; expectedLabel: string | null; alsoAccept: string[] }
+  /** Spec 04 (D-85): the field list's labels in schema order. Never the answer key (decision 1). */
+  | { kind: 'extraction'; fields: Array<{ label: string; mustFill: boolean }> }
 
 export type KitReadinessIssue =
   | { kind: 'kit_input_unsupported'; caseKey: string; inputKind: InputKind; kitVersion: string }

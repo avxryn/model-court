@@ -177,6 +177,37 @@ export const RUBRICS = {
       },
     },
   },
+  // Spec 04 §9.6 (D-85): the extraction kit's default.
+  'extraction-v1': {
+    name: 'Field extraction',
+    description: 'Fields pulled from a document: accuracy, coverage, and no invented values.',
+    lines: {
+      correctness: {
+        label: 'Accuracy',
+        anchors: {
+          0: 'A value contradicts the document (wrong number, date, party, or unit)',
+          1: 'Values are supported, but one is misread or formatted so it would be used wrongly',
+          2: 'Every filled value matches the document',
+        },
+      },
+      completeness: {
+        label: 'Coverage',
+        anchors: {
+          0: 'Leaves empty several fields the document clearly contains',
+          1: 'Leaves one findable field empty',
+          2: 'Fills every field the document contains',
+        },
+      },
+      grounding: {
+        label: 'No invented values',
+        anchors: {
+          0: "Fills a field the document doesn't support with a plausible guess",
+          1: 'Resolves an ambiguous field one way without basis where the jury instructions asked it to be left empty',
+          2: 'Leaves unsupported fields empty and handles ambiguity as the jury instructions say',
+        },
+      },
+    },
+  },
 } as const satisfies Record<string, { name: string; description: string; lines: RubricLines }>
 
 export type RubricVersion = keyof typeof RUBRICS

@@ -10,6 +10,7 @@
 import { z } from 'zod'
 import type { CaseInput } from '../contracts'
 import { CLASSIFICATION_V1, classificationFieldsSchema, classificationSettingsSchema } from './classification'
+import { EXTRACTION_V1, extractionFieldsSchema, extractionSettingsSchema } from './extraction'
 import { GENERAL_V1 } from './general'
 import { SUMMARIZATION_V1, summarizationFieldsSchema, summarizationSettingsSchema } from './summarization'
 import type { InputKind, KitJurorCaseView, KitReadinessIssue, TaskKit } from './types'
@@ -18,6 +19,7 @@ export const KITS = {
   'general-v1': GENERAL_V1,
   'summarization-v1': SUMMARIZATION_V1,
   'classification-v1': CLASSIFICATION_V1,
+  'extraction-v1': EXTRACTION_V1,
 } as const satisfies Record<string, TaskKit<any, any>>
 
 export type KitVersion = keyof typeof KITS
@@ -52,11 +54,12 @@ export function kitVersionOf(holder: { kit?: { version: string } | undefined }):
 export const kitChoiceSchema = z.discriminatedUnion('version', [
   z.strictObject({ version: z.literal('summarization-v1'), settings: summarizationSettingsSchema }),
   z.strictObject({ version: z.literal('classification-v1'), settings: classificationSettingsSchema }),
-  // Items 4–6 append their versions here.
+  z.strictObject({ version: z.literal('extraction-v1'), settings: extractionSettingsSchema }),
+  // Items 5–6 append their versions here.
 ])
 
 /** A question's kit fields, discriminated on `kind` (= family), so a v2 kit of a family reuses the shape. */
-export const kitFieldsSchema = z.discriminatedUnion('kind', [summarizationFieldsSchema, classificationFieldsSchema])
+export const kitFieldsSchema = z.discriminatedUnion('kind', [summarizationFieldsSchema, classificationFieldsSchema, extractionFieldsSchema])
 
 /** A question with earlier turns is a conversation; otherwise it is plain text. */
 export function inputKindOf(testCase: Pick<CaseInput, 'messages'>): InputKind {
@@ -74,7 +77,9 @@ export function kitReadinessIssues(draft: { kit?: { version: string; settings?: 
   const cases = draft.cases ?? []
   const issues: KitReadinessIssue[] = cases.flatMap((testCase) => {
     const inputKind = inputKindOf(testCase)
-    return kit.inputKinds.includes(inputKind) ? [] : [{ kind: 'kit_input_unsupported' as const, caseKey: testCase.key, inputKind, kitVersion: kit.version }]
+    // A document kit's question is plain text plus a document stored beside the draft (spec 04 §4.2).
+    const accepted = kit.inputKinds.includes(inputKind) || (inputKind === 'text' && kit.inputKinds.includes('document'))
+    return accepted ? [] : [{ kind: 'kit_input_unsupported' as const, caseKey: testCase.key, inputKind, kitVersion: kit.version }]
   })
   return [...issues, ...(kit.readinessIssues?.(draft.kit.settings, cases) ?? [])]
 }

@@ -41,6 +41,11 @@ export function KitFacts({ view, kitName }: { view: KitJurorCaseView; kitName: s
             </>
           )}
         </dl>
+      ) : view.kind === 'extraction' ? (
+        <dl className="mt-2 grid gap-x-4 gap-y-1.5 text-muted-foreground sm:grid-cols-[auto_1fr]">
+          <dt className="font-medium text-foreground">Fields</dt>
+          <dd>{view.fields.map((field) => (field.mustFill ? field.label : `${field.label} (may be empty)`)).join(' · ')}</dd>
+        </dl>
       ) : (
         <dl className="mt-2 grid gap-x-4 gap-y-1.5 text-muted-foreground sm:grid-cols-[auto_1fr]">
           <dt className="font-medium text-foreground">Allowed labels</dt>

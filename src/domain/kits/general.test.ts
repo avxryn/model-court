@@ -62,7 +62,7 @@ describe('general-v1 is exactly today', () => {
         const prompt = withMessages ? { ...testCase, messages: history } : testCase
         const messageTemplateVersion = kit.selectTemplate([prompt])
         reached.add(messageTemplateVersion)
-        const request = buildKitRequest({ messageTemplateVersion, kit: { version: kit.version, settings: kit.defaultSettings } }, 'S', prompt)
+        const request = buildKitRequest({ messageTemplateVersion, kit: { version: kit.version, settings: kit.defaultSettings } }, 'S', prompt, { kind: 'text', text: 'A document.' })
         expect(request).not.toBeNull()
         expect(JSON.stringify(request)).not.toContain(sentinel)
       }
