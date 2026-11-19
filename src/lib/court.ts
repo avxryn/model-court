@@ -19,6 +19,8 @@ export const TERMS = {
   juror: { term: 'Juror', plain: 'invited reviewer', explain: 'Someone you summon to score the testimony blind. Jurors never need an API key.' },
   question: { term: 'Question presented', plain: 'test case', explain: 'One question put to both parties. A case has up to five.' },
   exhibit: { term: 'Exhibit', plain: 'reference evidence, sent to the models', explain: 'The source material each party should rely on when answering.' },
+  sources: { term: 'Sources', plain: 'numbered passages, sent to the models', explain: 'Passages your retriever returned for one question, numbered S1, S2… Every party gets the same sources in the same order, and jurors see them too. Your notes on them stay with you.' },
+  citation: { term: 'Citation', plain: 'a pointer to a source', explain: 'How a party points to the source behind a claim: [S2], or [S2: "exact words"] to quote it. Free checks test whether citations and quotes match the sources; the results stay sealed until the record is unsealed.' },
   instructions: { term: 'Jury instructions', plain: 'scoring guide, never sent to the models', explain: 'What a good answer looks like. Only the judge and jurors see it.' },
   parties: { term: 'Parties', plain: 'the configurations being compared', explain: 'The two model and prompt setups. Their names stay sealed until the record is unsealed.' },
   hearing: { term: 'Hearing', plain: 'run', explain: 'One round of generation and review, frozen when it starts so later edits never change it.' },

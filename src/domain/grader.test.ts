@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { calibrate, type CalibrationItem } from './calibration'
-import { buildGraderRequest, parseGraderOutput } from './grader'
+import { buildGraderRequest, buildGroundedGraderRequest, GROUNDED_GRADER_TEMPLATE_VERSION, parseGraderOutput } from './grader'
 import { RUBRIC, rubricLines } from './rubric'
 
 describe('grader-v1 request (D-40)', () => {
@@ -69,5 +69,36 @@ describe('calibration math', () => {
     expect(calibrate([], 0).sameTopParty).toBeNull()
     const tie = calibrate([items[0], { ...items[2], configurationKey: 'B', grader: { ...items[0].grader } }], 1)
     expect(tie.sameTopParty).toBeNull()
+  })
+})
+
+describe('grader-grounded-v1 (spec 05 §9, D-97)', () => {
+  const lines = rubricLines('grounded-v1')
+  const request = buildGroundedGraderRequest(lines, {
+    input: 'How long?',
+    sources: [
+      { number: 1, title: 'Refunds', text: 'Within 30 days.' },
+      { number: 2, title: null, text: 'To the original card.' },
+    ],
+    groundingKey: { answerable: 'partly', requiredSources: [1] },
+    expectedBehavior: 'GUIDE',
+    response: 'Thirty days [S1].',
+  })
+  const data = JSON.parse(request.messages[0].content.split('\n\n')[1])
+
+  it('replaces the reference evidence with the numbered sources and the grounding key; same output schema', () => {
+    expect(GROUNDED_GRADER_TEMPLATE_VERSION).toBe('grader-grounded-v1')
+    expect(Object.keys(data)).toEqual(['rubric', 'question', 'sources', 'groundingKey', 'scoringGuide', 'responseToGrade'])
+    expect(data.sources).toEqual([{ id: 'S1', title: 'Refunds', text: 'Within 30 days.' }, { id: 'S2', text: 'To the original card.' }])
+    expect(data.groundingKey).toEqual({ answerable: 'partly', requiredSources: ['S1'] })
+    expect(data.rubric.grounding.measures).toBe('Correct refusal')
+    expect(request.system).toContain('[S2: "exact words"]')
+    expect(parseGraderOutput('{"correctness":2,"completeness":1,"grounding":2,"note":"x"}')).not.toBeNull()
+  })
+
+  it('carries no origin note, label, model or other response', () => {
+    const withOrigin = buildGroundedGraderRequest(lines, { input: 'q', sources: [{ number: 1, title: null, text: 't', origin: 'SENTINEL' } as never], groundingKey: { answerable: 'yes', requiredSources: [] }, expectedBehavior: 'g', response: 'r' })
+    expect(JSON.stringify(withOrigin)).not.toContain('SENTINEL')
+    expect(JSON.stringify(request)).not.toMatch(/Testimony|openai|anthropic|label/u)
   })
 })

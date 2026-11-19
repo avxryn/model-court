@@ -460,3 +460,42 @@ describe('grounded sources: renumbering the required sources (D-95)', () => {
     expect((await h.request('PUT', `/evaluations/${setup.evaluationId}/sources/${q2}`, { as: OWNER, ifMatch: revision + 2, body: { sources: SOURCES_Q2, requiredSources: [] } })).status).toBe(200)
   })
 })
+
+describe('grounded sources: the special master (D-97)', () => {
+  it('grades with grader-grounded-v1: the sources and the key, no notes, labels or models; judge-only after unsealing', async () => {
+    const { setup, runId } = await generatedHearing()
+    await h.drainJobs()
+    await openDeliberation(h, runId)
+    const invite = await h.request('POST', `/runs/${runId}/invites`, { as: OWNER, body: {} })
+    const token = new URL(invite.json.data.url).hash.replace('#token=', '')
+    expect((await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token } })).status).toBe(200)
+    const body = { modelKey: 'anthropic-claude-haiku-5-5', credentialIdsByProvider: { anthropic: setup.anthropicKeyId }, consentToProviderProcessing: true, acknowledgeProviderCharges: true }
+    expect((await h.request('POST', `/runs/${runId}/special-master`, { as: OWNER, body })).status).toBe(409)
+    await reveal(runId)
+    expect((await h.request('POST', `/runs/${runId}/special-master`, { as: REVIEWER, body })).status).toBe(404)
+    const grade = '{"correctness":2,"completeness":1,"grounding":2,"note":"Misses S3."}'
+    h.setProvider(async (call) => (JSON.stringify(call.body).includes('responseToGrade') ? anthropicOk(grade) : groundedStub(call)))
+    const before = h.providerCalls.length
+    const started = await h.request('POST', `/runs/${runId}/special-master`, { as: OWNER, body })
+    expect(started.status, JSON.stringify(started.json)).toBe(202)
+    expect(started.json.data.plannedCalls).toBe(4)
+    await h.drainJobs()
+    const calls = h.providerCalls.slice(before)
+    expect(calls).toHaveLength(4)
+    for (const call of calls) {
+      // The grader's own model is in the body; the parties' are never in the messages.
+      const text = JSON.stringify((call.body as { system?: unknown; messages?: unknown }).messages) + JSON.stringify((call.body as { system?: unknown }).system)
+      expect(text).toContain('groundingKey')
+      expect(text).toContain('numbered sources')
+      expect(text).not.toContain('referenceEvidence')
+      for (const leak of ['SENTINEL-ORIGIN', 'kb-1432', 'cites-something', 'quotes-match', 'Testimony A', 'gpt-6', 'claude-haiku']) expect(text).not.toContain(leak)
+    }
+    const refunds = calls.find((call) => JSON.stringify(call.body).includes('ask for a refund'))!
+    expect(JSON.stringify(refunds.body)).toContain('SENTINEL-SOURCE-TEXT')
+    expect(JSON.stringify(refunds.body)).toContain('\\"requiredSources\\":[\\"S1\\",\\"S3\\"]')
+    const config = (await h.db.prepare('SELECT config_json FROM grader_runs WHERE run_id = ?').bind(runId).first<{ config_json: string }>())!
+    expect(JSON.parse(config.config_json).graderTemplateVersion).toBe('grader-grounded-v1')
+    const view = (await h.request('GET', `/runs/${runId}/special-master`, { as: OWNER })).json.data
+    expect(view.graderRuns[0].status).toBe('ready')
+  })
+})

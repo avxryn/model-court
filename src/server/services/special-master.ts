@@ -11,7 +11,9 @@ import type { z } from 'zod'
 import { calibrate, type CalibrationItem } from '../../domain/calibration'
 import { canonicalJson, sha256Hex } from '../../domain/canonical'
 import type { startSpecialMasterSchema } from '../../domain/contracts'
-import { buildGraderRequest, GRADER_TEMPLATE_VERSION, parseGraderOutput } from '../../domain/grader'
+import { buildGraderRequest, buildGroundedGraderRequest, GRADER_TEMPLATE_VERSION, GROUNDED_GRADER_TEMPLATE_VERSION, parseGraderOutput, type GraderTemplateVersion } from '../../domain/grader'
+import type { GroundedFields } from '../../domain/kits/grounded'
+import { loadRunPromptSources, sourceRefsOf } from './sources'
 import { LIMITS } from '../../domain/limits'
 import { findRoute, isRouteEnabled, type ProviderId } from '../../domain/registry'
 import { DIMENSIONS, rubricLines } from '../../domain/rubric'
@@ -41,7 +43,8 @@ interface GraderConfig {
   provider: ProviderId
   modelId: string
   adapterVersion: string
-  graderTemplateVersion: typeof GRADER_TEMPLATE_VERSION
+  /** Spec 05 (D-97): `grader-grounded-v1` on grounded hearings. */
+  graderTemplateVersion: GraderTemplateVersion
   rubricVersion: string
 }
 
@@ -90,7 +93,7 @@ export async function startSpecialMaster(deps: Deps, userId: string, runId: stri
     const snapshot = parseSnapshot(run.snapshot_json)
     const manifest = JSON.parse(run.eligible_manifest_json ?? '{"caseKeys":[],"excludedCaseKeys":[],"entries":[]}') as EligibleManifest
     if (manifest.entries.length === 0) throw stateConflict('There is nothing eligible to grade.')
-    const config: GraderConfig = { modelKey: route.key, provider: route.provider, modelId: route.modelId, adapterVersion: route.adapterVersion, graderTemplateVersion: GRADER_TEMPLATE_VERSION, rubricVersion: snapshot.rubricVersion }
+    const config: GraderConfig = { modelKey: route.key, provider: route.provider, modelId: route.modelId, adapterVersion: route.adapterVersion, graderTemplateVersion: snapshot.kit?.version === 'grounded-v1' ? GROUNDED_GRADER_TEMPLATE_VERSION : GRADER_TEMPLATE_VERSION, rubricVersion: snapshot.rubricVersion }
     const configHash = await sha256Hex(canonicalJson(config))
     const now = deps.now()
     const graderRunId = deps.newId()
@@ -260,13 +263,31 @@ export async function handleGradingJob(deps: Deps, job: GradingJob, jobSignal: A
   const adapter = adapterFor(context.config.adapterVersion, context.config.provider, 1)
   if (text === null || !testCase || !adapter) return finishGrading(deps, { attemptId, fence, job, context, requestId }, unsentFailure('INVALID_PROVIDER_RESPONSE'), true)
 
-  const request = buildGraderRequest(rubricLines(context.config.rubricVersion), {
-    input: testCase.input,
-    reference: testCase.reference,
-    expectedBehavior: testCase.expectedBehavior,
-    messages: testCase.messages,
-    response: text,
-  })
+  // Spec 05 (D-97): a grounded question is graded against its frozen sources, verified like generation's.
+  let request: ReturnType<typeof buildGraderRequest>
+  if (context.config.graderTemplateVersion === GROUNDED_GRADER_TEMPLATE_VERSION) {
+    const sources = await loadRunPromptSources(db, context.runId, testCase.key, sourceRefsOf(testCase))
+    if (!sources) {
+      deps.log({ event: 'grader.sources_mismatch', graderItemId: job.graderItemId, attemptNo: job.attemptNo })
+      return finishGrading(deps, { attemptId, fence, job, context, requestId }, unsentFailure('INVALID_PROVIDER_RESPONSE'), true)
+    }
+    const fields = testCase.kitFields as GroundedFields | undefined
+    request = buildGroundedGraderRequest(rubricLines(context.config.rubricVersion), {
+      input: testCase.input,
+      sources,
+      groundingKey: { answerable: fields?.answerable ?? 'yes', requiredSources: fields?.requiredSources ?? [] },
+      expectedBehavior: testCase.expectedBehavior,
+      response: text,
+    })
+  } else {
+    request = buildGraderRequest(rubricLines(context.config.rubricVersion), {
+      input: testCase.input,
+      reference: testCase.reference,
+      expectedBehavior: testCase.expectedBehavior,
+      messages: testCase.messages,
+      response: text,
+    })
+  }
   const timeout = AbortSignal.timeout(deps.config.providerTimeoutMs)
   const signal = AbortSignal.any([jobSignal, timeout])
   let outcome: ProviderOutcome
