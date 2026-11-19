@@ -360,6 +360,46 @@ const PINNED: Record<string, unknown> = {
             "type": "string"
           },
           "additionalProperties": {}
+        },
+        "document": {
+          "type": "object",
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "byteLength": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "delivery": {
+              "type": "string",
+              "enum": [
+                "text",
+                "pdf_native"
+              ]
+            },
+            "pageCount": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "sha256",
+            "byteLength",
+            "delivery",
+            "pageCount"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

@@ -177,7 +177,7 @@ export async function createHarness(options: HarnessOptions = {}) {
     get config() {
       return parseConfig(env)
     },
-    routes: options.routes ?? MODEL_ROUTES.map((route) => ({ ...route, verifiedAt: '2026-11-16', multiTurnVerifiedAt: '2026-11-16' })),
+    routes: options.routes ?? MODEL_ROUTES.map((route) => ({ ...route, verifiedAt: '2026-11-16', multiTurnVerifiedAt: '2026-11-16', structuredVerifiedAt: '2026-11-16', pdfVerifiedAt: '2026-11-16' })),
     priceTables: options.priceTables ?? PRICE_TABLES,
     now: () => clock,
     newId: () => {

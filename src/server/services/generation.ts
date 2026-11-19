@@ -15,6 +15,7 @@ import { all, auditStatement, cond, GuardFailed, releaseReservations, runGuarded
 import type { Deps, GenerationJob } from '../deps'
 import { adapterFor, type ProviderOutcome } from '../providers'
 import { checkRowFor, insertTestimonyChecksStatement } from './checks'
+import { loadRunDocument } from './documents'
 import { attemptStillCurrent, CredentialUnusable, withRunCredential } from './credentials'
 // Function-only cycle (runs.ts imports this module too); nothing runs at import time.
 import { autoOpenReview } from './runs'
@@ -184,10 +185,17 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
   if (!testCase || !configuration) {
     return finishAttempt(deps, { attemptId, fence, job, context, requestId }, { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }, true)
   }
+  // Spec 04 §8.2 (D-87): a document question's bytes are read from the hearing's own copy only after
+  // the guarded claim; the pre-send fence check below still runs before anything is sent, and no
+  // byte ever travels in the job payload. A missing copy is a definite, unsent failure.
+  const documentRef = (testCase.kitFields as { kind?: string; document?: { sha256: string } } | undefined)?.kind === 'extraction' ? (testCase.kitFields as { document?: { sha256: string } }).document : undefined
+  const document = documentRef ? await loadRunDocument(db, context.runId, testCase.key, documentRef.sha256) : undefined
   // The hearing's recorded template (spec 03, D-75); reviewer-only fields never reach the request.
-  const conversation = buildKitRequest(context.snapshot, configuration.systemPrompt, testCase)
-  // Dispatch by the adapter version this hearing recorded (D-39); refuse, unsent, if it cannot carry the messages.
-  const adapter = conversation ? adapterFor(configuration.adapterVersion, context.provider, conversation.messages.length) : null
+  const conversation = documentRef && !document ? null : buildKitRequest(context.snapshot, configuration.systemPrompt, testCase, document ?? undefined)
+  const options = conversation?.requestOptions
+  const features = options ? { structuredOutput: true, ...(options.document ? { pdfInput: true } : {}) } : {}
+  // Dispatch by the adapter version this hearing recorded (D-39); refuse, unsent, if it cannot carry the messages or a feature.
+  const adapter = conversation ? adapterFor(configuration.adapterVersion, context.provider, conversation.messages.length, features) : null
   if (!conversation || !adapter) {
     return finishAttempt(deps, { attemptId, fence, job, context, requestId }, { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }, true)
   }
@@ -200,7 +208,21 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
     outcome = await withRunCredential(deps, context.runId, context.provider, requestId, async (apiKey) => {
       // Canceled or deleted since claim: send nothing (the attempt is already fenced out).
       if (!(await attemptStillCurrent(deps.db, attemptId, fence, context.runId))) throw new AttemptFenced()
-      return adapter(deps.providerFetch, { modelId: configuration.modelId, system: conversation.system, messages: conversation.messages, maxOutputTokens: configuration.maxOutputTokens, apiKey, signal }, timeout)
+      return adapter(
+        deps.providerFetch,
+        {
+          modelId: configuration.modelId,
+          system: conversation.system,
+          messages: conversation.messages,
+          // Spec 04 §10.1: the kit's cap (2,048) in place of the party's 512.
+          maxOutputTokens: options?.maxOutputTokens ?? configuration.maxOutputTokens,
+          apiKey,
+          signal,
+          ...(options ? { responseFormat: options.responseFormat } : {}),
+          ...(options?.document ? { document: options.document } : {}),
+        },
+        timeout,
+      )
     })
   } catch (error) {
     if (error instanceof AttemptFenced) {

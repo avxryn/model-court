@@ -590,6 +590,64 @@ export const MIGRATIONS: Migration[] = [
        BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_TESTIMONY_CHECKS'); END`,
     ],
   },
+  {
+    // Spec 04 §4.2 / D-87: documents for extraction questions (roadmap item 4). Content-addressed
+    // per owner, stored once as base64 chunks (the adapter binds only strings and numbers), and
+    // referenced by draft questions (replaceable) and hearings (immutable). Byte quotas in their
+    // own buckets, guarded by a CHECK like budget_buckets. Additive: no existing table changes.
+    id: '0012_extraction_documents',
+    statements: [
+      `CREATE TABLE document_blobs (
+        id TEXT PRIMARY KEY,
+        owner_user_id TEXT NOT NULL,
+        sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
+        media_type TEXT NOT NULL CHECK (media_type IN ('text/plain','application/pdf')),
+        byte_length INTEGER NOT NULL CHECK (byte_length > 0),
+        page_count INTEGER CHECK (page_count IS NULL OR page_count BETWEEN 1 AND 20),
+        chunk_count INTEGER NOT NULL CHECK (chunk_count BETWEEN 1 AND 16),
+        created_at INTEGER NOT NULL,
+        UNIQUE (owner_user_id, sha256)
+      )`,
+      `CREATE TRIGGER document_blobs_immutable BEFORE UPDATE ON document_blobs
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_DOCUMENT_BLOBS'); END`,
+      `CREATE TABLE document_blob_chunks (
+        blob_id TEXT NOT NULL REFERENCES document_blobs(id) ON DELETE CASCADE,
+        chunk_no INTEGER NOT NULL CHECK (chunk_no >= 0),
+        data_base64 TEXT NOT NULL CHECK (length(data_base64) > 0 AND length(data_base64) <= 524288 AND length(data_base64) % 4 = 0),
+        PRIMARY KEY (blob_id, chunk_no)
+      )`,
+      `CREATE TRIGGER document_blob_chunks_immutable BEFORE UPDATE ON document_blob_chunks
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_DOCUMENT_BLOBS'); END`,
+      `CREATE TABLE evaluation_documents (
+        evaluation_id TEXT NOT NULL REFERENCES evaluations(id) ON DELETE CASCADE,
+        case_key TEXT NOT NULL,
+        blob_id TEXT NOT NULL REFERENCES document_blobs(id),
+        delivery TEXT NOT NULL CHECK (delivery IN ('text','pdf_native')),
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (evaluation_id, case_key)
+      )`,
+      `CREATE TABLE run_documents (
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        case_key TEXT NOT NULL,
+        blob_id TEXT NOT NULL REFERENCES document_blobs(id),
+        sha256 TEXT NOT NULL,
+        delivery TEXT NOT NULL CHECK (delivery IN ('text','pdf_native')),
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (run_id, case_key)
+      )`,
+      `CREATE TRIGGER run_documents_immutable BEFORE UPDATE ON run_documents
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_RUN_DOCUMENTS'); END`,
+      `CREATE TABLE document_storage_buckets (
+        scope TEXT PRIMARY KEY,
+        used_bytes INTEGER NOT NULL CHECK (used_bytes >= 0),
+        limit_bytes INTEGER NOT NULL,
+        CHECK (used_bytes <= limit_bytes)
+      )`,
+      `CREATE INDEX document_blobs_by_owner ON document_blobs(owner_user_id, created_at)`,
+      `CREATE INDEX run_documents_by_blob ON run_documents(blob_id)`,
+      `CREATE INDEX evaluation_documents_by_blob ON evaluation_documents(blob_id)`,
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`

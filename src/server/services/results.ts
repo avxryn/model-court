@@ -16,6 +16,8 @@ import type { Deps } from '../deps'
 import { ApiError, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
 import { loadKitResults, withKitResults } from './checks'
+import { listRunDocuments, loadRunTextDocuments } from './documents'
+import { extractionSection, isExtractionHearing } from './extraction'
 import { notifyRun } from './generation'
 import { isImportedSnapshot, samplesPerAnswer } from '../../domain/snapshot'
 import { loadGenerations, parseSnapshot, primarySample, samplesFor, type AssignmentCase, type EligibleManifest } from './runs'
@@ -132,6 +134,44 @@ export function runSetupMetrics(deps: Deps, run: Pick<RunRow, 'created_at'>, { s
     ),
   )
   return { prices, metrics }
+}
+
+type ResultsCase = { key: string; responses: ReadonlyArray<{ configurationKey: string; status: string; text: string | null; sampleNo?: number }> }
+
+async function extractionResults(
+  db: D1Database,
+  runId: string,
+  snapshot: Parameters<typeof extractionSection>[0],
+  eligibleCaseKeys: readonly string[],
+  cases: readonly ResultsCase[],
+  scored: readonly ScoredSession[],
+  kitResults: Awaited<ReturnType<typeof loadKitResults>>,
+) {
+  const flags = new Map<string, NonNullable<DraftRating['fieldFlags']>>()
+  for (const session of scored) {
+    for (const response of session.responses) {
+      const rating = session.ratings.find((r) => r.responseId === response.responseId) as DraftRating | undefined
+      const key = `${response.caseKey}:${response.configurationKey}`
+      flags.set(key, [...(flags.get(key) ?? []), ...(rating?.fieldFlags ?? [])])
+    }
+  }
+  const answers = cases
+    .filter((testCase) => eligibleCaseKeys.includes(testCase.key))
+    .flatMap((testCase) =>
+      testCase.responses.map((response) => {
+        const results = kitResults.forSlot(testCase.key, response.configurationKey, response.status === 'imported' ? null : (response.sampleNo ?? 1))
+        const required = results?.find((result) => result.checkId === 'required-filled')
+        return { caseKey: testCase.key, configurationKey: response.configurationKey, text: response.text, requiredFilled: required ? required.status === 'pass' : null, flags: flags.get(`${testCase.key}:${response.configurationKey}`) ?? [] }
+      }),
+    )
+  const section = await extractionSection({ ...snapshot, cases: snapshot.cases.filter((testCase) => eligibleCaseKeys.includes(testCase.key)) }, answers)
+  if (!section) return null
+  const texts = await loadRunTextDocuments(db, runId)
+  const documents = (await listRunDocuments(db, runId)).map((document) => {
+    const content = texts.get(document.caseKey)
+    return { ...document, ...(content?.kind === 'text' ? { text: content.text } : {}) }
+  })
+  return { ...section, documents }
 }
 
 export async function getResults(deps: Deps, userId: string, runId: string) {
@@ -264,6 +304,8 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
                   grounding: rating?.grounding ?? null,
                   note: rating?.note ?? '',
                   suspectedIdentityClue: rating?.suspectedIdentityClue ?? false,
+                  // Spec 04 (D-87): juror field flags, only on extraction hearings. Counts, never a score.
+                  ...(isExtractionHearing(snapshot) ? { fieldFlags: (rating as { fieldFlags?: DraftRating['fieldFlags'] } | undefined)?.fieldFlags ?? [] } : {}),
                 }
               })
           })
@@ -282,7 +324,9 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
 
   // Spec 03 (D-76): automatic checks, next to and never inside the findings above.
   const kitResults = await loadKitResults(deps, { runId, snapshot, eligibleCaseKeys: manifest.caseKeys, generations, samplesPerAnswer: samples })
-  return withKitResults(kitResults, {
+  // Spec 04 §3.4 (D-87): the Extraction section, from eligible questions' scored answers and the jury's flags.
+  const extraction = isExtractionHearing(snapshot) ? await extractionResults(db, runId, snapshot, manifest.caseKeys, cases, scored, kitResults) : null
+  const withKit = withKitResults(kitResults, {
     runId,
     role: access.role,
     // Same case reference the run view already gives both roles; used for breadcrumbs.
@@ -328,6 +372,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
       createdAt: verdict.created_at,
     })),
   })
+  return extraction ? { ...withKit, extraction } : withKit
 }
 
 /**

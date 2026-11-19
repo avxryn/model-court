@@ -82,6 +82,8 @@ function buildRecordBody(results: Results, evaluationId: string) {
         grounding: judgment.grounding,
         note: judgment.note,
         suspectedIdentityClue: judgment.suspectedIdentityClue,
+        // Spec 04 (D-87): only on extraction hearings, so other records keep their fingerprint.
+        ...('fieldFlags' in judgment ? { fieldFlags: judgment.fieldFlags } : {}),
       })),
     ),
     findings: {
@@ -96,6 +98,9 @@ function buildRecordBody(results: Results, evaluationId: string) {
     setupMetrics: { priceTable: results.priceTable, byConfiguration: results.setupMetrics },
     // Free automatic checks (spec 03): reported next to the findings, never part of them.
     ...(results.checks ? { checks: results.checks } : {}),
+    // Spec 04 §5: authoring and wire schemas with their hash, answer keys, rules, document
+    // metadata, text documents in full and the per-field table. PDF bytes are never embedded.
+    ...('extraction' in results && results.extraction ? { extraction: results.extraction } : {}),
     verdicts: results.verdicts,
   }
 }
@@ -150,6 +155,9 @@ export const RECORD_CSV_HEADER = [
 /** Spec 03 (D-76): appended after `exported_at`, only for hearings with automatic checks. Reasons stay in the JSON. */
 export const RECORD_CSV_CHECK_COLUMNS = ['kit_version', 'checks_passed', 'checks_failed', 'checks_not_applicable', 'checks_failed_ids'] as const
 
+/** Spec 04 §5: appended last, only for extraction hearings ("invented:/total;ambiguous:/dueDate"). */
+export const RECORD_CSV_FLAG_COLUMNS = ['field_flags'] as const
+
 function checkCells(record: CertifiedRecord, caseKey: string, configurationKey: string): CsvCell[] {
   const response = record.responses.find((r) => r.caseKey === caseKey && r.configurationKey === configurationKey) as { checks?: Array<{ checkId: string; status: string }> | null } | undefined
   const results = response?.checks ?? null
@@ -165,6 +173,7 @@ function checkCells(record: CertifiedRecord, caseKey: string, configurationKey: 
  */
 export function recordToCsv(record: CertifiedRecord): string {
   const withChecks = record.checks !== undefined
+  const withFlags = 'extraction' in record && record.extraction !== undefined
   const rows: CsvCell[][] = []
   for (const testCase of record.cases) {
     for (const configuration of record.configurations) {
@@ -172,13 +181,14 @@ export function recordToCsv(record: CertifiedRecord): string {
       const base: CsvCell[] = [testCase.number, testCase.title, testCase.eligible, configuration.label, configuration.provider, configuration.modelId, response?.status ?? 'pending', response?.text ?? '']
       const tail: CsvCell[] = [testCase.key, configuration.key, record.versions.snapshotHash, record.versions.rubricVersion, record.exportedAt, ...(withChecks ? checkCells(record, testCase.key, configuration.key) : [])]
       const ratings = record.ratings.filter((r) => r.caseKey === testCase.key && r.configurationKey === configuration.key)
-      if (ratings.length === 0) rows.push([...base, null, null, null, null, null, null, null, ...tail])
+      if (ratings.length === 0) rows.push([...base, null, null, null, null, null, null, null, ...tail, ...(withFlags ? [null] : [])])
       for (const rating of ratings) {
-        rows.push([...base, rating.juror, rating.contextType, rating.correctness, rating.completeness, rating.grounding, rating.note, rating.suspectedIdentityClue, ...tail])
+        const flags = withFlags ? [((rating as { fieldFlags?: Array<{ path: string; flag: string }> }).fieldFlags ?? []).map((flag) => `${flag.flag}:${flag.path}`).join(';')] : []
+        rows.push([...base, rating.juror, rating.contextType, rating.correctness, rating.completeness, rating.grounding, rating.note, rating.suspectedIdentityClue, ...tail, ...flags])
       }
     }
   }
-  return toCsv(withChecks ? [...RECORD_CSV_HEADER, ...RECORD_CSV_CHECK_COLUMNS] : RECORD_CSV_HEADER, rows)
+  return toCsv([...RECORD_CSV_HEADER, ...(withChecks ? RECORD_CSV_CHECK_COLUMNS : []), ...(withFlags ? RECORD_CSV_FLAG_COLUMNS : [])], rows)
 }
 
 export async function exportRun(deps: Deps, userId: string, runId: string, format: ExportFormat, requestId: string) {

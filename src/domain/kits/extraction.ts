@@ -49,6 +49,15 @@ export const extractionSettingsSchema = z
     for (const issue of validateCompareRules(result.schema, settings.compare)) ctx.addIssue({ code: 'custom', path: ['compare', issue.path], message: issue.message })
   }) as unknown as z.ZodType<ExtractionSettings>
 
+/** A document's fingerprint on a question: what the snapshot commits to. */
+export const documentRefSchema = z.strictObject({
+  sha256: z.string().regex(/^[0-9a-f]{64}$/u),
+  byteLength: z.number().int().min(1),
+  delivery: z.enum(['text', 'pdf_native']),
+  pageCount: z.number().int().min(1).max(X.pdfPages).nullable(),
+})
+export type DocumentRef = z.infer<typeof documentRefSchema>
+
 export const extractionFieldsSchema = z.strictObject({
   kind: z.literal('extraction'),
   /**
@@ -63,6 +72,12 @@ export const extractionFieldsSchema = z.strictObject({
       return false
     }
   }, `An answer key is at most ${X.answerKeyBytes / 1024} KiB`).optional(),
+  /**
+   * The question's document, as the server recorded it (spec 04 §4.2, D-87). Written by the
+   * server from `evaluation_documents` on every draft write, never trusted from a client, so the
+   * question hash and the snapshot hash commit to the exact bytes. Never sent to a provider.
+   */
+  document: documentRefSchema.optional(),
 })
 export type ExtractionFields = z.infer<typeof extractionFieldsSchema>
 
@@ -247,6 +262,9 @@ export const EXTRACTION_V1: TaskKit<ExtractionSettings, ExtractionFields> = {
       return issues
     })
   },
+  // A question without a document can't start (spec 04 §6.5 `document_missing`; the framework's kit_document_missing).
+  readinessIssues: (_settings, cases) =>
+    cases.flatMap((testCase) => ((testCase.kitFields as ExtractionFields | undefined)?.document ? [] : [{ kind: 'kit_document_missing' as const, caseKey: testCase.key, kitVersion: 'extraction-v1' }])),
   selectTemplate: () => 'extract-v1',
   defaultRubricVersion: 'extraction-v1',
   defaultJuryInstructions: "Check each value against the document. Mark a value Invented if the document doesn't support it, Ambiguous if the document could fairly be read another way.",

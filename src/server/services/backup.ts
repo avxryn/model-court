@@ -19,6 +19,7 @@
  * the live store and the operator is a platform step (see the runbook).
  */
 
+import { recomputeStorageStatements } from './documents'
 import { canonicalJson, sha256Hex } from '../../domain/canonical'
 import { MIGRATIONS } from '../db/migrations'
 import { auditStatement } from '../db/sql'
@@ -35,8 +36,14 @@ export const BACKUP_VERSION = 1
  */
 export const BACKUP_TABLES = [
   'evaluations',
+  // Spec 04 (D-87): documents. Blobs before their chunks and references; buckets are recomputed on restore.
+  'document_blobs',
+  'document_blob_chunks',
+  'evaluation_documents',
+  'document_storage_buckets',
   'evaluation_imports',
   'runs',
+  'run_documents',
   'run_imported_outputs',
   'grader_runs',
   'grader_credentials',
@@ -82,7 +89,8 @@ export interface StoreSnapshot {
   /** Schema objects (tables, indexes, triggers) for reference and audit; restore relies on the target's own migrations. */
   schema: Array<{ type: string; name: string; sql: string }>
   tables: Record<string, Row[]>
-  redactions: { credentialRowsRevoked: number; credentialReceiptsDropped: number }
+  /** `pdfChunksOmitted` (spec 04 §4.6, decision 4): PDF bytes never leave the store in a backup; absent in older files. */
+  redactions: { credentialRowsRevoked: number; credentialReceiptsDropped: number; pdfChunksOmitted?: number }
   /** sha256 of canonicalJson(tables): detects corruption of an unsealed file. */
   contentDigest: string
 }
@@ -128,9 +136,16 @@ export async function exportSnapshot(deps: Deps): Promise<StoreSnapshot> {
   if (unknown.length > 0) throw new BackupError(`Tables without a backup order: ${unknown.map((object) => object.name).join(', ')}. Add them to BACKUP_TABLES.`)
 
   const tables: Record<string, Row[]> = {}
-  const redactions = { credentialRowsRevoked: 0, credentialReceiptsDropped: 0 }
+  const redactions = { credentialRowsRevoked: 0, credentialReceiptsDropped: 0, pdfChunksOmitted: 0 }
+  const pdfBlobs = new Set((tableResults[BACKUP_TABLES.indexOf('document_blobs')].results as Row[]).filter((row) => row.media_type === 'application/pdf').map((row) => row.id))
   BACKUP_TABLES.forEach((table, index) => {
     let rows = tableResults[index].results as Row[]
+    if (table === 'document_blob_chunks') {
+      // Decision 4: text documents travel whole; PDF chunks are left out (their blob rows and hashes stay).
+      const kept = rows.filter((row) => !pdfBlobs.has(row.blob_id))
+      redactions.pdfChunksOmitted = rows.length - kept.length
+      rows = kept
+    }
     if (table === 'provider_credentials') {
       redactions.credentialRowsRevoked = rows.filter((row) => row.status === 'active').length
       rows = rows.map((row) => redactCredential(row, exportedAt))
@@ -203,6 +218,8 @@ export async function restoreSnapshot(deps: Deps, snapshot: StoreSnapshot, optio
       report.credentialReceiptsDropped = rows.length - kept.length
       rows = kept
     }
+    // Spec 04 §4.6: byte counters are recomputed below from what was restored, never trusted from the file.
+    if (table === 'document_storage_buckets') rows = []
     const statements = rows.map((row) => {
       const columns = Object.keys(row)
       if (columns.length === 0 || !columns.every((column) => IDENTIFIER.test(column))) throw new BackupError(`Invalid column name in ${table}.`)
@@ -211,6 +228,8 @@ export async function restoreSnapshot(deps: Deps, snapshot: StoreSnapshot, optio
     for (let start = 0; start < statements.length; start += chunkSize) await db.batch(statements.slice(start, start + chunkSize))
     report.rows[table] = rows.length
   }
+
+  await db.batch(recomputeStorageStatements(db, deps.config.documentStorage))
 
   // Fence all unfinished work pinned to any restored key (the final UPDATE is a no-op: rows are already revoked).
   report.unfinishedRunsFenced = Number((await db.prepare(`SELECT COUNT(DISTINCT run_id) AS n FROM generations WHERE status IN ('pending','running')`).first<{ n: number }>())?.n ?? 0)

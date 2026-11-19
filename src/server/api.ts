@@ -9,7 +9,7 @@ import {
   createCredentialSchema,
   createEvaluationSchema,
   deleteEvaluationSchema,
-  putImportsSchema,
+  putImportsSchema, putTextDocumentSchema,
   draftInputSchema,
   duplicateEvaluationSchema,
   emptySchema,
@@ -38,6 +38,7 @@ import { getQuota } from './services/quota'
 import { cancelRun, getRun, openReview, retryGenerations, startRun } from './services/runs'
 import { getComparison, parseRunIds } from './services/comparison'
 import { duplicateEvaluation, exportScenario, restoreDraft } from './services/scenarios'
+import { deleteDocument, getDraftDocument, putTextDocument } from './services/documents'
 import { cancelSpecialMaster, getSpecialMaster, startSpecialMaster } from './services/special-master'
 import {
   GUEST_COOKIE_PREFIX,
@@ -61,6 +62,20 @@ type ApiContext = Context<{ Variables: Vars }>
 
 function optionalIfMatch(c: ApiContext): number | null {
   return c.req.header('If-Match') ? ifMatchRevision(c) : null
+}
+
+/** Spec 04 §5: every document byte response downloads under a fixed name and never renders in the app's origin. */
+function documentBytes(bytes: Uint8Array<ArrayBuffer>): Response {
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="document.pdf"',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "sandbox; default-src 'none'",
+      'Cache-Control': 'private, no-store',
+    },
+  })
 }
 
 export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Hono<{ Variables: Vars }> {
@@ -241,6 +256,21 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     const ifMatch = ifMatchRevision(c)
     const input = await readBody(c, putImportsSchema)
     return ok(c, await putImports(deps(c), user(c), pathId(c, 'id'), pathId(c, 'configurationKey'), input, ifMatch, rid(c)))
+  })
+  // Spec 04 (D-87): the document of one extraction question. Text as JSON here; PDF bytes in step B.
+  api.put('/evaluations/:id/documents/:caseKey', async (c) => {
+    const ifMatch = ifMatchRevision(c)
+    const input = await readBody(c, putTextDocumentSchema)
+    return ok(c, await putTextDocument(deps(c), user(c), pathId(c, 'id'), pathId(c, 'caseKey'), input.text, ifMatch, rid(c)))
+  })
+  api.delete('/evaluations/:id/documents/:caseKey', async (c) => {
+    const ifMatch = ifMatchRevision(c)
+    return ok(c, await deleteDocument(deps(c), user(c), pathId(c, 'id'), pathId(c, 'caseKey'), ifMatch, rid(c)))
+  })
+  api.get('/evaluations/:id/documents/:caseKey', async (c) => {
+    const document = await getDraftDocument(deps(c), user(c), pathId(c, 'id'), pathId(c, 'caseKey'))
+    if (document.kind === 'text') return ok(c, document, 200, { 'Cache-Control': 'private, no-store' })
+    return documentBytes(document.bytes)
   })
   api.delete('/evaluations/:id/imports/:configurationKey', async (c) => {
     const ifMatch = ifMatchRevision(c)

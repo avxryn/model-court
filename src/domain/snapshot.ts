@@ -74,6 +74,8 @@ export type ReadinessIssue =
   | { kind: 'history_unverified'; configurationKey: string }
   /** Spec 04 §6.5 (D-86): an extraction hearing on a route without a recorded structured-output check. */
   | { kind: 'structured_unverified'; configurationKey: string; modelKey: string }
+  /** Spec 04 §4.6: the question's document is gone from the store (a PDF a restore left out) or changed under the draft. */
+  | { kind: 'document_not_restored'; caseKey: string }
   | KitReadinessIssue
 
 /** A kit whose parties answer in JSON (extraction) sends a structured-output schema. */
@@ -139,6 +141,8 @@ export function describeIssue(issue: ReadinessIssue, cases?: ReadonlyArray<Pick<
       return 'An imported party is missing an answer for at least one question. Add every answer and save it.'
     case 'history_unverified':
       return 'A question has a conversation, but a selected model has not yet passed a live multi-message check. Remove the conversation or wait for that check.'
+    case 'document_not_restored':
+      return `The source file of ${questionName(issue.caseKey, cases)} was not restored, so no call can be sent with it. Upload the same file again on that question.`
     case 'structured_unverified': {
       const route = findRoute(issue.modelKey)
       return `Pulling fields from documents needs a model that has passed a live structured-output check (one real call, recorded). ${route ? `${PROVIDER_NAMES[route.provider]} ${route.label}` : 'A selected model'} hasn't yet. Choose a checked model or record that check first.`
@@ -149,7 +153,10 @@ export function describeIssue(issue: ReadinessIssue, cases?: ReadonlyArray<Pick<
       return `${name} questions can't carry ${what} yet. Remove it from ${questionName(issue.caseKey, cases)} or switch the task kit to General answers.`
     }
     case 'kit_document_missing':
-      return `${kitFor(issue.kitVersion).name} needs a document in the exhibit of every question. Add one to ${questionName(issue.caseKey, cases)}.`
+      // Spec 04: an extraction question's document is uploaded beside the question, not typed in the exhibit.
+      return kitFor(issue.kitVersion).inputKinds.includes('document')
+        ? `Every question needs a document to pull fields from. Add one to ${questionName(issue.caseKey, cases)}.`
+        : `${kitFor(issue.kitVersion).name} needs a document in the exhibit of every question. Add one to ${questionName(issue.caseKey, cases)}.`
     case 'kit_unknown':
       return 'This case uses a task kit this version of Model Court does not know. Choose another task kit.'
   }

@@ -14,6 +14,10 @@ import { loadEvaluationAccess, requireOwner, type EvaluationRow } from '../acces
 import { auditStatement, cond, GuardFailed, releaseReservations, runGuarded } from '../db/sql'
 import type { Deps } from '../deps'
 import { ApiError, revisionConflict } from '../http'
+import { parseOutput } from '../../domain/extraction/render'
+import { validateAgainstSchema } from '../../domain/extraction/validate'
+import type { ExtractionSettings } from '../../domain/kits/extraction'
+import { listDraftDocuments, orphanDocumentStatements, withDocumentRefs } from './documents'
 import { caseOrigin, caseVersions } from './scenarios'
 
 export interface EvaluationSummary {
@@ -107,7 +111,8 @@ export async function createEvaluation(deps: Deps, userId: string, input: z.outp
     const capError = configurationCapError(deps, input.draft.configurations.length) ?? samplesCapError(deps, input.draft.samplesPerAnswer)
     if (capError) throw capError
   }
-  const draft: Draft = { schemaVersion: 1, ...(input.draft ?? makeExampleDraft(deps.newId, defaultModelKeys(deps.routes))) }
+  // Spec 04 (D-87): a new case has no documents yet, whatever a scenario file says.
+  const draft: Draft = withDocumentRefs({ schemaVersion: 1, ...(input.draft ?? makeExampleDraft(deps.newId, defaultModelKeys(deps.routes))) }, [])
   const origin = input.origin && input.draft ? { kind: input.origin.kind, scenarioHash: await scenarioHash(scenarioSourceOfDraft(draft)) } : null
   try {
     await runGuarded(
@@ -173,6 +178,8 @@ export async function getEvaluation(deps: Deps, userId: string, evaluationId: st
       draftScenarioVersion: versions.draftScenarioVersion,
       nextScenarioVersion: versions.nextScenarioVersion,
       draftDiff: versions.draftDiff,
+      // Spec 04 (D-87): the draft's documents (metadata only; text and bytes have their own route).
+      documents: await listDraftDocuments(deps.db, evaluationId),
       imports: (
         await deps.db
           .prepare('SELECT configuration_key, case_key, text, text_sha256, byte_length, updated_at FROM evaluation_imports WHERE evaluation_id = ? ORDER BY configuration_key, case_key')
@@ -224,17 +231,20 @@ export async function saveDraft(deps: Deps, userId: string, evaluationId: string
   requireOwner(access)
   const capError = configurationCapError(deps, input.configurations.length) ?? samplesCapError(deps, input.samplesPerAnswer)
   if (capError) throw capError
-  const draft: Draft = { schemaVersion: 1, ...input }
+  // Spec 04 (D-87): a question's document reference always comes from the server's own table.
+  const draft: Draft = withDocumentRefs({ schemaVersion: 1, ...input }, await listDraftDocuments(deps.db, evaluationId))
   const now = deps.now()
-  const result = await deps.db
-    .prepare(
-      `UPDATE evaluations SET draft_json = ?, revision = revision + 1, updated_at = ?
-       WHERE id = ? AND owner_user_id = ? AND revision = ? AND deleted_at IS NULL`,
-    )
-    .bind(JSON.stringify(draft), now, evaluationId, userId, ifMatch)
-    .run()
-  if (result.meta.changes !== 1) throw revisionConflict()
-  return { revision: ifMatch + 1 }
+  try {
+    await runGuarded(deps.db, 'evaluation.draft', cond('EXISTS (SELECT 1 FROM evaluations WHERE id = ? AND owner_user_id = ? AND revision = ? AND deleted_at IS NULL)', evaluationId, userId, ifMatch), [
+      deps.db.prepare('UPDATE evaluations SET draft_json = ?, revision = revision + 1, updated_at = ? WHERE id = ?').bind(JSON.stringify(draft), now, evaluationId),
+      // A removed question takes its draft document with it (the blob is swept later unless a hearing uses it).
+      ...orphanDocumentStatements(deps.db, evaluationId, draft.cases.map((testCase) => testCase.key)),
+    ])
+  } catch (error) {
+    if (error instanceof GuardFailed) throw revisionConflict()
+    throw error
+  }
+  return { revision: ifMatch + 1, ...(draft.kit?.version === 'extraction-v1' ? { draft } : {}) }
 }
 
 /**
@@ -255,6 +265,18 @@ export async function putImports(deps: Deps, userId: string, evaluationId: strin
       throw new ApiError(422, 'VALIDATION_FAILED', 'Each answer must belong to a different question in the saved draft.', { fields: [{ path: `items.${index}.caseKey`, message: 'Unknown or repeated question' }] })
     }
     seen.add(item.caseKey)
+  }
+  // Spec 04 §9.1 (D-87): on a field-extraction case an imported answer must be JSON that fits the field list,
+  // so a human data-entry baseline is a fair party.
+  const extraction = draft.kit?.version === 'extraction-v1' ? (draft.kit.settings as ExtractionSettings) : null
+  if (extraction) {
+    for (const [index, item] of input.items.entries()) {
+      const parsed = parseOutput(item.text)
+      const issues = parsed.status === 'parsed' ? validateAgainstSchema(extraction.schema, parsed.value, 'output') : [{ path: '', problem: 'not valid JSON' }]
+      if (issues.length > 0) {
+        throw new ApiError(422, 'VALIDATION_FAILED', 'An imported answer must be JSON that fits the field list.', { fields: issues.slice(0, 5).map((issue) => ({ path: `items.${index}.text`, message: `${issue.path || '(the answer)'}: ${issue.problem}` })) })
+      }
+    }
   }
   const now = deps.now()
   const db = deps.db

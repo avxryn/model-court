@@ -19,6 +19,7 @@ import { ApiError, notFound, revisionConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
 import { caseQuotaError, configurationCapError, parseStoredDraft, samplesCapError } from './evaluations'
 import { parseSnapshot } from './runs'
+import { listDraftDocuments, listRunDocuments, withDocumentRefs } from './documents'
 
 export interface HearingPartyView {
   key: string
@@ -176,6 +177,18 @@ export async function restoreDraft(deps: Deps, userId: string, evaluationId: str
         )
         .bind(evaluationId, now, now, run.id, configurationKey, ...caseKeys),
     ]),
+    // Spec 04 (D-87): restored questions take the hearing's own documents (same owner, same blobs).
+    ...(input.questions
+      ? [
+          db.prepare(`DELETE FROM evaluation_documents WHERE evaluation_id = ?`).bind(evaluationId),
+          db
+            .prepare(
+              `INSERT INTO evaluation_documents (evaluation_id, case_key, blob_id, delivery, updated_at)
+               SELECT ?, case_key, blob_id, delivery, ? FROM run_documents WHERE run_id = ? AND case_key IN (${caseKeys.map(() => '?').join(',')})`,
+            )
+            .bind(evaluationId, now, run.id, ...caseKeys),
+        ]
+      : []),
     auditStatement(db, { eventType: 'evaluation.restore', requestId, outcome: 'ok', actorUserId: userId, evaluationId, runId: run.id, metadata: { fromRunId: run.id, questions: input.questions, parties: input.parties } }, now),
   ]
   try {
@@ -266,7 +279,10 @@ export async function duplicateEvaluation(deps: Deps, userId: string, evaluation
     if (!parsed.success) throw new ApiError(422, 'VALIDATION_FAILED', 'This setup cannot be copied into a new case as it is.')
     const capError = configurationCapError(deps, parsed.data.configurations.length) ?? samplesCapError(deps, parsed.data.samplesPerAnswer)
     if (capError) throw capError
-    const draft: Draft = { schemaVersion: 1, ...parsed.data }
+    // Spec 04 (D-87): the copy takes the source's documents (the same owner's blobs), under the new question keys.
+    const sourceDocuments = input.fromRunId ? await listRunDocuments(db, input.fromRunId) : await listDraftDocuments(db, evaluationId)
+    const copiedDocuments = sourceDocuments.flatMap((document) => (caseKeys.has(document.caseKey) && document.available ? [{ ...document, caseKey: caseKeys.get(document.caseKey)! }] : []))
+    const draft: Draft = withDocumentRefs({ schemaVersion: 1, ...parsed.data }, copiedDocuments)
     const imported = new Set(draft.configurations.filter(isImported).map((party) => party.key))
     const copiedImports = input.includeImportedAnswers
       ? source.imports
@@ -288,6 +304,14 @@ export async function duplicateEvaluation(deps: Deps, userId: string, evaluation
              VALUES (?, ?, ?, ?, ?, 1, ?, ?, 'duplicate', ?, ?, ?)`,
           )
           .bind(id, userId, input.title, evaluation.task_description, JSON.stringify(draft), now, now, evaluationId, input.fromRunId ?? null, scenario),
+        ...copiedDocuments.map((document) =>
+          db
+            .prepare(
+              `INSERT INTO evaluation_documents (evaluation_id, case_key, blob_id, delivery, updated_at)
+               SELECT ?, ?, id, ?, ? FROM document_blobs WHERE owner_user_id = ? AND sha256 = ?`,
+            )
+            .bind(id, document.caseKey, document.delivery, now, userId, document.sha256),
+        ),
         ...copiedImports.map((row) =>
           db
             .prepare('INSERT INTO evaluation_imports (evaluation_id, configuration_key, case_key, text, text_sha256, byte_length, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')

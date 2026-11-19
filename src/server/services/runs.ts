@@ -20,6 +20,7 @@ import { importedCheckStatements } from './checks'
 import { configurationCapError, parseStoredDraft, samplesCapError } from './evaluations'
 import { dispatchOutbox, notifyRun, reconcileLeases } from './generation'
 import { guestNames } from './guest-jurors'
+import { admissionDocuments, unavailableDocuments } from './documents'
 
 export interface GenerationRow {
   id: string
@@ -189,8 +190,10 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
     const capError = configurationCapError(deps, draft.configurations.length) ?? samplesCapError(deps, draft.samplesPerAnswer)
     if (capError) throw capError
     const issues = readinessIssues(draft, deps.routes)
+    // Spec 04 §4.6 (D-87): no paid call is ever planned without its document's bytes.
+    for (const caseKey of await unavailableDocuments(db, evaluationId, draft.cases)) issues.push({ kind: 'document_not_restored', caseKey })
     if (issues.length > 0) {
-      throw new ApiError(422, 'UNSUPPORTED_CONFIGURATION', describeIssue(issues[0]), { details: { issues } })
+      throw new ApiError(422, 'UNSUPPORTED_CONFIGURATION', describeIssue(issues[0], draft.cases), { details: { issues } })
     }
     const providers = requiredProviders(draft.configurations, deps.routes)
     const supplied = Object.keys(input.credentialIdsByProvider).sort()
@@ -224,6 +227,8 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
       throw stateConflict('The draft’s questions changed since you opened this. Review them, then start again.', { scenarioChanged: true, scenarioHash: scenario })
     }
     const subjects = budgetSubjects(userId, now)
+    // Spec 04 §4.3: each question's document is copied to the hearing in this same batch.
+    const documents = admissionDocuments(db, evaluationId, runId, snapshot.cases, now)
 
     // D-65: one generation per (question, party, sample). Sample k is first dispatched (k − 1) minutes
     // later, so the minute cron spreads a repeated hearing's burst instead of sending it all at once.
@@ -260,6 +265,7 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
         db.prepare('INSERT INTO run_credentials (run_id, provider, credential_id) VALUES (?, ?, ?)').bind(runId, provider, input.credentialIdsByProvider[provider]),
       ),
       ...(generations.length > 0 ? reserveBudget(db, subjects, generations.length, deps.config.limits, now) : []),
+      ...documents.statements,
       // Freeze each imported answer exactly as hashed into the snapshot (D-38).
       ...imported.map((item) =>
         db
@@ -301,6 +307,7 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
           cond('EXISTS (SELECT 1 FROM evaluations WHERE id = ? AND owner_user_id = ? AND revision = ? AND deleted_at IS NULL)', evaluationId, userId, input.draftRevision),
           cond('(SELECT COUNT(*) FROM runs WHERE evaluation_id = ?) < ?', evaluationId, LIMITS.hearingsPerEvaluation),
           ...credentialChecks,
+          ...documents.conditions,
           ...(generations.length > 0 ? [capacity(userId, null)] : []),
           ...imported.map((item) =>
             cond('EXISTS (SELECT 1 FROM evaluation_imports WHERE evaluation_id = ? AND configuration_key = ? AND case_key = ? AND text_sha256 = ?)', evaluationId, item.configurationKey, item.caseKey, item.sha256),

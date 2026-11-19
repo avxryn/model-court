@@ -65,12 +65,16 @@ function requireJudge(access: { role: string }): void {
 // Start
 // ---------------------------------------------------------------------------
 
+export const SPECIAL_MASTER_EXTRACTION_TEXT = "The AI grader isn't available for field-extraction cases yet."
+
 export async function startSpecialMaster(deps: Deps, userId: string, runId: string, input: z.output<typeof startSpecialMasterSchema>, key: string, requestId: string) {
   const access = await loadRunAccess(deps.db, runId, userId)
   requireJudge(access)
   if (!deps.config.generationEnabled) throw new ApiError(503, 'GENERATION_DISABLED', 'Live generation is disabled on this deployment.')
   const run = access.run
   if (run.status !== 'revealed' && run.status !== 'decided') throw stateConflict('The special master can grade only after the record is unsealed.')
+  // Spec 04 decision 8 (D-87): no grader for field-extraction hearings yet.
+  if (parseSnapshot(run.snapshot_json).kit?.version === 'extraction-v1') throw stateConflict(SPECIAL_MASTER_EXTRACTION_TEXT, { reason: 'kit_unsupported' })
   const route = findRoute(input.modelKey, deps.routes)
   if (!route || !isRouteEnabled(route)) throw new ApiError(422, 'UNSUPPORTED_CONFIGURATION', 'Choose a verified model for the special master.')
   const supplied = Object.keys(input.credentialIdsByProvider)

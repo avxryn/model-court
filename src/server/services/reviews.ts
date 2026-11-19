@@ -19,6 +19,8 @@ import { all, auditStatement, classifyConstraint, cond, GuardFailed, runGuarded 
 import type { Deps } from '../deps'
 import { ApiError, notFound, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
+import { loadRunTextDocuments } from './documents'
+import { extractionSettingsOf, fieldFlagIssues, jurorAnswer, type ExtractionView } from './extraction'
 import { notifyRun } from './generation'
 import { revokeGuestStatements } from './guest-jurors'
 import { buildAssignment, insertSessionStatement, parseSnapshot, pendingReviewCount, type AssignmentCase, type EligibleManifest } from './runs'
@@ -187,9 +189,37 @@ export interface AnonymousReview {
     messages: Array<{ role: 'user' | 'assistant'; content: string }>
     /** Spec 03 (D-79): the kit facts of this question, identical for every party; never a check result. */
     kitView: KitJurorCaseView | null
-    responses: Array<{ responseId: string; label: 'A' | 'B' | 'C'; text: string }>
+    /**
+     * Spec 04 (D-87): the question's document, identical for every party; null outside extraction.
+     * A PDF comes with its size only (its bytes have their own route); `available` is false after a
+     * restore that left the bytes out ("Source file not restored").
+     */
+    document?: { kind: 'text'; text: string } | { kind: 'pdf'; pageCount: number | null; byteLength: number; available: boolean } | null
+    /**
+     * `extraction` only on extraction hearings: the parsed answer as field rows (and `text` is then the
+     * server's canonical JSON, never the provider's bytes), or `unparsed` with the raw text.
+     */
+    responses: Array<{ responseId: string; label: 'A' | 'B' | 'C'; text: string; extraction?: ExtractionView }>
   }>
   ratings: DraftRating[]
+}
+
+/** responseId → the text that answer shows (accepted attempt or frozen imported answer). */
+async function assignedOutputs(deps: Deps, runId: string, assignment: readonly AssignmentCase[]): Promise<Map<string, string>> {
+  const responses = assignment.flatMap((item) => item.responses)
+  const attemptIds = responses.flatMap((response) => (response.acceptedAttemptId ? [response.acceptedAttemptId] : []))
+  const importedIds = responses.flatMap((response) => (response.importedOutputId ? [response.importedOutputId] : []))
+  const byAttempt = new Map<string, string>()
+  const byImport = new Map<string, string>()
+  if (attemptIds.length > 0) {
+    const rows = await deps.db.prepare(`SELECT id, output_text FROM generation_attempts WHERE status = 'succeeded' AND id IN (${attemptIds.map(() => '?').join(',')})`).bind(...attemptIds).all<{ id: string; output_text: string }>()
+    for (const row of rows.results) byAttempt.set(row.id, row.output_text)
+  }
+  if (importedIds.length > 0) {
+    const rows = await deps.db.prepare(`SELECT id, text FROM run_imported_outputs WHERE run_id = ? AND id IN (${importedIds.map(() => '?').join(',')})`).bind(runId, ...importedIds).all<{ id: string; text: string }>()
+    for (const row of rows.results) byImport.set(row.id, row.text)
+  }
+  return new Map(responses.map((response) => [response.responseId, (response.importedOutputId ? byImport.get(response.importedOutputId) : response.acceptedAttemptId ? byAttempt.get(response.acceptedAttemptId) : undefined) ?? '']))
 }
 
 /** The only reviewer-facing projection of evidence before reveal. */
@@ -216,6 +246,8 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
     for (const row of rows.results) outputs.set(row.id, row.output_text)
   }
   const revealed = access.run.status === 'revealed' || access.run.status === 'decided'
+  const extraction = extractionSettingsOf(snapshot)
+  const documents = extraction ? await loadRunTextDocuments(deps.db, runId) : null
   return {
     runId: access.run.id,
     evaluationId: access.evaluation.id,
@@ -239,11 +271,11 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
         expectedBehavior: testCase.expectedBehavior,
         messages: testCase.messages ?? [],
         kitView: jurorKitView(snapshot, testCase),
-        responses: item.responses.map((response) => ({
-          responseId: response.responseId,
-          label: response.label,
-          text: (response.importedOutputId ? outputs.get(`import:${response.importedOutputId}`) : response.acceptedAttemptId ? outputs.get(response.acceptedAttemptId) : undefined) ?? '',
-        })),
+        ...(extraction ? { document: documents?.get(item.caseKey) ?? null } : {}),
+        responses: item.responses.map((response) => {
+          const text = (response.importedOutputId ? outputs.get(`import:${response.importedOutputId}`) : response.acceptedAttemptId ? outputs.get(response.acceptedAttemptId) : undefined) ?? ''
+          return { responseId: response.responseId, label: response.label, ...(extraction ? jurorAnswer(extraction.schema, text) : { text }) }
+        }),
       }
     }),
     ratings: JSON.parse(session.ratings_json) as DraftRating[],
@@ -253,8 +285,15 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
 export async function saveReview(deps: Deps, userId: string, runId: string, input: z.output<typeof saveRatingsSchema>, ifMatch: number) {
   const { access, session } = await requireSession(deps, userId, runId)
   if (session.status !== 'draft' || access.run.status !== 'reviewing') throw stateConflict('This review can no longer be edited.')
-  const issues = draftRatingIssues(assignedResponseIds(JSON.parse(session.assignment_json) as AssignmentCase[]), input.ratings)
+  const assignment = JSON.parse(session.assignment_json) as AssignmentCase[]
+  const issues = draftRatingIssues(assignedResponseIds(assignment), input.ratings)
   if (issues.length > 0) throw new ApiError(422, 'VALIDATION_FAILED', 'Ratings reference responses outside your assignment.', { details: { issues } })
+  // Spec 04 §4.4 (D-87): field flags only on extraction hearings, each on a field the juror was shown.
+  if (input.ratings.some((rating) => (rating.fieldFlags?.length ?? 0) > 0)) {
+    const outputs = await assignedOutputs(deps, runId, assignment)
+    const flagIssues = fieldFlagIssues(parseSnapshot(access.run.snapshot_json), (responseId) => outputs.get(responseId), input.ratings)
+    if (flagIssues.length > 0) throw new ApiError(422, 'VALIDATION_FAILED', 'Some field flags are not valid for this hearing.', { fields: flagIssues })
+  }
   const clue = input.ratings.some((rating) => rating.suspectedIdentityClue) ? 1 : 0
   const result = await deps.db
     .prepare(

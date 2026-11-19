@@ -29,7 +29,7 @@ const testCase: CaseInput = {
   input: 'Extract the fields from the document.',
   reference: '',
   expectedBehavior: 'Check each value.',
-  kitFields: { kind: 'extraction', answerKey },
+  kitFields: { kind: 'extraction', answerKey, document: { sha256: 'a'.repeat(64), byteLength: 15, delivery: 'text', pageCount: null } },
 }
 
 function check(text: string, fields: CaseInput = testCase) {

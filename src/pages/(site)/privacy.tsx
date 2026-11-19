@@ -47,6 +47,9 @@ export default function PrivacyPage() {
           A task kit adds its fixed instructions to each hearing request, with the length limit and format for summaries or the list of allowed labels for classification. Its automatic checks run on Model Court’s server: nothing extra is sent to a provider, and answer keys (required points, phrases to avoid, expected labels) are never sent to a model.
         </p>
         <p>
+          <strong>Field lists and documents.</strong> For a “pull fields from documents” case, each request also contains the document for that question and your field list (field names, descriptions and allowed values). If you upload a PDF and choose <strong>Send the PDF file</strong>, the file itself is sent to OpenAI or Anthropic with your key, and the provider reads its text and an image of each page. If you choose <strong>Send the text only</strong>, the PDF never leaves your browser; only the text you reviewed is saved and sent. Answer keys and jury instructions are never sent to a model. Anthropic keeps a compiled copy of the field list (not the document) for up to 24 hours to speed up later requests, so don’t put personal data in field names, descriptions, or allowed values.
+        </p>
+        <p>
           When you choose <strong>Check key</strong> (or leave it on when saving a key), Model Court asks OpenAI or Anthropic to list its models using your key. This is free and sends no questions, answers, or case content.
         </p>
         <p>
@@ -67,6 +70,9 @@ export default function PrivacyPage() {
         <ul>
           <li>
             <strong>Cases</strong> stay until the judge deletes them. Deleting a case removes it and everything in it (hearings, answers, scores, notes, guest jurors, and its activity records) within 24 hours.
+          </li>
+          <li>
+            <strong>Documents</strong> are stored with the case. Replacing or removing one deletes it within 24 hours unless a hearing still uses it; deleting the case deletes all of them within 24 hours. We don’t keep the file’s name. Deleting here can’t delete what a provider already received.
           </li>
           <li>
             <strong>API keys</strong> expire 7 days after they are saved or renewed (an operator can set up to 90). A removed or expired key’s encrypted copy is deleted within a day, unless a hearing still records which key it used, in which case it is deleted with that case.

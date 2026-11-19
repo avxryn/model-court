@@ -6,6 +6,7 @@
 import { DAY_MS } from '../db/sql'
 import type { Deps } from '../deps'
 import { expireCredentials } from './credentials'
+import { sweepUnreferencedDocumentBlobs } from './documents'
 import { dispatchOutbox, reconcileLeases } from './generation'
 import { dispatchGraderOutbox, reconcileGraderLeases } from './special-master'
 
@@ -15,6 +16,8 @@ export interface MaintenanceReport {
   evaluationsPurged: number
   cleanupFailures: number
   credentialsExpired: number
+  /** Spec 04 §4.5: unreferenced document blobs deleted this tick. */
+  documentsSwept: number
 }
 
 async function purgeEvaluation(deps: Deps, evaluationId: string): Promise<void> {
@@ -28,7 +31,8 @@ async function purgeEvaluation(deps: Deps, evaluationId: string): Promise<void> 
   await db.batch([
     db.prepare(`DELETE FROM command_receipts WHERE entity_id IN (${childIds}) OR operation = 'run.start:' || ?1`).bind(evaluationId),
     db.prepare(`DELETE FROM audit_events WHERE evaluation_id = ? OR run_id IN (${runIds})`).bind(evaluationId, evaluationId),
-    // Cascades to runs, generations, attempts, outbox, reservations, sessions, invites, verdicts, run_credentials.
+    // Cascades to runs, generations, attempts, outbox, reservations, sessions, invites, verdicts, run_credentials,
+    // and (spec 04 §4.5) evaluation_documents and run_documents; the blobs are then swept.
     // Budget counters are separate rows and keep counting consumed calls (no refund by deletion).
     db.prepare(`DELETE FROM evaluations WHERE id = ? AND deleted_at IS NOT NULL`).bind(evaluationId),
     db
@@ -40,7 +44,7 @@ async function purgeEvaluation(deps: Deps, evaluationId: string): Promise<void> 
 export async function runMaintenance(deps: Deps): Promise<MaintenanceReport> {
   const db = deps.db
   const now = deps.now()
-  const report: MaintenanceReport = { dispatched: 0, leasesExpired: 0, evaluationsPurged: 0, cleanupFailures: 0, credentialsExpired: 0 }
+  const report: MaintenanceReport = { dispatched: 0, leasesExpired: 0, evaluationsPurged: 0, cleanupFailures: 0, credentialsExpired: 0, documentsSwept: 0 }
 
   report.dispatched = await dispatchOutbox(deps)
   report.leasesExpired = await reconcileLeases(deps)
@@ -71,6 +75,13 @@ export async function runMaintenance(deps: Deps): Promise<MaintenanceReport> {
       report.cleanupFailures++
       deps.log({ event: 'cleanup.failed', evaluationId: row.id })
     }
+  }
+
+  try {
+    report.documentsSwept = await sweepUnreferencedDocumentBlobs(deps)
+  } catch {
+    report.cleanupFailures++
+    deps.log({ event: 'cleanup.documents_failed' })
   }
 
   await db.batch([

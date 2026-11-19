@@ -29,7 +29,7 @@ export function cond(sql: string, ...binds: unknown[]): Condition {
   return { sql, binds }
 }
 
-export type ConstraintKind = 'guard' | 'receipt' | 'active_run' | 'budget' | 'session_unique' | 'active_credential' | 'immutable' | 'other'
+export type ConstraintKind = 'guard' | 'receipt' | 'active_run' | 'budget' | 'document_storage' | 'session_unique' | 'active_credential' | 'immutable' | 'other'
 
 export function classifyConstraint(error: unknown): ConstraintKind | null {
   const message = error instanceof Error ? error.message : String(error)
@@ -38,6 +38,8 @@ export function classifyConstraint(error: unknown): ConstraintKind | null {
   if (message.includes('command_receipts.')) return 'receipt'
   if (message.includes('runs.evaluation_id')) return 'active_run'
   if (message.includes('allocated_units')) return 'budget'
+  // Spec 04 §4.2: the byte-quota CHECK of document_storage_buckets.
+  if (message.includes('used_bytes')) return 'document_storage'
   if (message.includes('review_sessions.run_id')) return 'session_unique'
   if (message.includes('provider_credentials.owner_user_id')) return 'active_credential'
   if (message.includes('IMMUTABLE_')) return 'immutable'

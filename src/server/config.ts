@@ -22,6 +22,9 @@ export interface ConfigEnv {
   MAX_CONFIGURATIONS_PER_RUN?: string
   /** D-65: the most samples per answer a hearing may ask for, 1–3 (1 turns repeats off). Default 3. */
   MAX_SAMPLES_PER_ANSWER?: string
+  /** Spec 04 §4.2: document bytes one user may store (default 32 MiB) and the deployment in total (default 256 MiB). */
+  MAX_DOCUMENT_BYTES_PER_USER?: string
+  MAX_DOCUMENT_BYTES_GLOBAL?: string
   /** Operator-only: re-encrypt every active key to this root version on each cron tick. */
   CREDENTIAL_REKEY_TARGET_VERSION?: string
   /** Operator-only: during re-keying, revoke keys that fail authentication under their recorded root. */
@@ -48,6 +51,8 @@ export interface AppConfig {
   maxConfigurationsPerRun: number
   /** D-65: 1–3; 1 turns repeats off for this deployment. */
   maxSamplesPerAnswer: number
+  /** Spec 04 §4.2 (D-87): byte quotas for extraction documents. */
+  documentStorage: { perUserBytes: number; globalBytes: number }
   /** Saved provider keys expire this long after saving or renewal (D-23). */
   credentialTtlMs: number
   /** Operator credential maintenance run by the cron (docs/runbook.md). Null/false = off. */
@@ -161,6 +166,10 @@ export function parseConfig(env: ConfigEnv): AppConfig {
     providerTimeoutMs: Math.min(positiveInt(env.PROVIDER_TIMEOUT_MS, LIMITS.providerTimeoutMs, problems, 'PROVIDER_TIMEOUT_MS') || LIMITS.providerTimeoutMs, LIMITS.providerTimeoutMs),
     maxConfigurationsPerRun: configurationCap(env.MAX_CONFIGURATIONS_PER_RUN, problems),
     maxSamplesPerAnswer: samplesCap(env.MAX_SAMPLES_PER_ANSWER, problems),
+    documentStorage: {
+      perUserBytes: positiveInt(env.MAX_DOCUMENT_BYTES_PER_USER, 32 * 1024 * 1024, problems, 'MAX_DOCUMENT_BYTES_PER_USER'),
+      globalBytes: positiveInt(env.MAX_DOCUMENT_BYTES_GLOBAL, 256 * 1024 * 1024, problems, 'MAX_DOCUMENT_BYTES_GLOBAL'),
+    },
     credentialOps: {
       rekeyTargetVersion,
       rekeyRevokeUnreadable: rekeyTargetVersion !== null && env.CREDENTIAL_REKEY_REVOKE_UNREADABLE === 'true',

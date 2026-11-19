@@ -199,6 +199,16 @@ export const startRunSchema = z.strictObject({
   expectedScenarioHash: z.string().regex(/^[0-9a-f]{64}$/, 'Invalid scenario hash').optional(),
 })
 
+/** Spec 04 §5 (D-87): a text document for one extraction question (≤ 64 KiB UTF-8). */
+export const putTextDocumentSchema = z.strictObject({
+  kind: z.literal('text'),
+  text: z
+    .string()
+    .refine((value) => value.trim().length > 0, 'The document is empty')
+    .refine((value) => utf8ByteLength(value) <= LIMITS.extraction.textDocumentBytes, `A text document is at most ${LIMITS.extraction.textDocumentBytes / 1024} KiB`)
+    .refine((value) => !hasDisallowedControlChars(value), 'The document contains control characters'),
+})
+
 /** Re-hear (D-69): copy a hearing's frozen questions and/or parties back into the draft. */
 export const restoreDraftSchema = z
   .strictObject({ fromRunId: uuid, questions: z.boolean(), parties: z.boolean() })
