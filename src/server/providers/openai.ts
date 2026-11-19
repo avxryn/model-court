@@ -8,9 +8,10 @@
 
 import type { TranscriptMessage } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
+import { PROVIDER_ORIGINS } from './endpoints'
 import { classifyHttpError, featureRejection, featuresOf, finishText, isFailure, isRecord, nonNegativeInt, postJson, subRecord, type Adapter, type RequestFeatures } from './common'
 
-export const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
+export const OPENAI_RESPONSES_URL = `${PROVIDER_ORIGINS.openai}/v1/responses`
 
 /**
  * `none`: reasoning off (`openai-responses-v1`/`-v2`). `low`: for models that reject `none`

@@ -15,6 +15,7 @@ import { GRADING_JOB_TYPE } from './services/special-master'
 import { TOOL_STEP_JOB_TYPE } from './services/tool-loop'
 import { SqlBatchDatabase } from './db/sql-batch-database'
 import { storeStub, type ModelCourtStore } from './db/store-object'
+import { allowlistedFetch } from './providers/endpoints'
 
 /**
  * A fresh adapter (and Durable Object stub) per call of platformDeps, i.e. per
@@ -76,7 +77,8 @@ export function platformDeps(env: Env): Deps {
     purgeNotices: async (evaluationId) => {
       await recordTool(env, 'records.deleteWhere', { collection: NOTICES_COLLECTION, where: { evaluationId }, limit: 500 })
     },
-    providerFetch: (input, init) => fetch(input, init),
+    // Spec 07 §6.5: the explicit outbound allowlist; adapters and the key check narrow it to one provider.
+    providerFetch: allowlistedFetch((input, init) => fetch(input, init), undefined, (event) => console.log(JSON.stringify({ app: 'model-court', ...event }))),
     log: (event) => console.log(JSON.stringify({ app: 'model-court', ...event })),
   }
 }

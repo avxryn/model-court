@@ -1,6 +1,7 @@
 import { ADAPTER_PROFILES, adapterProfile, type AdapterFeatures, type AdapterVersion, type ProviderId } from '../../domain/registry'
 import { makeAnthropicAdapter } from './anthropic'
 import type { Adapter } from './common'
+import { allowlistedFetch } from './endpoints'
 import { makeOpenAiAdapter } from './openai'
 
 export interface AdapterEntry {
@@ -43,8 +44,8 @@ const transports: Record<AdapterVersion, Adapter> = {
 
 /**
  * Keyed by the adapter version a snapshot records (D-39, D-48), so a retry always sends the
- * body its hearing recorded. Only two fixed endpoints exist behind these entries; no generic
- * proxy, base URL, or caller-chosen endpoint.
+ * body its hearing recorded. Only the fixed endpoints on `PROVIDER_ORIGINS` (endpoints.ts) exist behind
+ * these entries; no generic proxy, base URL, or caller-chosen endpoint.
  */
 export const ADAPTERS: Readonly<Record<AdapterVersion, AdapterEntry>> = Object.fromEntries(
   (Object.keys(ADAPTER_PROFILES) as AdapterVersion[]).map((version) => [version, { provider: ADAPTER_PROFILES[version].provider, multiTurn: ADAPTER_PROFILES[version].multiTurn, structuredOutput: ADAPTER_PROFILES[version].structuredOutput, pdfInput: ADAPTER_PROFILES[version].pdfInput, toolUse: ADAPTER_PROFILES[version].toolUse, adapter: transports[version] }]),
@@ -64,7 +65,8 @@ export function adapterFor(adapterVersion: string, provider: ProviderId, message
   if (entry.toolUse) return null
   if (!entry.multiTurn && messageCount !== 1) return null
   if ((features.structuredOutput && !entry.structuredOutput) || (features.pdfInput && !entry.pdfInput)) return null
-  return entry.adapter
+  // Spec 07 §6.5: a second guard after the provider check; this key reaches only this provider's origin.
+  return (fetchFn, request, timeoutSignal) => entry.adapter(allowlistedFetch(fetchFn, provider), request, timeoutSignal)
 }
 
 export type { ProviderOutcome, ProviderErrorCode } from './common'

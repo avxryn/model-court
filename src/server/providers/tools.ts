@@ -16,6 +16,7 @@ import type { ModelCall } from '../../domain/tools/mock'
 import type { PromptTool } from '../../domain/tools/task'
 import { ANTHROPIC_MESSAGES_URL, ANTHROPIC_VERSION, type AnthropicThinking } from './anthropic'
 import { classifyHttpError, isFailure, isRecord, nonNegativeInt, postJson, subRecord, type ProviderFailure } from './common'
+import { allowlistedFetch } from './endpoints'
 import { OPENAI_RESPONSES_URL, type OpenAiReasoning } from './openai'
 
 /**
@@ -61,7 +62,7 @@ export interface ToolStepSuccess {
 }
 
 /** `unsent`: refused before any network send (the request body was over its cap), so its unit can be released. */
-export type ToolStepFailure = ProviderFailure & { unsent?: true }
+export type ToolStepFailure = ProviderFailure
 
 export type ToolStepOutcome = ToolStepSuccess | ToolStepFailure
 
@@ -294,5 +295,7 @@ const TOOL_TRANSPORTS: Partial<Record<AdapterVersion, ToolAdapter>> = {
 export function toolAdapterFor(adapterVersion: string, provider: ProviderId): ToolAdapter | null {
   const profile = adapterProfile(adapterVersion)
   if (!profile || !profile.toolUse || profile.provider !== provider) return null
-  return TOOL_TRANSPORTS[adapterVersion as AdapterVersion] ?? null
+  const transport = TOOL_TRANSPORTS[adapterVersion as AdapterVersion]
+  // Spec 07 §6.5: a second guard after the provider check; this key reaches only this provider's origin.
+  return transport ? (fetchFn, request, timeoutSignal) => transport(allowlistedFetch(fetchFn, provider), request, timeoutSignal) : null
 }

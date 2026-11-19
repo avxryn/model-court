@@ -61,7 +61,7 @@ Generation sequence:
 1. **Admission:** snapshot, hash, pinned `run_credentials`, generations, reservations, and outbox commit atomically (one guarded batch).
 2. **Dispatch:** best-effort `enqueueJob`; cron re-dispatches anything left pending.
 3. **Claim:** a conditional `pending → running` with a fresh fencing token consumes the reservation.
-4. **Call:** the job re-checks the credential, decrypts it, and calls the fixed endpoint under a 90-second deadline.
+4. **Call:** the job re-checks the credential, decrypts it, and calls the fixed endpoint under a 90-second deadline. Every provider request (generation, tool steps, the special master, Check key) goes through `allowlistedFetch` (`src/server/providers/endpoints.ts`, spec 07 §6.5, D-107): https only, the key's own provider's fixed origin from `PROVIDER_ORIGINS`, no userinfo or port, redirects refused; anything else is refused before any network I/O as a definite, unsent `PROVIDER_REJECTED_REQUEST`.
 5. **Commit:** only if the fence, run state, deletion state, and credential are all still current.
 6. **Lease:** after 120 seconds an attempt becomes `uncertain`, applied by cron and on owner reads.
 

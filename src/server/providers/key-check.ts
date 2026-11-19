@@ -8,10 +8,11 @@
 
 import type { ProviderId } from '../../domain/registry'
 import { ANTHROPIC_VERSION } from './anthropic'
+import { allowlistedFetch, PROVIDER_ORIGINS } from './endpoints'
 
 export const KEY_CHECK_URLS: Readonly<Record<ProviderId, string>> = {
-  openai: 'https://api.openai.com/v1/models',
-  anthropic: 'https://api.anthropic.com/v1/models?limit=1',
+  openai: `${PROVIDER_ORIGINS.openai}/v1/models`,
+  anthropic: `${PROVIDER_ORIGINS.anthropic}/v1/models?limit=1`,
 }
 
 export const KEY_CHECK_TIMEOUT_MS = 10_000
@@ -50,7 +51,8 @@ export async function checkProviderKey(fetchFn: typeof fetch, provider: Provider
   const timeout = AbortSignal.timeout(timeoutMs)
   let response: Response
   try {
-    response = await fetchFn(KEY_CHECK_URLS[provider], { method: 'GET', headers: headersFor(provider, apiKey), redirect: 'manual', signal: timeout })
+    // Spec 07 §6.5: the key only ever goes to its own provider's origin.
+    response = await allowlistedFetch(fetchFn, provider)(KEY_CHECK_URLS[provider], { method: 'GET', headers: headersFor(provider, apiKey), redirect: 'manual', signal: timeout })
   } catch {
     // The error may quote the request; it is dropped, never logged or returned.
     return { result: 'unreachable', reason: timeout.aborted ? 'TIMEOUT' : 'NETWORK_ERROR', httpStatus: null }

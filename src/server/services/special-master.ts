@@ -300,6 +300,8 @@ export async function handleGradingJob(deps: Deps, job: GradingJob, jobSignal: A
       if (!(await graderAttemptCurrent(db, attemptId, fence, context.graderRunId))) throw new GraderFenced()
       return adapter(deps.providerFetch, { modelId: context.config.modelId, system: request.system, messages: request.messages, maxOutputTokens: LIMITS.maxOutputTokens, apiKey, signal }, timeout)
     })
+    // Spec 07 §6.5: refused by the outbound allowlist before any send.
+    if (outcome.kind === 'failure' && outcome.unsent) unsent = true
   } catch (error) {
     if (error instanceof GraderFenced) {
       // Canceled or deleted before the send: provably unsent, so the unit goes back.

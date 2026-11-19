@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createCredentialSchema, draftInputSchema, retrySchema, saveRatingsSchema, verdictSchema } from './contracts'
+import { createCredentialSchema, draftInputSchema, foreignKeyOwner, retrySchema, saveRatingsSchema, verdictSchema } from './contracts'
 import { canonicalJson, sha256Hex } from './canonical'
 import { makeExampleDraft } from './example'
 import { buildMessages } from './messages'
@@ -107,6 +107,22 @@ describe('createCredentialSchema', () => {
     expect(createCredentialSchema.safeParse({ ...base, apiKey: 'sk test' }).success).toBe(false)
     expect(createCredentialSchema.safeParse({ ...base, apiKey: 'sk-\u0007x' }).success).toBe(false)
     expect(createCredentialSchema.safeParse({ ...base, apiKey: '   ' }).success).toBe(false)
+  })
+  it('refuses keys that clearly belong to another company on each card (spec 07 §8.2)', () => {
+    const refused = (provider: string, apiKey: string) => {
+      const parsed = createCredentialSchema.safeParse({ ...base, provider, apiKey })
+      return parsed.success ? null : parsed.error.issues.find((issue) => (issue as { params?: { apiCode?: string } }).params?.apiCode === 'KEY_PROVIDER_MISMATCH')?.message ?? null
+    }
+    expect(refused('openai', 'sk-ant-api03-x')).toMatch(/Anthropic key/)
+    expect(refused('openai', 'AIzaSyx')).toMatch(/Google key/)
+    expect(refused('openai', 'sk-or-v1-x')).toMatch(/OpenRouter key/)
+    expect(refused('anthropic', 'sk-proj-x')).toMatch(/OpenAI key/)
+    expect(refused('anthropic', 'sk-svcacct-x')).toMatch(/OpenAI key/)
+    expect(refused('anthropic', 'AIzaSyx')).toMatch(/Google key/)
+    expect(refused('openai', 'sk-proj-x')).toBeNull()
+    expect(refused('openai', 'sk-x')).toBeNull()
+    expect(refused('anthropic', 'sk-ant-api03-x')).toBeNull()
+    expect(foreignKeyOwner('openai', 'sk-test')).toBeNull()
   })
   it('requires explicit storage consent and a known provider', () => {
     expect(createCredentialSchema.safeParse({ ...base, consentToStorage: false, apiKey: 'k' }).success).toBe(false)

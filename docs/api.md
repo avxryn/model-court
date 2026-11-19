@@ -49,7 +49,7 @@ Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **ju
 |---|---|---|
 | GET `/healthz` (no `/api/v1`) | public | `{build, ready, storeOk, generationEnabled}` |
 | GET `/catalog` | signed in | Model routes with `enabled` (verified) flag, limits (including `samplesPerAnswer`), price table, generation switch |
-| GET/POST `/credentials`, DELETE `/credentials/:id` | own | Metadata only; POST `{provider,label,apiKey,consentToStorage:true,replacesCredentialId?}`. Admin keys are refused (422) |
+| GET/POST `/credentials`, DELETE `/credentials/:id` | own | Metadata only; POST `{provider,label,apiKey,consentToStorage:true,replacesCredentialId?}`. Admin keys are refused (422); a key that clearly belongs to another company (`sk-ant-`, `AIza`, `sk-or-`, `sk-proj-` on the wrong card) is 422 `KEY_PROVIDER_MISMATCH` with a fixed message, before anything is stored or sent (spec 07 §8.2, D-107) |
 | POST `/credentials/:id/renew` | own | If-Match, empty body. Resets `expiresAt` to now + `CREDENTIAL_TTL_DAYS`; 409 once expired or removed |
 | GET/POST `/evaluations` | own/joined | Cursor pagination `?cursor&limit≤50`; POST seeds the example draft, or starts from `draft` (a full draft, validated like a save) with optional `origin: {kind: "scenario_file"|"certified_record"}` (D-71) |
 | POST `/evaluations/:id/duplicate` | owner (jurors and strangers 404) | Idempotency-Key. `{title, fromRunId?, includeParties, includeImportedAnswers?: true}`: copies the draft, or that hearing's frozen setup, into a new case with fresh question and party keys (default pair without parties; imported answers only with the flag, which needs `includeParties`). Counts against the 10-case quota (429). Never copies hearings, sessions, invites, verdicts, special master runs or key pins. → 201 `{id, revision}` (D-71) |
@@ -76,7 +76,7 @@ Terminology: the UI calls the `owner` the **judge** and `invited` reviewers **ju
 
 Error codes: `UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, REVISION_CONFLICT, STATE_CONFLICT,
 IDEMPOTENCY_CONFLICT, INCOMPLETE_REVIEW, INVITE_UNAVAILABLE, ACTIVE_RUN_EXISTS, PAYLOAD_TOO_LARGE,
-VALIDATION_FAILED, UNSUPPORTED_CONFIGURATION, CREDENTIAL_MISSING, REVISION_REQUIRED, QUOTA_EXHAUSTED,
+VALIDATION_FAILED, KEY_PROVIDER_MISMATCH, UNSUPPORTED_CONFIGURATION, CREDENTIAL_MISSING, REVISION_REQUIRED, QUOTA_EXHAUSTED,
 RATE_LIMITED, GENERATION_DISABLED, CREDENTIAL_WRITES_DISABLED, INTERNAL`.
 
 Generation outcome codes (owner-only): see `ERROR_TEXT` in `src/components/common.tsx`.

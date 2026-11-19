@@ -7,6 +7,7 @@
 import type { TranscriptMessage } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
 import { utf8ByteLength } from '../../domain/text'
+import { isOutboundRefused } from './endpoints'
 
 export interface ProviderRequest {
   modelId: string
@@ -97,6 +98,8 @@ export interface ProviderFailure {
   definite: boolean
   providerRequestId: string | null
   durationMs: number
+  /** Refused before any network send (spec 07 §6.5: an outbound refusal), so its budget unit can be released. */
+  unsent?: true
 }
 
 export type ProviderOutcome = ProviderSuccess | ProviderFailure
@@ -158,7 +161,9 @@ export async function postJson(
       redirect: 'manual',
       signal,
     })
-  } catch {
+  } catch (error) {
+    // Spec 07 §6.5: the allowlist refused the URL before any network I/O. Definite and unsent.
+    if (isOutboundRefused(error)) return { kind: 'failure', code: 'PROVIDER_REJECTED_REQUEST', definite: true, providerRequestId: null, durationMs: elapsed(), unsent: true }
     // The request may have reached the provider before the connection failed.
     const code = timeoutSignal.aborted ? 'PROVIDER_TIMEOUT' : signal.aborted ? 'PROVIDER_CANCELED' : 'PROVIDER_NETWORK_ERROR'
     return { kind: 'failure', code, definite: false, providerRequestId: null, durationMs: elapsed() }
