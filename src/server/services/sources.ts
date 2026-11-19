@@ -129,9 +129,16 @@ function withRequiredSources(draft: Draft, caseKey: string, required: number[]):
 }
 
 /** Replaces one question's sources and bumps the revision (spec 05 §5.1). */
-export async function putSources(deps: Deps, userId: string, evaluationId: string, caseKey: string, input: { sources: SourceInput[]; requiredSources?: number[] }, ifMatch: number, requestId: string) {
+/** Spec 05 §5.1 (D-98): anyone but the owner, a juror included, gets the same 404 as a missing resource. */
+async function ownerAccess(deps: Deps, evaluationId: string, userId: string) {
   const access = await loadEvaluationAccess(deps.db, evaluationId, userId)
+  if (access.role !== 'owner') throw notFound()
   requireOwner(access)
+  return access
+}
+
+export async function putSources(deps: Deps, userId: string, evaluationId: string, caseKey: string, input: { sources: SourceInput[]; requiredSources?: number[] }, ifMatch: number, requestId: string) {
+  const access = await ownerAccess(deps, evaluationId, userId)
   const draft = parseStoredDraft(access.evaluation)
   requireGroundedQuestion(draft, caseKey)
   if (access.evaluation.revision !== ifMatch) throw revisionConflict()
@@ -174,8 +181,7 @@ export async function putSources(deps: Deps, userId: string, evaluationId: strin
 }
 
 export async function deleteSources(deps: Deps, userId: string, evaluationId: string, caseKey: string, ifMatch: number, requestId: string) {
-  const access = await loadEvaluationAccess(deps.db, evaluationId, userId)
-  requireOwner(access)
+  const access = await ownerAccess(deps, evaluationId, userId)
   if (access.evaluation.revision !== ifMatch) throw revisionConflict()
   const db = deps.db
   const now = deps.now()
@@ -217,14 +223,15 @@ function refsOfCase(testCase: { kitFields?: unknown }): SourceRef[] {
  * removed after the snapshot was built, so a hearing never freezes text its snapshot doesn't describe.
  */
 export function admissionSources(db: D1Database, newId: () => string, evaluationId: string, runId: string, cases: ReadonlyArray<{ key: string; kitFields?: unknown }>, now: number): { conditions: Condition[]; statements: D1PreparedStatement[] } {
-  const conditions: Condition[] = []
   const statements: D1PreparedStatement[] = []
+  const expected: string[] = []
+  const caseKeys: string[] = []
   for (const testCase of cases) {
     const refs = refsOfCase(testCase)
     if (refs.length === 0) continue
-    conditions.push(cond('(SELECT COUNT(*) FROM evaluation_sources WHERE evaluation_id = ? AND case_key = ?) = ?', evaluationId, testCase.key, refs.length))
+    caseKeys.push(testCase.key)
     for (const ref of refs) {
-      conditions.push(cond('EXISTS (SELECT 1 FROM evaluation_sources WHERE evaluation_id = ? AND case_key = ? AND number = ? AND sha256 = ?)', evaluationId, testCase.key, ref.number, ref.sha256))
+      expected.push(`${testCase.key}:${ref.number}:${ref.sha256}`)
       statements.push(
         db
           .prepare(
@@ -236,6 +243,26 @@ export function admissionSources(db: D1Database, newId: () => string, evaluation
       )
     }
   }
+  if (caseKeys.length === 0) return { conditions: [], statements }
+  // D-98: one set-equality guard with six bound values, whatever the number of sources (D1 binds at
+  // most 100 values per statement, and the guard row carries every condition of the start). The
+  // draft's rows for these questions must be exactly the expected (question, number, hash)
+  // triples: none missing (the count), none different or extra (each row is in the list). Keys are
+  // UUIDs, numbers digits and hashes hex, so the comma-delimited lists cannot collide.
+  const keys = `,${caseKeys.join(',')},`
+  const triples = `,${expected.join(',')},`
+  const conditions = [
+    cond(
+      `NOT EXISTS (SELECT 1 FROM evaluation_sources e WHERE e.evaluation_id = ? AND instr(?, ',' || e.case_key || ',') > 0 AND instr(?, ',' || e.case_key || ':' || e.number || ':' || e.sha256 || ',') = 0)
+       AND (SELECT COUNT(*) FROM evaluation_sources e WHERE e.evaluation_id = ? AND instr(?, ',' || e.case_key || ',') > 0) = ?`,
+      evaluationId,
+      keys,
+      triples,
+      evaluationId,
+      keys,
+      expected.length,
+    ),
+  ]
   return { conditions, statements }
 }
 

@@ -328,7 +328,9 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
   // Spec 04 §3.4 (D-87): the Extraction section, from eligible questions' scored answers and the jury's flags.
   const extraction = isExtractionHearing(snapshot) ? await extractionResults(db, runId, snapshot, manifest.caseKeys, cases, scored, kitResults) : null
   // Spec 05 §5.2 (D-94): a grounded hearing's frozen sources, with the judge's notes and hashes, after unsealing only.
-  const grounded = snapshot.kit?.version === 'grounded-v1' ? { sources: [...(await listRunSources(db, runId)).entries()].map(([caseKey, items]) => ({ caseKey, items: items.map((item) => ({ number: item.number, title: item.title, origin: item.origin, text: item.text, sha256: item.sha256, byteLength: item.byteLength })) })) } : null
+  // D-98: the judge's notes are judge-only (spec 05 §7.1, open question 6); a juror reading the unsealed record gets null.
+  const owner = access.role === 'owner'
+  const grounded = snapshot.kit?.version === 'grounded-v1' ? { sources: [...(await listRunSources(db, runId)).entries()].map(([caseKey, items]) => ({ caseKey, items: items.map((item) => ({ number: item.number, title: item.title, origin: owner ? item.origin : null, text: item.text, sha256: item.sha256, byteLength: item.byteLength })) })) } : null
   const withKit = withKitResults(kitResults, {
     runId,
     role: access.role,

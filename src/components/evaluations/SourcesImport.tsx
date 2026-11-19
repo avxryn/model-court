@@ -45,7 +45,11 @@ export function SourcesImport({ cases, disabled }: { cases: readonly CaseInput[]
     let revision = context.revision
     const done: number[] = []
     try {
-      for (const question of pending.questions) {
+      // D-98: questions whose sources shrink go first, so a file that is within the case total as a
+      // whole is never refused halfway because a growing question was saved before a shrinking one.
+      const existing = (position: number) => chars(context.sources.find((entry) => entry.caseKey === cases[position - 1]?.key)?.items.map((item) => item.text) ?? [])
+      const ordered = [...pending.questions].sort((a, b) => chars(a.sources.map((s) => s.text)) - existing(a.position) - (chars(b.sources.map((s) => s.text)) - existing(b.position)))
+      for (const question of ordered) {
         const caseKey = cases[question.position - 1]?.key
         if (!caseKey) continue
         // A required source beyond the new count would no longer exist, so it is unticked.

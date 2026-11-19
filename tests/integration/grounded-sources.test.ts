@@ -279,7 +279,7 @@ describe('grounded sources: backup and deletion', () => {
     expect((await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token } })).status).toBe(200)
     const view = (await h.request('GET', `/evaluations/${made.setup.evaluationId}`, { as: OWNER })).json.data
     const refused = await putSources(made.setup, made.q1, view.revision, SOURCES_Q2, REVIEWER)
-    expect([403, 404]).toContain(refused.status)
+    expect(refused.status).toBe(404)
     expect((await h.request('GET', `/evaluations/${made.setup.evaluationId}`, { as: REVIEWER })).json.data.sources).toBeUndefined()
   })
 })
@@ -497,5 +497,65 @@ describe('grounded sources: the special master (D-97)', () => {
     expect(JSON.parse(config.config_json).graderTemplateVersion).toBe('grader-grounded-v1')
     const view = (await h.request('GET', `/runs/${runId}/special-master`, { as: OWNER })).json.data
     expect(view.graderRuns[0].status).toBe('ready')
+  })
+})
+
+describe('grounded sources: review fixes (D-98)', () => {
+  it('a hearing at the limits (5 questions × 10 sources) starts; the admission guard binds six values whatever the count', async () => {
+    const setup = await setupOwner(h)
+    const { schemaVersion: _v, ...base } = setup.draft
+    const provenance = { sourceType: 'human_baseline', description: 'Written by the support lead', redacted: false }
+    const parties = [
+      { kind: 'imported', key: crypto.randomUUID(), label: 'Human baseline', provenance },
+      { kind: 'imported', key: crypto.randomUUID(), label: 'Old bot', provenance },
+      { kind: 'imported', key: crypto.randomUUID(), label: 'Vendor bot', provenance },
+    ]
+    const keys = Array.from({ length: 5 }, () => crypto.randomUUID())
+    const draft = { ...base, comparisonMode: 'configuration', configurations: parties, kit: { version: 'grounded-v1', settings: {} }, cases: keys.map((key, i) => ({ key, title: `Q${i + 1}`, input: `Question ${i + 1}?`, reference: '', expectedBehavior: 'Check.', kitFields: { kind: 'grounded', answerable: 'yes', requiredSources: [1, 10] } })) }
+    let revision = (await h.request('PUT', `/evaluations/${setup.evaluationId}/draft`, { as: OWNER, ifMatch: 1, body: draft })).json.data.revision as number
+    for (const key of keys) {
+      const put = await putSources(setup, key, revision, Array.from({ length: 10 }, (_, i) => ({ number: i + 1, title: `Passage ${i + 1}`, text: `Passage ${i + 1} of ${key}: ${'words '.repeat(150)}` })))
+      expect(put.status, JSON.stringify(put.json)).toBe(200)
+      revision = put.json.data.revision
+    }
+    for (const party of parties) {
+      const put = await h.request('PUT', `/evaluations/${setup.evaluationId}/imports/${party.key}`, { as: OWNER, ifMatch: revision, body: { items: keys.map((caseKey) => ({ caseKey, text: 'Per [S1] and [S10].' })), confirmMayShareWithJurors: true } })
+      revision = put.json.data.revision
+    }
+    const started = await start(setup, revision, {})
+    expect(started.status, JSON.stringify(started.json)).toBe(202)
+    expect(await count('SELECT COUNT(*) AS n FROM run_sources WHERE run_id = ?', started.json.data.runId)).toBe(50)
+
+    const view = (await h.request('GET', `/evaluations/${setup.evaluationId}`, { as: OWNER })).json.data
+    const { admissionSources } = await import('../../src/server/services/sources')
+    const guard = (cases: Array<{ key: string; kitFields?: unknown }>) => admissionSources(h.db, () => crypto.randomUUID(), setup.evaluationId, 'run', cases, 0).conditions[0]
+    const ok = guard(view.draft.cases)
+    expect(ok.binds).toHaveLength(6)
+    const holds = async (condition: { sql: string; binds: unknown[] }) => (await h.db.prepare(`SELECT CASE WHEN ${condition.sql} THEN 1 ELSE 0 END AS ok`).bind(...condition.binds).first<{ ok: number }>())!.ok
+    expect(await holds(ok)).toBe(1)
+    // A changed hash, a missing source and an extra one each make the guard false.
+    const withRefs = (mutate: (refs: Array<{ number: number; sha256: string; byteLength: number }>) => unknown[]) =>
+      view.draft.cases.map((c: { kitFields: { sources: Array<{ number: number; sha256: string; byteLength: number }> } }, i: number) => (i === 0 ? { ...c, kitFields: { ...c.kitFields, sources: mutate([...c.kitFields.sources]) } } : c))
+    expect(await holds(guard(withRefs((refs) => refs.map((ref, i) => (i === 3 ? { ...ref, sha256: 'f'.repeat(64) } : ref)))))).toBe(0)
+    expect(await holds(guard(withRefs((refs) => refs.slice(0, 9))))).toBe(0)
+    await h.db.prepare('INSERT INTO evaluation_sources (evaluation_id, case_key, number, title, origin, text, sha256, byte_length, created_at, updated_at) VALUES (?, ?, 11, NULL, NULL, ?, ?, 1, 0, 0)').bind(setup.evaluationId, keys[0], 'x', 'a'.repeat(64)).run().catch(() => undefined)
+    // The CHECK on number refuses an 11th row outright; a row under another number with the same count is caught by the hash list.
+    await h.db.prepare('UPDATE evaluation_sources SET sha256 = ? WHERE evaluation_id = ? AND case_key = ? AND number = 2').bind('b'.repeat(64), setup.evaluationId, keys[1]).run()
+    expect(await holds(ok)).toBe(0)
+  })
+
+  it('jurors reading the unsealed record get no origin notes', async () => {
+    const { runId } = await generatedHearing()
+    await h.drainJobs()
+    await openDeliberation(h, runId)
+    const invite = await h.request('POST', `/runs/${runId}/invites`, { as: OWNER, body: {} })
+    const token = new URL(invite.json.data.url).hash.replace('#token=', '')
+    expect((await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token } })).status).toBe(200)
+    await reveal(runId)
+    const asJuror = await h.request('GET', `/runs/${runId}/results`, { as: REVIEWER })
+    expect(asJuror.status).toBe(200)
+    expect(JSON.stringify(asJuror.json)).not.toContain('SENTINEL-ORIGIN')
+    expect(asJuror.json.data.grounded.sources[0].items.every((item: { origin: unknown }) => item.origin === null)).toBe(true)
+    expect(JSON.stringify((await h.request('GET', `/runs/${runId}/results`, { as: OWNER })).json)).toContain('SENTINEL-ORIGIN')
   })
 })
