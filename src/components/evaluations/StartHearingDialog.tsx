@@ -13,6 +13,7 @@ import { PROVIDER_NAMES, type ProviderId } from '@/domain/registry'
 import { generatedParties } from '@/domain/snapshot'
 import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
 import type { CredentialMetadata, QuotaView } from '@/lib/dto'
+import { estimateExtractionInput } from '@/domain/extraction/estimate'
 import { draftKit } from '@/lib/kits'
 import { useApi } from '@/lib/use-api'
 
@@ -136,6 +137,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
             </>
           )}
         </dl>
+        {kit.family === 'extraction' && <ExtractionSendsLine draft={draft} samples={samples} />}
         {kit.checks.length > 0 && (
           <p className="text-sm leading-relaxed text-muted-foreground">
             After each answer arrives, Model Court runs these free checks on its own server: {kit.checks.map((check) => check.label).join(', ')}. Nothing extra is sent to a provider and nothing is charged. Results stay sealed until you unseal the record.
@@ -173,5 +175,19 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Spec 04 §3.1, §10.3: what each extraction call sends, and an input-token estimate. */
+function ExtractionSendsLine({ draft, samples }: { draft: DraftInput; samples: number }) {
+  const estimate = estimateExtractionInput(draft.cases, draft.configurations, samples)
+  const largest = Math.max(0, ...estimate.perCall.map((call) => call.tokens))
+  return (
+    <div className="space-y-1.5 text-sm leading-relaxed text-muted-foreground">
+      <p>Each call sends the party’s instructions, the document, your request and the field list. Your answer keys and jury instructions are never sent.</p>
+      <p className="tabular-nums">
+        Estimate: up to about {largest.toLocaleString('en-US')} input tokens a call, {estimate.total.toLocaleString('en-US')} in total. Output tokens, reasoning and retries add to it, billed to your keys.
+      </p>
+    </div>
   )
 }

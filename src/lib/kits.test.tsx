@@ -22,6 +22,14 @@ describe('switchKit', () => {
     expect(draftInputSchema.safeParse(draft).success).toBe(true)
   })
 
+  it('switching to field extraction clears exhibits and says so, keeping the draft valid', () => {
+    const { draft, removals } = switchKit(seed(), 'extraction-v1')
+    expect(removals).toEqual([expect.stringContaining('clears the exhibit of 5 questions')])
+    expect(draft.cases.every((testCase) => testCase.reference === '')).toBe(true)
+    expect(draft).toMatchObject({ kit: { version: 'extraction-v1' }, rubricVersion: 'extraction-v1' })
+    expect(draftInputSchema.safeParse(draft).success).toBe(true)
+  })
+
   it('keeps a rubric the judge chose, but follows the kit when the rubric was the previous default', () => {
     expect(switchKit({ ...seed(), rubricVersion: 'writing-v1' }, 'summarization-v1').draft.rubricVersion).toBe('writing-v1')
     const summary = switchKit(seed(), 'summarization-v1').draft

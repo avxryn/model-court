@@ -69,7 +69,13 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
         try {
           const created = await api<OwnerEvaluationView>('GET', `/evaluations/${result.id}`)
           const seed: DraftInput = { comparisonMode: created.draft.comparisonMode, cases: created.draft.cases, configurations: created.draft.configurations }
-          await api('PUT', `/evaluations/${result.id}/draft`, { body: template.apply(seed, newIntentKey), revision: created.revision })
+          const applied = template.apply(seed, newIntentKey)
+          let revision = (await api<{ revision: number }>('PUT', `/evaluations/${result.id}/draft`, { body: applied, revision: created.revision })).revision
+          // Spec 04: a template's documents are uploaded one by one after its draft is saved.
+          for (const [index, text] of (template.documents ?? []).entries()) {
+            const caseKey = applied.cases[index]?.key
+            if (caseKey) revision = (await api<{ revision: number }>('PUT', `/evaluations/${result.id}/documents/${caseKey}`, { body: { kind: 'text', text }, revision })).revision
+          }
         } catch {
           toast.error('The case was opened with the default example; the template could not be applied.')
         }

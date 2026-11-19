@@ -251,7 +251,7 @@ const PINNED: Record<string, unknown> = {
     "version": "extraction-v1",
     "family": "extraction",
     "name": "Pull fields from documents",
-    "listed": false,
+    "listed": true,
     "inputKinds": [
       "document"
     ],

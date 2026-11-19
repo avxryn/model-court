@@ -12,7 +12,9 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ExtractionQuestionFields } from '@/components/evaluations/ExtractionQuestion'
 import type { CaseInput } from '@/domain/contracts'
+import type { ExtractionSettings } from '@/domain/kits/extraction'
 import type { ClassificationFields, ClassificationSettings } from '@/domain/kits/classification'
 import type { SummarizationFields } from '@/domain/kits/summarization'
 import type { TaskKit } from '@/domain/kits/types'
@@ -32,6 +34,8 @@ export function QuestionKitFields({ kit, settings, testCase, index, errors, onCh
   const id = (field: string) => `case-${testCase.key}-kit-${field}`
   const raw = testCase.kitFields as { kind?: string } | undefined
   const own = raw?.kind === kit.family ? raw : undefined
+  // Spec 04 (D-88): a document and an answer key; laid out by their own component.
+  if (kit.family === 'extraction') return <ExtractionQuestionFields settings={settings as ExtractionSettings} testCase={testCase} index={index} errors={errors} onChange={onChange} />
   const body =
     kit.family === 'summarization' ? (
       <SummaryFields fields={(own as SummarizationFields | undefined) ?? { kind: 'summarization', requiredPoints: [], mustNotMention: [] }} id={id} error={error} onChange={(kitFields) => onChange({ kitFields })} />

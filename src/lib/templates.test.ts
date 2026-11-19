@@ -14,7 +14,13 @@ describe('case templates', () => {
   it.each(CASE_TEMPLATES.map((t) => [t.id, t] as const))('%s produces a valid, runnable draft', (_id, template) => {
     const draft = template.apply ? template.apply(seed(), newId) : seed()
     expect(draftInputSchema.safeParse(draft).success).toBe(true)
-    expect(readinessIssues(draft, MODEL_ROUTES)).toEqual([])
+    // Spec 04: the extraction template's documents are uploaded after the draft, and its routes need a structured check.
+    const withDocuments = template.documents
+      ? { ...draft, cases: draft.cases.map((c) => ({ ...c, kitFields: { ...(c.kitFields as object), document: { sha256: 'a'.repeat(64), byteLength: 1, delivery: 'text', pageCount: null } } })) }
+      : draft
+    const routes = template.documents ? MODEL_ROUTES.map((route) => ({ ...route, structuredVerifiedAt: '2026-11-19' })) : MODEL_ROUTES
+    expect(readinessIssues(withDocuments as typeof draft, routes)).toEqual([])
+    expect(template.documents?.length ?? draft.cases.length).toBe(draft.cases.length)
     expect(new Set(draft.cases.map((c) => c.key)).size).toBe(draft.cases.length)
     expect(new Set(draft.configurations.map((c) => c.key)).size).toBe(draft.configurations.length)
   })

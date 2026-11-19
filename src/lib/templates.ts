@@ -5,6 +5,8 @@
  * change is needed.
  */
 
+import { extractionStarter } from '@/domain/extraction/starters'
+import { EXTRACTION_DEFAULT_INPUT, EXTRACTION_V1 } from '@/domain/kits/extraction'
 import { DEFAULT_SYSTEM_PROMPT, EXAMPLE_CASES, EXAMPLE_POLICY } from '@/domain/example'
 import { isImported, type DraftInput, type ModelConfiguration } from '@/domain/contracts'
 
@@ -16,6 +18,8 @@ export interface CaseTemplate {
   task: string
   /** Turns the server's seeded draft into this template's draft; null keeps the seed. */
   apply: ((seed: DraftInput, newId: () => string) => DraftInput) | null
+  /** Spec 04: text documents to upload after the draft is saved, by question position. */
+  documents?: readonly string[]
 }
 
 const HR_HANDBOOK =
@@ -74,6 +78,25 @@ const ROUTING_TICKETS: Array<{ title: string; text: string; label: (typeof ROUTI
   { title: 'Dark mode', text: 'Could you add a dark mode to the mobile app? My eyes hurt at night.', label: 'Feature request' },
   { title: 'Parcel', text: 'Where is my parcel? The tracking page has not changed for four days.', label: 'Other' },
 ]
+
+/** Fictitious intake emails for the extraction template (spec 04); null marks what an email doesn't say. */
+const INTAKE_EMAILS = [
+  {
+    title: 'Studio enquiry',
+    text: 'Hi, this is Dana Whitfield from Fabrikam Studio in Portland. We need a quote for 40 chairs.\nBest,\nDana\ndana.whitfield@fabrikam.example | (503) 555-0142',
+    key: { fullName: 'Dana Whitfield', organization: 'Fabrikam Studio', email: 'dana.whitfield@fabrikam.example', phone: '503 555 0142', city: 'Portland' },
+  },
+  {
+    title: 'Callback request',
+    text: 'Please call me back about my order, I could not log in. Thanks, Arjun Mehta. Mobile 0161 496 0838.',
+    key: { fullName: 'Arjun Mehta', organization: null, email: null, phone: '0161 496 0838', city: null },
+  },
+  {
+    title: 'Forwarded signature',
+    text: 'From: Lee Okafor <l.okafor@northwind.example>\nSubject: Invoices\n\nCan you resend March? We moved offices, so use the new address on file.\n\nLee Okafor | Accounts payable, Northwind Traders',
+    key: { fullName: 'Lee Okafor', organization: 'Northwind Traders', email: 'l.okafor@northwind.example', phone: null, city: null },
+  },
+] as const
 
 export const CASE_TEMPLATES: CaseTemplate[] = [
   {
@@ -140,6 +163,28 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
       })),
       configurations: seed.configurations.map((c) => (isImported(c) ? c : { ...c, systemPrompt: 'You summarize customer-support threads for the agent who takes over. Be faithful to the thread and brief. Do not add facts that are not in it.' })),
     }),
+  },
+  {
+    id: 'extraction',
+    name: 'Pull fields from documents',
+    useCase: 'Extraction kit (spec 04): three intake emails, a contact field list and answer keys; jurors mark invented values.',
+    title: 'Contact details from intake emails',
+    task: 'Which setup pulls contact details out of intake emails correctly, and leaves a field empty instead of guessing?',
+    apply: (seed, newId) => ({
+      comparisonMode: 'model',
+      rubricVersion: 'extraction-v1',
+      kit: { version: 'extraction-v1', settings: { schema: extractionStarter('contact').schema, compare: { '/phone': 'alnum' } } },
+      cases: INTAKE_EMAILS.map((email) => ({
+        key: newId(),
+        title: email.title,
+        input: EXTRACTION_DEFAULT_INPUT,
+        reference: '',
+        expectedBehavior: EXTRACTION_V1.defaultJuryInstructions ?? '',
+        kitFields: { kind: 'extraction' as const, answerKey: email.key },
+      })),
+      configurations: seed.configurations.map((c) => (isImported(c) ? c : { ...c, systemPrompt: 'You extract contact details from emails for a CRM. Copy values as written. Leave a field empty when the email does not give it.' })),
+    }),
+    documents: INTAKE_EMAILS.map((email) => email.text),
   },
   {
     id: 'ticket-routing',

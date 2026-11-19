@@ -16,6 +16,7 @@ import { UnsealButton } from '@/components/hearing/JuryPanel'
 import { useHearingAction } from '@/components/hearing/use-hearing-action'
 import { Page } from '@/components/layout/Page'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
+import { ExtractionTestimony } from '@/components/review/ExtractionTestimony'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
 import { isComplete, useWorksheet } from '@/components/review/use-worksheet'
 import { QuestionPager, QuestionStepper, useWorksheetKeys, WorksheetGrid, WorksheetKeyLegend } from '@/components/review/Worksheet'
@@ -176,13 +177,23 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
 
             <WorksheetGrid
               columns={current.responses.length}
-              material={<CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={review.cases.length} messages={current.messages} kitView={current.kitView} kitName={review.kit?.name} />}
+              wideMaterial={current.document !== undefined}
+              material={<CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={review.cases.length} messages={current.messages} kitView={current.kitView} kitName={review.kit?.name} {...(current.document !== undefined ? { document: current.document } : {})} />}
             >
-              {current.responses.map((response) => (
-                <ResponseCard key={response.responseId} label={response.label} text={response.text}>
-                  <RubricForm label={response.label} rating={w.ratings[response.responseId] ?? emptyRating(response.responseId)} onChange={w.update} disabled={!w.editable} rubricVersion={review.rubricVersion} />
-                </ResponseCard>
-              ))}
+              {current.responses.map((response) => {
+                const rating = w.ratings[response.responseId] ?? emptyRating(response.responseId)
+                const form = <RubricForm label={response.label} rating={rating} onChange={w.update} disabled={!w.editable} rubricVersion={review.rubricVersion} />
+                // Spec 04 (D-88): an extraction answer shows as fields with per-field flags.
+                return response.extraction ? (
+                  <ExtractionTestimony key={response.responseId} label={response.label} text={response.text} extraction={response.extraction} flags={rating.fieldFlags ?? []} disabled={!w.editable} onFlagsChange={(fieldFlags) => w.update({ ...rating, fieldFlags })}>
+                    {form}
+                  </ExtractionTestimony>
+                ) : (
+                  <ResponseCard key={response.responseId} label={response.label} text={response.text}>
+                    {form}
+                  </ResponseCard>
+                )
+              })}
             </WorksheetGrid>
 
             <QuestionStepper current={caseIndex} count={review.cases.length} onGo={(index) => void goTo(index)}>

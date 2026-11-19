@@ -20,7 +20,15 @@ function toFieldErrors(error: unknown): FieldErrors {
 }
 
 export function useCaseDraft(evaluation: OwnerEvaluationView) {
-  const [draft, setDraft] = useState<DraftInput>(() => ({ comparisonMode: evaluation.draft.comparisonMode, ...(evaluation.draft.rubricVersion ? { rubricVersion: evaluation.draft.rubricVersion } : {}), cases: evaluation.draft.cases, configurations: evaluation.draft.configurations }))
+  // Every saved field comes back, the task kit and repeats included, so a later save never drops them.
+  const [draft, setDraft] = useState<DraftInput>(() => ({
+    comparisonMode: evaluation.draft.comparisonMode,
+    ...(evaluation.draft.rubricVersion ? { rubricVersion: evaluation.draft.rubricVersion } : {}),
+    cases: evaluation.draft.cases,
+    configurations: evaluation.draft.configurations,
+    ...(evaluation.draft.samplesPerAnswer ? { samplesPerAnswer: evaluation.draft.samplesPerAnswer } : {}),
+    ...(evaluation.draft.kit ? { kit: evaluation.draft.kit } : {}),
+  }))
   const [revision, setRevision] = useState(evaluation.revision)
   const [imports, setImports] = useState<SavedImport[]>(() => evaluation.imports.map((item) => ({ configurationKey: item.configurationKey, caseKey: item.caseKey, text: item.text })))
   const [dirty, setDirty] = useState(false)

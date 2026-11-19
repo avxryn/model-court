@@ -38,15 +38,15 @@ export function QuestionPager({ count, current, isDone, onSelect, className }: {
  * The question in a fixed-width rail on the left (sticky on wide screens),
  * the testimony cards side by side on the right with most of the width.
  */
-export function WorksheetGrid({ material, children, columns = 2 }: { material: ReactNode; children: ReactNode; columns?: number }) {
+export function WorksheetGrid({ material, children, columns = 2, wideMaterial = false }: { material: ReactNode; children: ReactNode; columns?: number; /** Spec 04: an extraction source gets as much room as the answers. */ wideMaterial?: boolean }) {
   return (
-    <div className="grid gap-6 xl:grid-cols-[18rem_minmax(0,1fr)]">
-      <div className="xl:sticky xl:top-4 xl:self-start">{material}</div>
+    <div className={cn('grid gap-6', wideMaterial ? 'min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]' : 'xl:grid-cols-[18rem_minmax(0,1fr)]')}>
+      <div className={wideMaterial ? 'min-[900px]:sticky min-[900px]:top-4 min-[900px]:self-start' : 'xl:sticky xl:top-4 xl:self-start'}>{material}</div>
       <div className="min-w-0 space-y-3">
         <h2 className="court-label">
           <Term name="testimony" />
         </h2>
-        <div className={cn('grid gap-4', columns > 1 && 'md:grid-cols-2')}>{children}</div>
+        <div className={cn('grid gap-4', columns > 1 && !wideMaterial && 'md:grid-cols-2')}>{children}</div>
       </div>
     </div>
   )

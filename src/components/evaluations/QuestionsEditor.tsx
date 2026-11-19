@@ -15,6 +15,7 @@ import type { FieldErrors } from '@/components/evaluations/DraftEditor'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { CaseInput } from '@/domain/contracts'
+import { EXTRACTION_DEFAULT_INPUT } from '@/domain/kits/extraction'
 import { GENERAL_V1 } from '@/domain/kits/general'
 import type { TaskKit } from '@/domain/kits/types'
 import { LIMITS } from '@/domain/limits'
@@ -58,7 +59,7 @@ export function QuestionsEditor({ cases, onChange, errors, newId, disabled, kit 
       <Button
         variant="outline"
         disabled={cases.length >= LIMITS.maxCases}
-        onClick={() => onChange([...cases, { key: newId(), title: `Question ${cases.length + 1}`, input: '', reference: '', expectedBehavior: kit.defaultJuryInstructions ?? '' }])}
+        onClick={() => onChange([...cases, { key: newId(), title: `Question ${cases.length + 1}`, input: kit.family === 'extraction' ? EXTRACTION_DEFAULT_INPUT : '', reference: '', expectedBehavior: kit.defaultJuryInstructions ?? '', ...(kit.family === 'extraction' ? { kitFields: { kind: 'extraction' as const } } : {}) }])}
       >
         <Plus aria-hidden /> Add a question ({cases.length}/{LIMITS.maxCases})
       </Button>
@@ -68,6 +69,8 @@ export function QuestionsEditor({ cases, onChange, errors, newId, disabled, kit 
 
 function QuestionFields({ testCase, index, errors, onChange, kit, kitSettings }: { testCase: CaseInput; index: number; errors: FieldErrors; onChange: (patch: Partial<CaseInput>) => void; kit: TaskKit<unknown, unknown>; kitSettings: unknown }) {
   const takesConversation = kit.inputKinds.includes('conversation')
+  // Spec 04: a document kit's source is uploaded beside the question; there is no exhibit.
+  const documentKit = kit.inputKinds.includes('document')
   const id = (field: string) => `case-${testCase.key}-${field}`
   const error = (field: string) => errors[`cases.${index}.${field}`]
   const messages = testCase.messages ?? []
@@ -78,8 +81,18 @@ function QuestionFields({ testCase, index, errors, onChange, kit, kitSettings }:
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <CountedField className="md:col-span-2" id={id('title')} label="Short title" value={testCase.title} max={LIMITS.caseTitle.max} error={error('title')} onChange={(title) => onChange({ title })} />
-      <CountedField id={id('input')} label="The question (sent to the models)" multiline rows={4} value={testCase.input} max={LIMITS.caseInput.max} error={error('input')} onChange={(input) => onChange({ input })} />
       <CountedField
+        className={documentKit ? 'md:col-span-2' : undefined}
+        id={id('input')}
+        label={documentKit ? 'What to extract (sent to the models)' : 'The question (sent to the models)'}
+        multiline
+        rows={documentKit ? 2 : 4}
+        value={testCase.input}
+        max={LIMITS.caseInput.max}
+        error={error('input')}
+        onChange={(input) => onChange({ input })}
+      />
+      {!documentKit && <CountedField
         id={id('reference')}
         label={kit.family === 'summarization' ? 'Document (exhibit, sent to the models)' : kit.family === 'classification' ? 'Context (exhibit, sent to the models)' : 'Exhibit: reference evidence (sent to the models)'}
         multiline
@@ -89,7 +102,7 @@ function QuestionFields({ testCase, index, errors, onChange, kit, kitSettings }:
         hint={kit.family === 'summarization' ? 'The text to summarize. Required to start a hearing.' : kit.family === 'classification' ? 'Optional, for example a routing policy.' : 'May be empty to test abstention.'}
         error={error('reference')}
         onChange={(reference) => onChange({ reference })}
-      />
+      />}
       <CountedField
         className="md:col-span-2"
         id={id('expected')}

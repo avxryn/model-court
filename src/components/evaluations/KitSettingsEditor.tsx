@@ -13,7 +13,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { DraftInput } from '@/domain/contracts'
+import { ExtractionSettingsFields } from '@/components/evaluations/ExtractionSettings'
 import type { ClassificationSettings } from '@/domain/kits/classification'
+import type { ExtractionSettings } from '@/domain/kits/extraction'
 import type { SummarizationSettings } from '@/domain/kits/summarization'
 import { LIMITS } from '@/domain/limits'
 import { draftKit, draftKitSettings, withKitSettings } from '@/lib/kits'
@@ -22,6 +24,7 @@ import { cn } from '@/lib/utils'
 export function KitSettingsEditor({ draft, onChange, errors }: { draft: DraftInput; onChange: (next: DraftInput) => void; errors: FieldErrors }) {
   const kit = draftKit(draft)
   if (kit.family === 'summarization') return <SummarizationSettingsFields settings={draftKitSettings<SummarizationSettings>(draft)} errors={errors} onChange={(settings) => onChange(withKitSettings(draft, settings))} />
+  if (kit.family === 'extraction') return <ExtractionSettingsFields settings={draftKitSettings<ExtractionSettings>(draft)} errors={errors} onChange={(settings) => onChange(withKitSettings(draft, settings))} />
   if (kit.family === 'classification') return <ClassificationSettingsFields settings={draftKitSettings<ClassificationSettings>(draft)} errors={errors} onChange={(settings) => onChange(withKitSettings(draft, settings))} />
   return null
 }

@@ -9,6 +9,7 @@ import { ConfigurationsEditor } from '@/components/evaluations/DraftEditor'
 import { HearingList } from '@/components/evaluations/HearingList'
 import { ImportedAnswers } from '@/components/evaluations/ImportedAnswers'
 import { JurorCaseView } from '@/components/evaluations/JurorCaseView'
+import { ExtractionDocumentsProvider } from '@/components/evaluations/ExtractionQuestion'
 import { KitPicker } from '@/components/evaluations/KitPicker'
 import { KitSettingsEditor } from '@/components/evaluations/KitSettingsEditor'
 import { MissingKeys, SavedKeys } from '@/components/evaluations/KeyStatus'
@@ -192,7 +193,10 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                 <KitPicker draft={draft} onChange={c.change} />
                 <KitSettingsEditor key={draftKit(draft).version} draft={draft} errors={c.errors} onChange={c.change} />
                 <RubricPicker value={draft.rubricVersion} onChange={(rubricVersion) => c.change({ ...draft, rubricVersion })} />
-                <QuestionsEditor cases={draft.cases} errors={c.errors} newId={newIntentKey} kit={draftKit(draft)} kitSettings={draftKitSettings(draft)} onChange={(cases) => c.change({ ...draft, cases })} />
+                {/* Spec 04 (D-88): documents are saved on their own; a save reloads the case with the server's revision and draft. */}
+                <ExtractionDocumentsProvider value={{ evaluationId: evaluation.id, revision: c.revision, saved: !c.dirty, documents: evaluation.documents, onSaved: () => void reload() }}>
+                  <QuestionsEditor cases={draft.cases} errors={c.errors} newId={newIntentKey} kit={draftKit(draft)} kitSettings={draftKitSettings(draft)} onChange={(cases) => c.change({ ...draft, cases })} />
+                </ExtractionDocumentsProvider>
               </TabsContent>
               <TabsContent value="configurations">
                 {rehearing && <RehearBanner source={rehearing} runs={evaluation.runs} matches={workingScenario === null || workingScenario === rehearing.scenarioHash} onClose={() => setParam('rehearing', null)} />}

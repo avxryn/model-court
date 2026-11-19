@@ -240,8 +240,7 @@ export const EXTRACTION_V1: TaskKit<ExtractionSettings, ExtractionFields> = {
   family: 'extraction',
   name: 'Pull fields from documents',
   description: 'Fields from a document as JSON, checked against your field list and answer key; jurors mark invented values.',
-  // Unlisted until the text path works end to end (spec 04 step A4); listed from then on.
-  listed: false,
+  listed: true,
   inputKinds: ['document'],
   outputContract: { kind: 'json', schemaSource: 'kit-settings' },
   settingsSchema: extractionSettingsSchema,

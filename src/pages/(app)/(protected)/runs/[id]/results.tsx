@@ -9,6 +9,7 @@ import { Caption, Sheet, SheetIndex, Stamp } from '@/components/court/CaseFile'
 import { HearingFolder, StageLine } from '@/components/court/HearingNav'
 import { Page } from '@/components/layout/Page'
 import { ChecksSection } from '@/components/record/ChecksSection'
+import { ExtractionSection } from '@/components/record/ExtractionSection'
 import { DisagreementSection, findSplits } from '@/components/record/DisagreementSection'
 import { FindingsSection } from '@/components/record/FindingsSection'
 import { HeadlineSection } from '@/components/record/HeadlineSection'
@@ -58,6 +59,7 @@ function Record({ data }: { data: ResultsView }) {
               { id: 'verdict', label: 'Judgment' },
               ...(findSplits(data).jurors >= 2 ? [{ id: 'splits', label: 'Splits' }] : []),
               ...(data.checks ? [{ id: 'checks', label: 'Checks' }] : []),
+              ...('extraction' in data && data.extraction ? [{ id: 'extraction', label: 'Extraction' }] : []),
               { id: 'evidence', label: 'Testimony' },
               { id: 'coverage', label: 'Reliability' },
             ]}
@@ -69,6 +71,7 @@ function Record({ data }: { data: ResultsView }) {
           <JudgmentSummary data={data} />
           <DisagreementSection data={data} />
           <ChecksSection data={data} />
+          <ExtractionSection data={data} />
           <TestimonySection data={data} />
           <ReliabilitySection data={data} />
         </Sheet>
