@@ -57,7 +57,7 @@ export function ToolTraceView({ label, trace, maxSteps, full, usage, children }:
                 <p className="court-label flex flex-wrap items-baseline justify-between gap-2">
                   <span>Step {step.stepNo}</span>
                   {stepUsage && (
-                    <span className="typewriter text-caption font-normal tracking-normal text-muted-foreground tabular-nums">
+                    <span className="typewriter text-caption font-normal tracking-normal normal-case text-muted-foreground tabular-nums">
                       {stepUsage.inputTokens ?? '—'} in · {stepUsage.outputTokens ?? '—'} out{stepUsage.durationMs !== null ? ` · ${(stepUsage.durationMs / 1000).toFixed(1)} s` : ''}
                       {stepUsage.truncated ? ' · cut off' : ''}
                     </span>

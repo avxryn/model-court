@@ -217,6 +217,9 @@ describe('parsing Anthropic steps (spec 06 §6.3)', () => {
     const cut = parseAnthropicToolStep(raw({ content: [{ type: 'text', text: 'Looking' }, { type: 'tool_use', id: 'toolu_x', name: 'lookup_order', input: '{"order' }], stop_reason: 'max_tokens' }))
     expect(cut).toMatchObject({ kind: 'success', truncated: true, calls: [], text: 'Looking' })
     expect(parseAnthropicToolStep(raw({ content: [{ type: 'text', text: 'x' }], stop_reason: 'pause_turn' }))).toMatchObject({ code: 'TOOL_PROTOCOL_ERROR' })
+    // D-105: a non-object input is an unreadable call (answered with the error response), as OpenAI's string arguments allow.
+    const odd = parseAnthropicToolStep(raw({ content: [{ type: 'tool_use', id: 'toolu_z', name: 'lookup_order', input: 'A-1042' }], stop_reason: 'tool_use' }))
+    expect(odd).toMatchObject({ kind: 'success', stop: 'tool_calls', calls: [{ name: 'lookup_order', argumentsRaw: '"A-1042"', argumentsParsed: undefined }] })
     expect(parseAnthropicToolStep(raw({ content: [{ type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search' }], stop_reason: 'tool_use' }))).toMatchObject({ code: 'TOOL_PROTOCOL_ERROR' })
     expect(parseAnthropicToolStep(raw({ content: [{ type: 'tool_use', name: 'lookup_order', input: {} }], stop_reason: 'tool_use' }))).toMatchObject({ code: 'TOOL_PROTOCOL_ERROR' })
     expect(parseAnthropicToolStep(raw({ content: [], stop_reason: 'refusal' }))).toMatchObject({ code: 'PROVIDER_BLOCKED', definite: true })

@@ -11,7 +11,7 @@
 
 import { LIMITS } from '../limits'
 import { utf8ByteLength } from '../text'
-import type { SchemaIssue } from './json-schema'
+import { prettyJson, type SchemaIssue } from './json-schema'
 import { capName, type CallSource, type MockAnswer, type ModelCall } from './mock'
 import type { ToolTask } from './task'
 
@@ -72,27 +72,22 @@ export interface JurorToolTrace {
   ended: TraceEnd
 }
 
+export { prettyJson }
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Keys sorted at every level. `Object.fromEntries` defines own properties, so `__proto__` stays a plain key. */
-function sorted(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sorted)
-  if (isRecord(value)) return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sorted(value[key])]))
-  return value
-}
-
-/** Sorted keys, 2-space indent. */
-export function prettyJson(value: unknown): string {
-  return JSON.stringify(sorted(value), null, 2)
-}
-
-/** The arguments as jurors read them: identical for both providers' formats. */
+/**
+ * The arguments as jurors read them: identical for both providers' formats. Anything that is not
+ * a JSON object is `(unreadable)`, and the size cut is measured on the canonical text only, never
+ * on the provider's own spelling (whitespace, `\uXXXX` escapes), so the same arguments look the
+ * same whoever sent them (D-105).
+ */
 export function formatArguments(call: Pick<ModelCall, 'argumentsRaw' | 'argumentsParsed'>): string {
-  if (call.argumentsParsed === undefined) return UNREADABLE_ARGUMENTS
+  if (!isRecord(call.argumentsParsed)) return UNREADABLE_ARGUMENTS
   const text = prettyJson(call.argumentsParsed)
-  if (utf8ByteLength(call.argumentsRaw) <= LIMITS.tools.argumentsBytes && utf8ByteLength(text) <= LIMITS.tools.argumentsBytes) return text
+  if (utf8ByteLength(text) <= LIMITS.tools.argumentsBytes) return text
   // Oversized: a preview cut on a code point, never parseable, so the checks count it invalid.
   let preview = ''
   for (const char of text) {

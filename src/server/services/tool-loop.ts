@@ -317,15 +317,20 @@ async function runStep(deps: Deps, ref: StepRef, jobSignal: AbortSignal): Promis
   return finishStep(deps, ref, task, history, outcome, unsent)
 }
 
-/** Provably unsent: give back this step's unit and every later one, and close the loop (like `AttemptFenced`). */
+/**
+ * Provably unsent: give back this step's unit and every later one, and close the loop (like
+ * `AttemptFenced`). The guard is the fence alone (D-105): every path that fences a step (cancel,
+ * delete, revoke, lease expiry) also moves it off `running`, and this worker holds the only copy of
+ * the fence and checked it before any send. Statuses another path already set are left as they are.
+ */
 async function closeFencedStep(deps: Deps, ref: StepRef): Promise<void> {
   const db = deps.db
   const now = deps.now()
   try {
-    await runGuarded(db, 'tool.step_fenced', stepCurrent(ref.stepId, ref.fence), [
+    await runGuarded(db, 'tool.step_fenced', cond(`EXISTS (SELECT 1 FROM generation_steps WHERE id = ? AND fence_token = ?)`, ref.stepId, ref.fence), [
       ...releaseSteps(db, ref.generationId, ref.attemptNo, { at: ref.stepNo }, 'consumed', now),
       ...releaseSteps(db, ref.generationId, ref.attemptNo, { after: ref.stepNo }, 'reserved', now),
-      db.prepare(`UPDATE generation_steps SET status = 'canceled', error_code = 'CANCELED', finished_at = ? WHERE id = ?`).bind(now, ref.stepId),
+      db.prepare(`UPDATE generation_steps SET status = 'canceled', error_code = 'CANCELED', finished_at = ? WHERE id = ? AND status = 'running'`).bind(now, ref.stepId),
       db.prepare(`UPDATE generation_attempts SET status = 'canceled', error_code = 'CANCELED', finished_at = ? WHERE id = ? AND status = 'running'`).bind(now, ref.attemptId),
       db.prepare(`UPDATE generations SET status = 'canceled', last_error_code = 'CANCELED', updated_at = ? WHERE id = ? AND status = 'running'`).bind(now, ref.generationId),
       dropReplayStatement(db, ref.attemptId),
@@ -448,6 +453,9 @@ async function finishStep(deps: Deps, ref: StepRef, task: ToolsFields | undefine
     if (error instanceof GuardFailed) {
       // Canceled, deleted, lease-expired, or revoked meanwhile: evidence is unchanged.
       deps.log({ event: 'step.stale_commit_rejected', generationId: ref.generationId, attemptNo: ref.attemptNo, stepNo: ref.stepNo })
+      // D-105: a step refused before its send (no history, an unusable key, an oversized body) that was
+      // fenced meanwhile was still never sent, so its unit goes back like a step fenced before the send.
+      if (unsent) await closeFencedStep(deps, ref)
       return 'stale'
     }
     throw error

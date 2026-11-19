@@ -201,6 +201,18 @@ function matchesType(value: unknown, type: string): boolean {
 
 const TYPE_WORDS: Record<string, string> = { string: 'text', number: 'a number', integer: 'a whole number', boolean: 'true or false', object: 'an object', array: 'a list', null: 'null' }
 
+/** Keys sorted at every level. `Object.fromEntries` defines own properties, so `__proto__` stays a plain key. */
+function sorted(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sorted)
+  if (isRecord(value)) return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sorted(value[key])]))
+  return value
+}
+
+/** Sorted keys, 2-space indent: how arguments are shown, and what their size is measured on (D-105). */
+export function prettyJson(value: unknown): string {
+  return JSON.stringify(sorted(value), null, 2)
+}
+
 /** Equality of plain JSON values: numbers numerically, strings exactly, objects by own keys. */
 export function jsonEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true

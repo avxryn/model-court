@@ -629,8 +629,15 @@ export async function retryGenerations(deps: Deps, userId: string, runId: string
         'run.retry',
         all(
           cond(`EXISTS (SELECT 1 FROM runs WHERE id = ? AND owner_user_id = ? AND revision = ? AND status IN ('generating','ready'))`, runId, userId, ifMatch),
-          ...targets.map((generation) =>
-            cond(`EXISTS (SELECT 1 FROM generations WHERE id = ? AND run_id = ? AND status IN ('failed','uncertain') AND attempt_count = ? AND attempt_count < ?)`, generation.id, runId, generation.attempt_count, LIMITS.maxAttemptsPerGeneration),
+          // D-105: one condition with four bound values for any number of targets (D1 takes at most 100 per
+          // statement): every target is in this run, retryable, and still at the attempt count read above.
+          // Ids are UUIDs, so the comma-delimited "id:count" list cannot collide.
+          cond(
+            `(SELECT COUNT(*) FROM generations WHERE run_id = ? AND status IN ('failed','uncertain') AND attempt_count < ? AND instr(?, ',' || id || ':' || attempt_count || ',') > 0) = ?`,
+            runId,
+            LIMITS.maxAttemptsPerGeneration,
+            `,${targets.map((generation) => `${generation.id}:${generation.attempt_count}`).join(',')},`,
+            targets.length,
           ),
           ...providers.map((provider) => {
             const repin = repins.find((candidate) => candidate.provider === provider)

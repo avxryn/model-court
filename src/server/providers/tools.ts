@@ -242,9 +242,10 @@ export function parseAnthropicToolStep(raw: { status: number; requestId: string 
     if (!isRecord(block) || typeof block.type !== 'string' || !ANTHROPIC_BLOCKS.has(block.type)) return { kind: 'failure', code: 'TOOL_PROTOCOL_ERROR', definite: true, ...base }
     if (block.type === 'text' && typeof block.text === 'string') texts.push(block.text)
     if (block.type === 'tool_use') {
-      if (typeof block.id !== 'string' || block.id === '' || typeof block.name !== 'string' || !isRecord(block.input)) return { kind: 'failure', code: 'TOOL_PROTOCOL_ERROR', definite: true, ...base }
-      const argumentsRaw = JSON.stringify(block.input)
-      calls.push({ name: block.name, argumentsRaw, argumentsParsed: parsedArguments(argumentsRaw) })
+      if (typeof block.id !== 'string' || block.id === '' || typeof block.name !== 'string') return { kind: 'failure', code: 'TOOL_PROTOCOL_ERROR', definite: true, ...base }
+      // D-105: a non-object input is an unreadable call, as a non-object OpenAI argument string is.
+      const argumentsRaw = JSON.stringify(block.input) ?? ''
+      calls.push({ name: block.name, argumentsRaw, argumentsParsed: isRecord(block.input) ? parsedArguments(argumentsRaw) : undefined })
       callIds.push(block.id)
     }
   }

@@ -21,7 +21,6 @@ import { LIMITS } from '@/domain/limits'
 import { schemaIssues } from '@/domain/tools/json-schema'
 import { answerCall, describeAnswer, parseArguments } from '@/domain/tools/mock'
 import { blankTool, blankToolTask, EXAMPLE_TOOL_TASK, type ToolDefinition, type ToolsFields } from '@/domain/tools/task'
-import { prettyJson } from '@/domain/tools/trace'
 import { cn } from '@/lib/utils'
 
 const T = LIMITS.tools
@@ -34,7 +33,8 @@ function fieldsOf(testCase: CaseInput): ToolsFields {
 
 /** A JSON object typed as text: the draft changes only when the text parses to an object. */
 function JsonField({ id, label, value, onChange, rows = 4, hint, problems, error }: { id: string; label: string; value: Record<string, unknown> | undefined; onChange: (next: Record<string, unknown> | undefined) => void; rows?: number; hint?: string; problems?: string[]; error?: string }) {
-  const [text, setText] = useState(() => (value === undefined ? '' : prettyJson(value)))
+  // The judge's own key order (a schema reads best with "type" first); only jurors see sorted keys.
+  const [text, setText] = useState(() => (value === undefined ? '' : JSON.stringify(value, null, 2)))
   const [parseError, setParseError] = useState<string | null>(null)
   const shown = parseError ?? error ?? problems?.[0]
   return (

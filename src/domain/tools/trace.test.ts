@@ -36,6 +36,14 @@ describe('arguments formatting (spec 06 §10.1)', () => {
     expect(new TextEncoder().encode(big).byteLength).toBeLessThanOrEqual(1024 + 3)
   })
 
+  it('shows anything that is not an object as unreadable, and cuts on the canonical text only (D-105)', () => {
+    expect(formatArguments(modelCall('x', '[1]'))).toBe(UNREADABLE_ARGUMENTS)
+    expect(formatArguments(modelCall('x', '"text"'))).toBe(UNREADABLE_ARGUMENTS)
+    // OpenAI may spell the same arguments with padding or escapes; the measure ignores the spelling.
+    const padded = modelCall('x', `{"a":${' '.repeat(5000)}"\\u00e9"}`)
+    expect(formatArguments(padded)).toBe('{\n  "a": "é"\n}')
+  })
+
   it('keeps __proto__ a plain key', () => {
     expect(prettyJson(JSON.parse('{"__proto__": {"x": 1}, "b": 2}'))).toBe('{\n  "__proto__": {\n    "x": 1\n  },\n  "b": 2\n}')
   })

@@ -7,7 +7,7 @@
 
 import { LIMITS } from '../limits'
 import { utf8ByteLength } from '../text'
-import { jsonEqual, validate, type SchemaIssue, type ToolSchema } from './json-schema'
+import { jsonEqual, prettyJson, validate, type SchemaIssue, type ToolSchema } from './json-schema'
 import type { CannedResponse, ToolTask } from './task'
 
 export type CallSource = 'match' | 'default' | 'invalid_arguments' | 'unknown_tool' | 'over_cap'
@@ -66,11 +66,15 @@ export function argumentsMatch(when: Record<string, unknown>, args: Record<strin
   return Object.keys(when).every((key) => Object.hasOwn(args, key) && valueMatches(when[key], args[key], mode))
 }
 
-/** Whether parsed arguments are usable: a plain object within the stored-size cap that fits the schema. */
+/**
+ * Whether parsed arguments are usable: a plain object that fits the schema and whose canonical
+ * text (`prettyJson`, what jurors see) is within the stored-size cap. The cap is measured on the
+ * canonical text, not the provider's spelling, so both providers are treated alike (D-105).
+ */
 export function argumentIssues(schema: ToolSchema, call: Pick<ModelCall, 'argumentsRaw' | 'argumentsParsed'>): SchemaIssue[] {
-  if (utf8ByteLength(call.argumentsRaw) > LIMITS.tools.argumentsBytes) return [{ path: '', message: `The arguments are over ${LIMITS.tools.argumentsBytes / 1024} KiB.` }]
   if (call.argumentsParsed === undefined) return [{ path: '', message: 'The arguments are not valid JSON.' }]
   if (!isRecord(call.argumentsParsed)) return [{ path: '', message: 'The arguments must be a JSON object.' }]
+  if (utf8ByteLength(prettyJson(call.argumentsParsed)) > LIMITS.tools.argumentsBytes) return [{ path: '', message: `The arguments are over ${LIMITS.tools.argumentsBytes / 1024} KiB.` }]
   return validate(schema, call.argumentsParsed)
 }
 

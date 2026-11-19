@@ -587,3 +587,62 @@ describe('tool hearings: read paths (spec 06 §5, D-102)', () => {
     expect(refused.json.error.message).toBe("The AI grader isn't available for tool-use cases yet.")
   })
 })
+
+describe('tool loop: fixes from the independent review (D-105)', () => {
+  it('a step canceled between its claim and its send was never sent, so its unit is released', async () => {
+    const { setup } = await toolCase()
+    script([callsStep([LOOKUP]), answerStep()])
+    const runId = (await start(setup)).json.data.runId
+    const { handleGenerationJob } = await import('../../src/server/services/generation')
+    for (const job of h.jobs.splice(0)) await handleGenerationJob(h.deps, job, new AbortController().signal, 'r')
+    const step = h.toolStepJobs.shift()!
+    // The claim publishes a notice before the send; cancel lands right there.
+    const original = h.deps.publishNotices
+    let canceled = false
+    h.deps.publishNotices = async (notices) => {
+      if (!canceled) {
+        canceled = true
+        const view = await runView(runId)
+        expect((await h.request('POST', `/runs/${runId}/cancel`, { as: OWNER, ifMatch: view.revision, body: {} })).status).toBe(200)
+      }
+      return original(notices)
+    }
+    const calls = h.providerCalls.length
+    expect(await handleToolStepJob(h.deps, step, new AbortController().signal, 'r')).toBe('stale')
+    h.deps.publishNotices = original
+    expect(h.providerCalls).toHaveLength(calls)
+    const units = await rows<{ step_no: number; state: string }>('SELECT step_no, state FROM step_reservations WHERE generation_id = ? ORDER BY step_no', step.generationId)
+    expect(units.map((unit) => unit.state)).toEqual(['consumed', 'released', 'released', 'released'])
+    expect((await rows<{ status: string }>('SELECT status FROM generation_steps WHERE id = ?', step.stepId))[0].status).toBe('canceled')
+    await expectBalanced()
+  })
+
+  it('a retry of twenty tool generations is one guarded batch', async () => {
+    await h.dispose()
+    h = await createHarness({ env: { MAX_DAILY_CALLS_PER_USER: '60', MAX_DAILY_CALLS_GLOBAL: '200' } })
+    const setup = await setupOwner(h)
+    const { schemaVersion: _v, ...base } = setup.draft
+    const kitFields = { kind: 'tools', ...EXAMPLE_TOOL_TASK, maxSteps: 1, expect: { requiredCalls: [], requireOrder: false, forbiddenTools: [] } }
+    const cases = Array.from({ length: 5 }, (_, index) => ({ key: crypto.randomUUID(), title: `Q${index + 1}`, input: `Question ${index + 1}`, reference: '', expectedBehavior: 'x', kitFields }))
+    const saved = await h.request('PUT', `/evaluations/${setup.evaluationId}/draft`, { as: OWNER, ifMatch: 1, body: { ...base, kit: { version: 'tools-v1', settings: {} }, samplesPerAnswer: 2, cases } })
+    expect(saved.status, JSON.stringify(saved.json)).toBe(200)
+    script([() => new Response('{}', { status: 500 })])
+    const started = await start(setup)
+    expect(started.json.data.plannedCalls).toBe(20)
+    await h.drainJobs()
+    // Second samples are dispatched a minute later (D-65).
+    h.advance(61_000)
+    await runMaintenance(h.deps)
+    await h.drainJobs()
+    const view = await runView(started.json.data.runId)
+    const ids = view.generations.map((generation: { id: string }) => generation.id)
+    expect(ids).toHaveLength(20)
+    script([answerStep()])
+    const retry = await h.request('POST', `/runs/${view.runId}/retries`, { as: OWNER, ifMatch: view.revision, body: { generationIds: ids, acknowledgePossiblePriorCharge: true } })
+    expect(retry.status, JSON.stringify(retry.json)).toBe(202)
+    expect(retry.json.data.plannedCalls).toBe(20)
+    await h.drainJobs()
+    expect((await rows<{ status: string }>('SELECT DISTINCT status FROM generations')).map((row) => row.status)).toEqual(['succeeded'])
+    await expectBalanced()
+  })
+})

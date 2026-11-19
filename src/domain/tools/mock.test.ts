@@ -72,6 +72,8 @@ describe('answerCall (spec 06 §8.1)', () => {
     expect(answerCall(task, call('search', '{"q": '), at).issues[0].message).toBe('The arguments are not valid JSON.')
     expect(answerCall(task, call('search', '[1]'), at).issues[0].message).toBe('The arguments must be a JSON object.')
     expect(answerCall(task, call('search', { q: 'x'.repeat(5000) }), at).issues[0].message).toMatch(/over 4 KiB/)
+    // D-105: the size is measured on the canonical text, so padding in a provider's spelling does not count.
+    expect(answerCall(task, call('search', `{"q": "red lamp"${' '.repeat(5000)}}`), at).source).toBe('match')
   })
 
   it('an unknown tool gets a fixed error naming it, capped', () => {
