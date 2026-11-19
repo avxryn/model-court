@@ -21,6 +21,25 @@ export function testimonyLimitMessage(parties: number, questions: number): strin
   return `${parties} parties × ${questions} ${questions === 1 ? 'question' : 'questions'} is ${total} answers for each juror to score. The limit is ${LIMITS.maxTestimoniesPerHearing}: remove a question or a party. To compare more setups, re-hear this case with an anchor party.`
 }
 
+/**
+ * Review finding (D-112): with the testimony deck only the open testimony is on the page, so J and K
+ * step through the deck first. `focusInside`: focus is already on the open testimony. Returns the
+ * testimony to open, `'focus'` (focus the open one without moving), or `'pass'` (let the worksheet
+ * move to the next or previous question).
+ */
+export function deckStep(keys: readonly string[], open: string, direction: 1 | -1, focusInside: boolean): string | 'focus' | 'pass' {
+  const index = keys.indexOf(open)
+  if (index < 0) return 'pass'
+  if (!focusInside) return 'focus'
+  const next = keys[index + direction]
+  return next ?? 'pass'
+}
+
+/** Review finding (D-112): a CSV import that would put the draft over the testimony limit, in plain words, or null. */
+export function questionImportLimit(parties: number | undefined, questions: number): string | null {
+  return parties ? testimonyLimitMessage(parties, questions) : null
+}
+
 /** The most questions a hearing with this many parties may hold. */
 export function maxQuestionsFor(parties: number): number {
   return Math.min(LIMITS.maxCases, Math.floor(LIMITS.maxTestimoniesPerHearing / Math.max(1, parties)))

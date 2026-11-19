@@ -37,7 +37,7 @@ export function QuestionsEditor({ cases, onChange, errors, newId, disabled, kit 
   return (
     <fieldset disabled={disabled} className="space-y-4">
       <legend className="sr-only">Questions</legend>
-      <CaseImport currentCount={cases.length} newId={newId} onImport={onChange} disabled={disabled} kitVersion={kit.version} />
+      <CaseImport currentCount={cases.length} newId={newId} onImport={onChange} disabled={disabled} kitVersion={kit.version} parties={parties} />
       {kit.family === 'grounded' && <SourcesImport cases={cases} disabled={disabled} />}
       {cases.map((testCase, index) => (
         <Card key={testCase.key} className="rounded-md bg-card ring-border">

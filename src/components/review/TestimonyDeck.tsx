@@ -1,7 +1,8 @@
 /**
  * Four or five testimonies (spec 07 §9.2, D-111): one at a time at full width, with tabs A–E that
  * show which are scored, and "Compare two" to read two side by side. `[` and `]` move to the previous
- * and next testimony. Every testimony is the same kind of card whichever party wrote it; the deck
+ * and next testimony; J and K step through the deck's testimonies before moving to the next or
+ * previous question (the worksheet's own J/K, review finding D-112). Every testimony is the same kind of card whichever party wrote it; the deck
  * only chooses which are on screen, so blinding is the worksheet's own. Give it `key={question}` so a
  * new question opens on its first testimony.
  */
@@ -11,6 +12,7 @@ import { CheckCircle2, Columns2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { Tabs, TabsList, TabsContent, TabsTrigger } from '@/components/ui/tabs'
+import { deckStep } from '@/domain/parties'
 import { cn } from '@/lib/utils'
 
 export interface DeckItem {
@@ -58,25 +60,43 @@ export function TestimonyDeck({ items, noun = 'Testimony', keys = true }: { item
   const [secondary, setSecondary] = useState(items[1]?.key ?? '')
   const current = useRef({ items, primary })
   current.current = { items, primary }
+  const root = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!keys) return
+    /** Focus the first line of the open testimony on the left, once it has rendered. */
+    const focusOpen = () =>
+      requestAnimationFrame(() => {
+        const article = root.current?.querySelector('[data-deck-pane="left"] [data-testimony]')
+        const target = article?.querySelector<HTMLElement>('[role=radio][data-checked]') ?? article?.querySelector<HTMLElement>('[role=radio]')
+        target?.focus()
+      })
     const onKey = (event: KeyboardEvent) => {
-      if ((event.key !== '[' && event.key !== ']') || event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return
+      const key = event.key.toLowerCase()
+      if (!['[', ']', 'j', 'k'].includes(key) || event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return
       if (document.querySelector('[role=dialog], [role=alertdialog]')) return
       const { items: list, primary: open } = current.current
-      const index = list.findIndex((item) => item.key === open)
-      const next = list[index + (event.key === ']' ? 1 : -1)]
-      if (!next) return
+      const left = root.current?.querySelector('[data-deck-pane="left"]')
+      const step = deckStep(
+        list.map((item) => item.key),
+        open,
+        key === ']' || key === 'j' ? 1 : -1,
+        // [ and ] always move; J and K first land on the open testimony.
+        key === '[' || key === ']' || (!!left && left.contains(document.activeElement)),
+      )
+      if (step === 'pass') return
+      // Before the worksheet's own J/K handler (bubble phase): this testimony, then the next one, then the next question.
       event.preventDefault()
-      setPrimary(next.key)
+      event.stopImmediatePropagation()
+      if (step !== 'focus') setPrimary(step)
+      if (key === 'j' || key === 'k') focusOpen()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [keys])
   // The compare pane never shows the testimony that is already open on the left.
   const other = secondary !== primary && items.some((item) => item.key === secondary) ? secondary : (items.find((item) => item.key !== primary)?.key ?? '')
   return (
-    <div className="space-y-3" data-testimony-deck>
+    <div ref={root} className="space-y-3" data-testimony-deck>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           {items.length} testimonies, one at a time. {items.filter((item) => item.done).length > 0 && `${items.filter((item) => item.done).length} of ${items.length} scored.`}
@@ -95,8 +115,14 @@ export function TestimonyDeck({ items, noun = 'Testimony', keys = true }: { item
         </div>
       </div>
       <div className={cn('grid gap-4', compare && 'lg:grid-cols-2')}>
-        <DeckTabs items={items} value={primary} onChange={setPrimary} label={compare ? `${noun} on the left` : `${noun}`} noun={noun} />
-        {compare && <DeckTabs items={items} value={other} onChange={setSecondary} exclude={primary} label={`${noun} on the right`} noun={noun} />}
+        <div data-deck-pane="left" className="min-w-0">
+          <DeckTabs items={items} value={primary} onChange={setPrimary} label={compare ? `${noun} on the left` : `${noun}`} noun={noun} />
+        </div>
+        {compare && (
+          <div data-deck-pane="right" className="min-w-0">
+            <DeckTabs items={items} value={other} onChange={setSecondary} exclude={primary} label={`${noun} on the right`} noun={noun} />
+          </div>
+        )}
       </div>
     </div>
   )

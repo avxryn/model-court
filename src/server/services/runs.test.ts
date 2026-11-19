@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { maxQuestionsFor, rotate, testimonyLimitMessage } from '../../domain/parties'
+import { deckStep, maxQuestionsFor, questionImportLimit, rotate, testimonyLimitMessage } from '../../domain/parties'
 import { buildAssignment, drawPositionBase, type EligibleManifest } from './runs'
 
 function manifest(configurationKeys: string[], caseKeys: string[]): EligibleManifest {
@@ -84,6 +84,25 @@ describe('buildAssignment with five parties and the balanced rotation (spec 07 Â
       counts.set(order, (counts.get(order) ?? 0) + 1)
     }
     expect(counts.size).toBe(6)
+  })
+})
+
+describe('review fixes (D-112)', () => {
+  it('J and K step through the deck before changing question', () => {
+    const keys = ['a', 'b', 'c', 'd']
+    expect(deckStep(keys, 'a', 1, false)).toBe('focus') // first press lands on the open testimony
+    expect(deckStep(keys, 'a', 1, true)).toBe('b')
+    expect(deckStep(keys, 'c', 1, true)).toBe('d')
+    expect(deckStep(keys, 'd', 1, true)).toBe('pass') // the worksheet moves to the next question
+    expect(deckStep(keys, 'b', -1, true)).toBe('a')
+    expect(deckStep(keys, 'a', -1, true)).toBe('pass')
+    expect(deckStep(keys, 'zz', 1, true)).toBe('pass')
+  })
+
+  it('a CSV import over the testimony limit is refused with the plain message', () => {
+    expect(questionImportLimit(4, 3)).toBeNull()
+    expect(questionImportLimit(undefined, 5)).toBeNull()
+    expect(questionImportLimit(4, 5)).toContain('4 parties Ã— 5 questions is 20 answers')
   })
 })
 
