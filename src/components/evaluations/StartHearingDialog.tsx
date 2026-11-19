@@ -17,7 +17,17 @@ import { draftKit } from '@/lib/kits'
 import { useApi } from '@/lib/use-api'
 
 /** Freeze the saved draft into a hearing; consent to provider processing and charges when anything is generated. */
-export function StartHearingDialog({ evaluationId, revision, draft, providers, keys, disabled }: { evaluationId: string; revision: number; draft: DraftInput; providers: ProviderId[]; keys: CredentialMetadata[]; disabled: boolean }) {
+export interface StartScenario {
+  /** The saved draft's scenario hash, sent so a draft changed in another tab is refused (D-69). */
+  hash: string | null
+  /** "hearings 1 and 2 (v1)" when the questions match earlier hearings. */
+  sameAs: string | null
+  nextVersion: number
+  /** Calls for parties already heard in that hearing versus new ones. */
+  split: { heardIn: number; again: number; fresh: number; freshLabels: string[] } | null
+}
+
+export function StartHearingDialog({ evaluationId, revision, draft, providers, keys, disabled, scenario }: { evaluationId: string; revision: number; draft: DraftInput; providers: ProviderId[]; keys: CredentialMetadata[]; disabled: boolean; scenario?: StartScenario }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [consent, setConsent] = useState(false)
@@ -43,7 +53,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
     try {
       const credentialIdsByProvider = Object.fromEntries(providers.map((provider) => [provider, keys.find((k) => k.provider === provider)?.id]))
       const result = await api<{ runId: string }>('POST', `/evaluations/${evaluationId}/runs`, {
-        body: { draftRevision: revision, credentialIdsByProvider, consentToProviderProcessing: true, acknowledgeProviderCharges: true },
+        body: { draftRevision: revision, credentialIdsByProvider, consentToProviderProcessing: true, acknowledgeProviderCharges: true, ...(scenario?.hash ? { expectedScenarioHash: scenario.hash } : {}) },
         idempotencyKey: intent.current,
       })
       setOpen(false)
@@ -83,6 +93,12 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
           </DialogDescription>
         </DialogHeader>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+          {scenario && (
+            <>
+              <dt className="text-muted-foreground">Questions</dt>
+              <dd>{scenario.sameAs ? `Same questions as ${scenario.sameAs}` : `New questions: this hearing starts v${scenario.nextVersion}`}</dd>
+            </>
+          )}
           <dt className="text-muted-foreground">Planned calls</dt>
           <dd className="tabular-nums">
             {needsConsent ? (
@@ -94,6 +110,15 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
               <strong>None</strong>
             )}
           </dd>
+          {needsConsent && scenario?.split && (
+            <>
+              <dt className="text-muted-foreground">Of these</dt>
+              <dd>
+                {scenario.split.fresh > 0 && <>{scenario.split.fresh} for {scenario.split.freshLabels.join(' and ')} (new); </>}
+                {scenario.split.again} for parties already heard in hearing {scenario.split.heardIn} (asked again, answers may differ). That is what lets you compare the hearings fairly.
+              </dd>
+            </>
+          )}
           {needsConsent && (
             <>
               <dt className="text-muted-foreground">Providers</dt>

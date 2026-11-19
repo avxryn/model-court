@@ -17,6 +17,11 @@ export interface EvaluationRow {
   created_at: number
   updated_at: number
   deleted_at: number | null
+  /** Spec 02 (D-71, migration 0010): set once at creation; null for a case made here. */
+  origin_kind?: 'duplicate' | 'scenario_file' | 'certified_record' | null
+  origin_evaluation_id?: string | null
+  origin_run_id?: string | null
+  origin_scenario_hash?: string | null
 }
 
 export interface RunRow {

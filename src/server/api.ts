@@ -11,12 +11,14 @@ import {
   deleteEvaluationSchema,
   putImportsSchema,
   draftInputSchema,
+  duplicateEvaluationSchema,
   emptySchema,
   openReviewSchema,
   redeemInviteSchema,
   retrySchema,
   revealSchema,
   saveRatingsSchema,
+  restoreDraftSchema,
   startRunSchema,
   startSpecialMasterSchema,
   verdictSchema,
@@ -33,6 +35,8 @@ import { getResults, recordVerdict } from './services/results'
 import { createInvite, fileAndUnseal, getReview, redeemInvite, reveal, revokeInvite, revokeSession, saveReview, submitReview } from './services/reviews'
 import { getQuota } from './services/quota'
 import { cancelRun, getRun, openReview, retryGenerations, startRun } from './services/runs'
+import { getComparison, parseRunIds } from './services/comparison'
+import { duplicateEvaluation, exportScenario, restoreDraft } from './services/scenarios'
 import { cancelSpecialMaster, getSpecialMaster, startSpecialMaster } from './services/special-master'
 import {
   GUEST_COOKIE_PREFIX,
@@ -238,6 +242,28 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
   api.delete('/evaluations/:id/imports/:configurationKey', async (c) => {
     const ifMatch = ifMatchRevision(c)
     return ok(c, await deleteImports(deps(c), user(c), pathId(c, 'id'), pathId(c, 'configurationKey'), ifMatch, rid(c)))
+  })
+  // Spec 02 (D-69): restore a hearing's questions and/or parties into the draft. No provider call.
+  api.post('/evaluations/:id/draft/restore', async (c) => {
+    const ifMatch = ifMatchRevision(c)
+    const input = await readBody(c, restoreDraftSchema)
+    return ok(c, await restoreDraft(deps(c), user(c), pathId(c, 'id'), input, ifMatch, rid(c)))
+  })
+  // Spec 02 (D-70): unsealed hearings of one case side by side, owner only.
+  api.get('/evaluations/:id/comparison', async (c) => ok(c, await getComparison(deps(c), user(c), pathId(c, 'id'), parseRunIds(c.req.query('runIds')))))
+  // Spec 02 (D-71): copy a case (its draft or one hearing's setup) into a new case; no runs, sessions or keys.
+  api.post('/evaluations/:id/duplicate', async (c) => {
+    const input = await readBody(c, duplicateEvaluationSchema)
+    const result = await duplicateEvaluation(deps(c), user(c), pathId(c, 'id'), input, idempotencyKey(c), rid(c))
+    return ok(c, result.data, result.status)
+  })
+  // Spec 02 (D-71): the case's questions (and, if asked, parties) as a scenario file.
+  api.get('/evaluations/:id/scenario', async (c) => {
+    const fromRunId = c.req.query('fromRunId') || undefined
+    const includeParties = c.req.query('includeParties') ?? 'false'
+    if ((fromRunId !== undefined && !/^[0-9a-f-]{36}$/i.test(fromRunId)) || (includeParties !== 'true' && includeParties !== 'false')) throw new ApiError(400, 'BAD_REQUEST', 'Use fromRunId=<hearing id> and includeParties=true or false.')
+    const result = await exportScenario(deps(c), user(c), pathId(c, 'id'), fromRunId, includeParties === 'true', rid(c))
+    return ok(c, result.file, 200, { 'Content-Disposition': `attachment; filename="${result.filename}"` })
   })
   api.delete('/evaluations/:id', async (c) => {
     const ifMatch = ifMatchRevision(c)

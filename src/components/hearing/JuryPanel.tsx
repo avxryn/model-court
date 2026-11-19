@@ -141,7 +141,7 @@ function JurySummonsDialog({ url, onClose }: { url: string | null; onClose: () =
         <DialogHeader>
           <div className="typewriter text-xs font-medium text-muted-foreground">JURY SUMMONS</div>
           <DialogTitle className="font-display text-xl font-medium">You are summoned to serve as a juror</DialogTitle>
-          <DialogDescription>Send this invitation link to one person. It works once, expires in 24 hours, and anyone holding it can take the seat, so share it directly. It is shown only once. Jurors need no API key.</DialogDescription>
+          <DialogDescription>Send this invitation link to one person. It works once, expires in 24 hours, and anyone holding it can take the seat, so share it directly. It is shown only once. Jurors need no API key. If you summon someone who saw an earlier hearing of this case unsealed, their findings on a party shared with it may not be blind; the comparison of hearings marks them.</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
           <Input readOnly value={url ?? ''} aria-label="Invitation link" className="typewriter bg-exhibit" onFocus={(e) => e.currentTarget.select()} />

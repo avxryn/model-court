@@ -8,6 +8,7 @@
 import type { QuotaStanding } from '@/domain/quota'
 import type { CredentialMetadata, KeyCheckView } from '@/server/services/credentials'
 import type { EvaluationSummary, getEvaluation } from '@/server/services/evaluations'
+import type { getComparison } from '@/server/services/comparison'
 import type { getResults } from '@/server/services/results'
 import type { AnonymousReview } from '@/server/services/reviews'
 import type { getRun } from '@/server/services/runs'
@@ -26,6 +27,8 @@ export type RunView = Resolved<typeof getRun>
 export type OwnerRunView = Extract<RunView, { role: 'owner' }>
 export type ResultsView = Resolved<typeof getResults>
 export type SpecialMasterView = Resolved<typeof getSpecialMaster>
+/** GET /evaluations/:id/comparison (D-70), judge only. */
+export type ComparisonView = Resolved<typeof getComparison>
 
 /** One route as the catalog shows it (D-48): registry metadata, never the adapter version. */
 export interface CatalogModel {

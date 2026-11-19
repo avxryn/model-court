@@ -10,7 +10,7 @@ import { priceTableFor } from '../../domain/prices'
 import { findDisagreements, scoreCohort, type CompleteRating, type ScoredSession } from '../../domain/rubric'
 import { median, setupMetrics, type AttemptStatus, type UsageRecord } from '../../domain/setup-metrics'
 import { canRun, type RunStatus } from '../../domain/transitions'
-import { loadRunAccess, requireOwner, type SessionRow } from '../access'
+import { loadRunAccess, requireOwner, type RunRow, type SessionRow } from '../access'
 import { all, auditStatement, cond, GuardFailed, runGuarded } from '../db/sql'
 import type { Deps } from '../deps'
 import { ApiError, revisionConflict, stateConflict } from '../http'
@@ -37,10 +37,13 @@ interface AttemptRow {
   observed_model: string | null
 }
 
-export async function getResults(deps: Deps, userId: string, runId: string) {
-  const access = await loadRunAccess(deps.db, runId, userId)
-  const { run } = access
-  if (run.status !== 'revealed' && run.status !== 'decided') throw stateConflict('Results are available after the judge reveals the models.')
+/**
+ * One unsealed hearing loaded and scored exactly as its record is (spec 02, D-70): the frozen
+ * snapshot, manifest and cohort, the generations and attempts, and the scored sessions in cohort order.
+ * Shared by the record and the comparison of hearings, so scoring is never reimplemented.
+ */
+export async function loadScoredRun(deps: Deps, run: RunRow) {
+  const runId = run.id
   const db = deps.db
   const snapshot = parseSnapshot(run.snapshot_json)
   const manifest = JSON.parse(run.eligible_manifest_json ?? '{"caseKeys":[],"excludedCaseKeys":[],"entries":[]}') as EligibleManifest
@@ -84,6 +87,60 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
     }
   })
   const configurationKeys = snapshot.configurations.map((configuration) => configuration.key)
+  return { snapshot, manifest, cohortIds, samples, generations, attempts, importedOutputs, labelled, scored, configurationKeys }
+}
+
+type ScoredRun = Awaited<ReturnType<typeof loadScoredRun>>
+
+/** Item 1's per-party cost and speed (D-63) for one loaded hearing. */
+export function runSetupMetrics(deps: Deps, run: Pick<RunRow, 'created_at'>, { snapshot, manifest, samples, generations, attempts, importedOutputs }: ScoredRun) {
+  // Cost and speed (D-63): computed on read from recorded usage and the dated price table for the
+  // hearing's creation day. No provider call; only after reveal, like everything else here.
+  const prices = priceTableFor(run.created_at, deps.priceTables)
+  const usageRecords: UsageRecord[] = generations.map((generation) => ({
+    caseKey: generation.case_key,
+    configurationKey: generation.configuration_key,
+    sampleNo: generation.sample_no,
+    status: generation.status,
+    text: generation.accepted_attempt_id ? (attempts.find((attempt) => attempt.id === generation.accepted_attempt_id)?.output_text ?? null) : null,
+    attempts: attempts
+      .filter((attempt) => attempt.generation_id === generation.id)
+      .map((attempt) => ({
+        attemptNo: attempt.attempt_no,
+        status: attempt.status as AttemptStatus,
+        errorCode: attempt.error_code,
+        definite: attempt.status === 'failed' ? true : attempt.status === 'uncertain' ? false : null,
+        inputTokens: attempt.input_tokens,
+        outputTokens: attempt.output_tokens,
+        cachedInputTokens: attempt.cached_input_tokens,
+        reasoningTokens: attempt.reasoning_tokens,
+        durationMs: attempt.duration_ms,
+      })),
+  }))
+  const metrics = setupMetrics(
+    {
+      parties: snapshot.configurations.map((c) =>
+        isImportedSnapshot(c) ? { key: c.key, source: 'imported' as const, provider: null, routeKey: null } : { key: c.key, source: 'generated' as const, provider: c.provider, routeKey: c.modelKey },
+      ),
+      eligibleCaseKeys: manifest.caseKeys,
+      records: usageRecords,
+      samplesPerAnswer: samples,
+    },
+    prices.table,
+    Object.fromEntries(
+      snapshot.configurations.filter(isImportedSnapshot).map((c) => [c.key, { planned: snapshot.cases.length, present: importedOutputs.filter((output) => output.configuration_key === c.key).length }]),
+    ),
+  )
+  return { prices, metrics }
+}
+
+export async function getResults(deps: Deps, userId: string, runId: string) {
+  const access = await loadRunAccess(deps.db, runId, userId)
+  const { run } = access
+  if (run.status !== 'revealed' && run.status !== 'decided') throw stateConflict('Results are available after the judge reveals the models.')
+  const loaded = await loadScoredRun(deps, run)
+  const { snapshot, manifest, samples, generations, attempts, importedOutputs, labelled, scored, configurationKeys } = loaded
+  const db = deps.db
 
   const coverage = Object.fromEntries(
     snapshot.configurations.map((configuration) => {
@@ -214,43 +271,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
     }
   })
 
-  // Cost and speed (D-63): computed on read from recorded usage and the dated price table for the
-  // hearing's creation day. No provider call; only after reveal, like everything else here.
-  const prices = priceTableFor(run.created_at, deps.priceTables)
-  const usageRecords: UsageRecord[] = generations.map((generation) => ({
-    caseKey: generation.case_key,
-    configurationKey: generation.configuration_key,
-    sampleNo: generation.sample_no,
-    status: generation.status,
-    text: generation.accepted_attempt_id ? (attempts.find((attempt) => attempt.id === generation.accepted_attempt_id)?.output_text ?? null) : null,
-    attempts: attempts
-      .filter((attempt) => attempt.generation_id === generation.id)
-      .map((attempt) => ({
-        attemptNo: attempt.attempt_no,
-        status: attempt.status as AttemptStatus,
-        errorCode: attempt.error_code,
-        definite: attempt.status === 'failed' ? true : attempt.status === 'uncertain' ? false : null,
-        inputTokens: attempt.input_tokens,
-        outputTokens: attempt.output_tokens,
-        cachedInputTokens: attempt.cached_input_tokens,
-        reasoningTokens: attempt.reasoning_tokens,
-        durationMs: attempt.duration_ms,
-      })),
-  }))
-  const metrics = setupMetrics(
-    {
-      parties: snapshot.configurations.map((c) =>
-        isImportedSnapshot(c) ? { key: c.key, source: 'imported' as const, provider: null, routeKey: null } : { key: c.key, source: 'generated' as const, provider: c.provider, routeKey: c.modelKey },
-      ),
-      eligibleCaseKeys: manifest.caseKeys,
-      records: usageRecords,
-      samplesPerAnswer: samples,
-    },
-    prices.table,
-    Object.fromEntries(
-      snapshot.configurations.filter(isImportedSnapshot).map((c) => [c.key, { planned: snapshot.cases.length, present: importedOutputs.filter((output) => output.configuration_key === c.key).length }]),
-    ),
-  )
+  const { prices, metrics } = runSetupMetrics(deps, run, loaded)
 
   const verdicts = (
     await db

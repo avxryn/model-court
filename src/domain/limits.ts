@@ -9,6 +9,12 @@ export const LIMITS = {
   maxSamplesPerAnswer: 3,
   /** Sample k is first dispatched (k − 1) × this after the hearing starts, to spread the burst over cron ticks. */
   sampleStaggerMs: 60_000,
+  /** Spec 02 (D-69, Q2): hearings a case may hold, canceled ones included. Duplicate the case to keep going. */
+  hearingsPerEvaluation: 20,
+  /** Spec 02 (D-70): hearings in one comparison, so one read loads at most five records. */
+  compareHearingsMax: 5,
+  /** Spec 02 (D-71): a scenario file or certified record read for import (same as the CSV import and body caps). */
+  scenarioFileBytes: 128 * 1024,
   caseTitle: { min: 1, max: 100 },
   caseInput: { min: 1, max: 4_000 },
   caseReference: { min: 0, max: 8_000 },

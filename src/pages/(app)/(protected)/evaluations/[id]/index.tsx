@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { AlertTriangle, Columns2, Repeat } from 'lucide-react'
 import { Caption, CaseStage, DocketNumber, Sheet, Stamp } from '@/components/court/CaseFile'
 import { CaseFolder, DividerTabs } from '@/components/court/Folder'
 import { CaseActionBar } from '@/components/evaluations/CaseActionBar'
@@ -13,6 +13,7 @@ import { KitPicker } from '@/components/evaluations/KitPicker'
 import { KitSettingsEditor } from '@/components/evaluations/KitSettingsEditor'
 import { MissingKeys, SavedKeys } from '@/components/evaluations/KeyStatus'
 import { QuestionsEditor } from '@/components/evaluations/QuestionsEditor'
+import { RehearDialog } from '@/components/evaluations/RehearDialog'
 import { RepeatsPicker } from '@/components/evaluations/RepeatsPicker'
 import { RubricPicker } from '@/components/evaluations/RubricPicker'
 import { StartHearingDialog } from '@/components/evaluations/StartHearingDialog'
@@ -34,6 +35,8 @@ import { caseStep, docketNumber, recordStamp } from '@/lib/court'
 import type { CatalogView, CredentialMetadata, EvaluationView, OwnerEvaluationView } from '@/lib/dto'
 import { formatTime, plural } from '@/lib/format'
 import { draftKit, draftKitSettings } from '@/lib/kits'
+import { useDraftPartyFingerprints, useDraftScenarioHash } from '@/lib/scenario-draft'
+import { catalogModelName, hearingNumbers } from '@/lib/scenario-words'
 import { isActive } from '@/lib/status'
 import { useApi } from '@/lib/use-api'
 
@@ -44,7 +47,7 @@ export default function EvaluationPage() {
   if (evaluation.error && !evaluation.data) return <Page><ErrorPanel error={evaluation.error} onRetry={evaluation.reload} /></Page>
   if (!evaluation.data) return null
   if (evaluation.data.role === 'reviewer') return <JurorCaseView evaluation={evaluation.data} />
-  return <OwnerEvaluation key={evaluation.data.id} evaluation={evaluation.data as OwnerEvaluationView} reload={evaluation.reload} />
+  return <OwnerEvaluation key={`${evaluation.data.id}:${(evaluation.data as OwnerEvaluationView).revision}`} evaluation={evaluation.data as OwnerEvaluationView} reload={evaluation.reload} />
 }
 
 function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationView; reload: () => Promise<void> }) {
@@ -53,10 +56,38 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
   const credentials = useApi<{ items: CredentialMetadata[] }>('/credentials')
   const c = useCaseDraft(evaluation)
   const { draft } = c
-  // With a hearing on file the folder opens on Hearings; a new case opens on its questions.
-  const [tab, setTab] = useState<string>(evaluation.runs.length > 0 ? 'runs' : 'cases')
-
+  const [params, setParams] = useSearchParams()
+  // With a hearing on file the folder opens on Hearings; a new case opens on its questions. A re-hearing opens on its parties.
+  const [tab, setTab] = useState<string>(params.get('rehearing') ? 'configurations' : evaluation.runs.length > 0 ? 'runs' : 'cases')
+  // Re-hear (D-69): ?rehear=<runId> opens the dialog; ?rehearing=<runId> keeps the banner once restored.
+  const rehearable = (id: string | null) => evaluation.runs.find((run) => run.id === id && (run.status === 'revealed' || run.status === 'decided' || run.status === 'canceled')) ?? null
+  const rehearSource = rehearable(params.get('rehear'))
+  const rehearing = rehearable(params.get('rehearing'))
   const routes: ModelRoute[] | null = useMemo(() => (catalog.data ? catalog.data.models.map((m) => ({ ...m, adapterVersion: '' })) : null), [catalog.data])
+  const workingScenario = useDraftScenarioHash(draft)
+  // Where the working draft stands (D-68): computed here so it follows edits and saves without a reload.
+  const workingVersion = evaluation.runs.find((run) => run.scenarioHash === workingScenario)?.scenarioVersion ?? null
+  const draftStanding = { draftScenarioVersion: workingVersion, nextScenarioVersion: evaluation.nextScenarioVersion, draftDiff: workingScenario === evaluation.draftScenarioHash ? evaluation.draftDiff : null }
+  const sameRuns = workingVersion === null ? [] : evaluation.runs.filter((run) => run.scenarioVersion === workingVersion)
+  // Parties already heard (D-69): the hearing being re-heard, else the newest unsealed hearing on these questions.
+  const heardIn = (rehearing && rehearing.scenarioVersion === workingVersion && rehearing.parties ? rehearing : null) ?? [...sameRuns].sort((a, b) => b.createdAt - a.createdAt).find((run) => run.parties) ?? null
+  const fingerprints = useDraftPartyFingerprints(draft, routes, c.imports)
+  const heardFingerprints = new Set(heardIn?.parties?.map((party) => party.fingerprint) ?? [])
+  const seenImported = new Set(evaluation.runs.flatMap((run) => (run.parties ?? []).filter((party) => party.source === 'imported').map((party) => party.fingerprint)))
+  const repeatedImported = draft.configurations.filter((party) => party.kind === 'imported' && seenImported.has(fingerprints?.get(party.key) ?? '')).map((party) => party.label)
+  const setParam = (name: 'rehear' | 'rehearing', value: string | null) => {
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.delete('rehear')
+        if (name === 'rehearing') next.delete('rehearing')
+        if (value) next.set(name, value)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
   const providers = requiredProviders(draft.configurations, routes ?? [])
   const keys = credentials.data?.items ?? []
   const missingProviders = providers.filter((provider) => !keys.some((key) => key.provider === provider))
@@ -64,6 +95,17 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
   const latestRun = [...evaluation.runs].sort((a, b) => b.createdAt - a.createdAt)[0]
   const stamp = recordStamp(latestRun?.status)
   const calls = plannedCalls(draft)
+  // The Start dialog says which questions this is and splits the calls into parties asked again and new ones (D-69).
+  const perParty = draft.cases.length * (draft.samplesPerAnswer ?? 1)
+  const modelParties = generatedParties(draft.configurations)
+  const askedAgain = heardIn && fingerprints ? modelParties.filter((party) => heardFingerprints.has(fingerprints.get(party.key) ?? '')) : []
+  const newParties = modelParties.filter((party) => !askedAgain.includes(party))
+  const hearingScenario = {
+    hash: workingScenario,
+    sameAs: workingVersion === null ? null : `${hearingNumbers(sameRuns.map((run) => run.number))} (v${workingVersion})`,
+    nextVersion: evaluation.nextScenarioVersion,
+    split: heardIn && askedAgain.length > 0 ? { heardIn: heardIn.number, again: askedAgain.length * perParty, fresh: newParties.length * perParty, freshLabels: newParties.map((party) => party.label) } : null,
+  }
   // Repeats apply to generated parties only (D-65): drop the setting when none is left, so the draft stays valid.
   const change = (next: DraftInput) => {
     if (next.samplesPerAnswer && generatedParties(next.configurations).length === 0) {
@@ -81,7 +123,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
     <Page width="wide">
       <div className="flex items-start justify-between gap-3">
         <Breadcrumbs items={[{ label: 'Your cases', to: '/evaluations' }, { label: evaluation.title }]} />
-        <CaseActions evaluationId={evaluation.id} title={evaluation.title} revision={c.revision} />
+        <CaseActions evaluationId={evaluation.id} title={evaluation.title} revision={c.revision} runs={evaluation.runs} copyCount={evaluation.copyCount} hasImported={draft.configurations.some((party) => party.kind === 'imported')} />
       </div>
       <Tabs value={tab} onValueChange={(value) => setTab(String(value))} className="block">
         <CaseFolder
@@ -115,6 +157,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                   <div>
                     Presiding: <span className="italic">you, as judge</span>
                   </div>
+                  {evaluation.origin && <OriginLine origin={evaluation.origin} />}
                   {evaluation.taskDescription && <div className="text-xs leading-snug text-muted-foreground">{evaluation.taskDescription}</div>}
                 </>
               }
@@ -152,7 +195,15 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                 <QuestionsEditor cases={draft.cases} errors={c.errors} newId={newIntentKey} kit={draftKit(draft)} kitSettings={draftKitSettings(draft)} onChange={(cases) => c.change({ ...draft, cases })} />
               </TabsContent>
               <TabsContent value="configurations">
+                {rehearing && <RehearBanner source={rehearing} runs={evaluation.runs} matches={workingScenario === null || workingScenario === rehearing.scenarioHash} onClose={() => setParam('rehearing', null)} />}
                 {credentials.data && <MissingKeys missing={missingProviders} />}
+                {repeatedImported.length > 0 && (
+                  <Alert className="mb-6">
+                    <AlertTriangle aria-hidden />
+                    <AlertTitle>Jurors of earlier hearings have seen these exact answers</AlertTitle>
+                    <AlertDescription>{repeatedImported.join(', ')} {repeatedImported.length === 1 ? 'uses' : 'use'} the same imported answers as an earlier hearing. A juror who sat on it, and saw its record unsealed, can recognize them. Their findings on {repeatedImported.length === 1 ? 'this party' : 'these parties'} may not be blind.</AlertDescription>
+                  </Alert>
+                )}
                 <ConfigurationsEditor
                   draft={draft}
                   catalog={catalog.data}
@@ -176,7 +227,25 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                 <SavedKeys providers={providers} keys={keys} />
               </TabsContent>
               <TabsContent value="runs">
-                <HearingList runs={evaluation.runs} to={(run) => `/runs/${run.id}`} />
+                {evaluation.runs.filter((run) => run.status === 'revealed' || run.status === 'decided').length >= 2 && (
+                  <div className="mb-4 flex justify-end">
+                    <Button size="sm" variant="outline" render={<Link to={`/evaluations/${evaluation.id}/compare`} />} nativeButton={false}>
+                      <Columns2 aria-hidden /> Compare hearings
+                    </Button>
+                  </div>
+                )}
+                <HearingList runs={evaluation.runs} to={(run) => `/runs/${run.id}`} versions={{
+                    rows: evaluation.runs,
+                    draft: draftStanding,
+                    modelName: catalogModelName(catalog.data?.models),
+                    actions: (row) =>
+                      rehearable(row.id) && (
+                        <Button size="sm" variant="outline" onClick={() => setParam('rehear', row.id)}>
+                          <Repeat aria-hidden /> Re-hear with different parties
+                        </Button>
+                      ),
+                  }}
+                />
               </TabsContent>
             </div>
             <CaseActionBar
@@ -186,11 +255,70 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
               onSave={() => void c.save()}
               calls={calls}
               blockers={blockers}
-              start={<StartHearingDialog evaluationId={evaluation.id} revision={c.revision} draft={draft} providers={providers} keys={keys} disabled={blockers.length > 0} />}
+              start={<StartHearingDialog evaluationId={evaluation.id} revision={c.revision} draft={draft} providers={providers} keys={keys} disabled={blockers.length > 0} scenario={hearingScenario} />}
             />
           </Sheet>
         </CaseFolder>
       </Tabs>
+      {rehearSource && (
+        <RehearDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setParam('rehear', null)
+          }}
+          evaluationId={evaluation.id}
+          revision={c.revision}
+          source={rehearSource}
+          draftScenarioHash={evaluation.draftScenarioHash}
+          dirty={c.dirty}
+          onRestored={async () => {
+            setParam('rehearing', rehearSource.id)
+            setTab('configurations')
+            await reload()
+          }}
+        />
+      )}
     </Page>
+  )
+}
+
+/** Shown on the Parties tab after a restore: the questions are the earlier hearing's, until they are edited. */
+function RehearBanner({ source, runs, matches, onClose }: { source: OwnerEvaluationView['runs'][number]; runs: OwnerEvaluationView['runs']; matches: boolean; onClose: () => void }) {
+  const same = hearingNumbers(runs.filter((run) => run.scenarioHash === source.scenarioHash).map((run) => run.number))
+  return (
+    <Alert variant={matches ? 'default' : 'destructive'} className="mb-6">
+      {matches ? <Repeat aria-hidden /> : <AlertTriangle aria-hidden />}
+      <AlertTitle>{matches ? `Re-hearing v${source.scenarioVersion}` : `These questions no longer match v${source.scenarioVersion}`}</AlertTitle>
+      <AlertDescription>
+        {matches
+          ? `Questions are hearing ${source.number}’s; change only the parties, then start. The new hearing can be compared with ${same}.`
+          : `Hearings on them cannot be compared with ${same}. Undo the question edits to keep them comparable.`}
+      </AlertDescription>
+      <AlertAction>
+        <Button size="sm" variant="ghost" onClick={onClose}>
+          Dismiss
+        </Button>
+      </AlertAction>
+    </Alert>
+  )
+}
+
+/** Where a copied or imported case came from (D-71). Never a link into a file's content. */
+function OriginLine({ origin }: { origin: NonNullable<OwnerEvaluationView['origin']> }) {
+  if (origin.kind === 'scenario_file') return <div className="text-xs text-muted-foreground">Opened from a scenario file</div>
+  if (origin.kind === 'certified_record') return <div className="text-xs text-muted-foreground">Questions taken from a certified record</div>
+  return (
+    <div className="text-xs text-muted-foreground">
+      {origin.sourceDeleted || !origin.fromEvaluationId ? (
+        'Copied from a case that was deleted'
+      ) : (
+        <>
+          Copied from{' '}
+          <Link className="underline underline-offset-4" to={`/evaluations/${origin.fromEvaluationId}`}>
+            case {docketNumber(origin.fromEvaluationId)}
+          </Link>
+        </>
+      )}
+    </div>
   )
 }

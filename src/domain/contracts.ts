@@ -161,10 +161,27 @@ export type Draft = DraftInput & { schemaVersion: 1 }
 // Evaluations and runs
 // ---------------------------------------------------------------------------
 
-export const createEvaluationSchema = z.strictObject({
-  title: text(LIMITS.evaluationTitle, 'Title'),
-  taskDescription: text(LIMITS.taskDescription, 'Task description'),
-})
+export const createEvaluationSchema = z
+  .strictObject({
+    title: text(LIMITS.evaluationTitle, 'Title'),
+    taskDescription: text(LIMITS.taskDescription, 'Task description'),
+    /** Spec 02 (D-71): start from this draft (an imported scenario file or record) instead of the example. */
+    draft: draftInputSchema.optional(),
+    /** Where the draft came from; the server computes the origin's scenario hash itself. */
+    origin: z.strictObject({ kind: z.enum(['scenario_file', 'certified_record']) }).optional(),
+  })
+  .refine((value) => value.origin === undefined || value.draft !== undefined, { message: 'An origin needs a draft', path: ['origin'] })
+
+/** Spec 02 (D-71): copy a case's draft, or one hearing's frozen setup, into a new case. */
+export const duplicateEvaluationSchema = z
+  .strictObject({
+    title: text(LIMITS.evaluationTitle, 'Title'),
+    fromRunId: uuid.optional(),
+    includeParties: z.boolean(),
+    /** Same meaning as `confirmMayShareWithJurors`: the copied answers will be shown to the copy's jurors. */
+    includeImportedAnswers: z.literal(true).optional(),
+  })
+  .refine((value) => !value.includeImportedAnswers || value.includeParties, { message: 'Imported answers come with their parties', path: ['includeImportedAnswers'] })
 
 export const deleteEvaluationSchema = z.strictObject({ confirmTitle: z.string().max(200) })
 
@@ -175,7 +192,17 @@ export const startRunSchema = z.strictObject({
   credentialIdsByProvider: z.partialRecord(providerSchema, uuid),
   consentToProviderProcessing: z.literal(true),
   acknowledgeProviderCharges: z.literal(true),
+  /**
+   * Spec 02 (D-69): the scenario the judge means to start. A draft whose questions
+   * changed since (another tab) is refused with 409 instead of silently starting a different scenario.
+   */
+  expectedScenarioHash: z.string().regex(/^[0-9a-f]{64}$/, 'Invalid scenario hash').optional(),
 })
+
+/** Re-hear (D-69): copy a hearing's frozen questions and/or parties back into the draft. */
+export const restoreDraftSchema = z
+  .strictObject({ fromRunId: uuid, questions: z.boolean(), parties: z.boolean() })
+  .refine((value) => value.questions || value.parties, { message: 'Restore the questions, the parties, or both', path: ['questions'] })
 
 /** Start the special master (D-40): the judge's own key for the grader's provider, with plain-words consent. */
 export const startSpecialMasterSchema = z.strictObject({

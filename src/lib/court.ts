@@ -31,6 +31,8 @@ export const TERMS = {
   record: { term: 'The record', plain: 'results', explain: 'Everything the hearing produced: testimony, findings, failures, and disagreements.' },
   judgment: { term: 'Judgment', plain: 'your verdict', explain: 'Your recorded decision and reasons. It may disagree with the numbers; say why.' },
   checks: { term: 'Automatic checks', plain: 'free tests on every answer', explain: 'Free tests Model Court runs on every answer, such as length or whether a label matches your answer key. Shown after unsealing, next to the jury’s findings and never mixed into them.' },
+  scenario: { term: 'Scenario version', plain: 'the same questions', explain: 'Hearings that asked exactly the same questions, exhibits and jury instructions share a version (v1, v2…), so they can be compared. Fixing a question’s title keeps the version.' },
+  anchor: { term: 'Anchor party', plain: 'a setup heard in both hearings', explain: 'The same model and instructions heard in two hearings. Other parties are compared with it inside their own hearing, never by adding scores across hearings.' },
   certified: { term: 'Certified record', plain: 'download', explain: 'A downloadable copy of a hearing’s record, with a fingerprint so two copies can be compared. Only the judge can download it.' },
 } as const satisfies Record<string, CourtTerm>
 

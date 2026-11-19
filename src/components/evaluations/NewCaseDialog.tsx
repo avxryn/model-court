@@ -14,6 +14,7 @@ import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-clie
 import type { OwnerEvaluationView } from '@/lib/dto'
 import { clearNewCaseDraft, isEmptyDraft, readNewCaseDraft, writeNewCaseDraft } from '@/lib/new-case-draft'
 import { CASE_TEMPLATES } from '@/lib/templates'
+import { ScenarioImport } from './ScenarioImport'
 
 /**
  * Open a new case from a starter template. `trigger` replaces the default
@@ -37,6 +38,8 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
   }
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Spec 02 (D-71): open the case from a scenario file or certified record instead of a template.
+  const [importing, setImporting] = useState(false)
 
   // Autosave while the dialog is open; an untouched form leaves no draft behind.
   useEffect(() => {
@@ -89,6 +92,7 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
         setOpen(next)
         if (next) {
           setError(null)
+          setImporting(false)
           const draft = readNewCaseDraft(userId)
           if (draft) {
             setTemplateId(CASE_TEMPLATES.some((t) => t.id === draft.templateId) ? draft.templateId : CASE_TEMPLATES[0].id)
@@ -111,8 +115,18 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="font-display text-xl font-medium">Open a new case</DialogTitle>
-          <DialogDescription>Start from a template. You can edit every question, exhibit, and party before the first hearing.</DialogDescription>
+          <DialogDescription>
+            {importing ? 'Open a scenario file someone exported from Model Court, or the questions of a certified record.' : 'Start from a template. You can edit every question, exhibit, and party before the first hearing.'}{' '}
+            {!importing && (
+              <Button type="button" variant="link" size="xs" className="h-auto p-0 align-baseline text-sm" onClick={() => setImporting(true)}>
+                Import a scenario file instead
+              </Button>
+            )}
+          </DialogDescription>
         </DialogHeader>
+        {importing ? (
+          <ScenarioImport onCancel={() => setImporting(false)} onCreated={() => setOpen(false)} />
+        ) : (
         <form
           className="space-y-4"
           onSubmit={(event) => {
@@ -151,6 +165,7 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
             </Button>
           </DialogFooter>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   )

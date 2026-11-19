@@ -4,16 +4,17 @@
 
 import { z } from 'zod'
 import { sha256Hex } from '../../domain/canonical'
+import { scenarioHash, scenarioSourceOfDraft } from '../../domain/scenario'
 import { createEvaluationSchema, draftInputSchema, isImported, type Draft, type DraftInput, type putImportsSchema } from '../../domain/contracts'
 import { utf8ByteLength } from '../../domain/text'
-import { makeExampleDraft } from '../../domain/example'
+import { defaultModelKeys, makeExampleDraft } from '../../domain/example'
 import { LIMITS } from '../../domain/limits'
-import { isRouteEnabled, MODEL_ROUTES, type ModelRoute } from '../../domain/registry'
 import type { RunStatus } from '../../domain/transitions'
 import { loadEvaluationAccess, requireOwner, type EvaluationRow } from '../access'
 import { auditStatement, cond, GuardFailed, releaseReservations, runGuarded } from '../db/sql'
 import type { Deps } from '../deps'
 import { ApiError, revisionConflict } from '../http'
+import { caseOrigin, caseVersions } from './scenarios'
 
 export interface EvaluationSummary {
   id: string
@@ -30,24 +31,6 @@ export interface EvaluationSummary {
   /** Whether the viewer has filed their own worksheet on the latest hearing. */
   viewerFiled: boolean
   updatedAt: number
-}
-
-/** A new case starts on the low-cost pair when it can run; registry order would put the priciest model first (D-48). */
-const PREFERRED_DEFAULTS: Record<ModelRoute['provider'], string> = { openai: 'openai-gpt-6-luna', anthropic: 'anthropic-claude-haiku-5-5' }
-
-function defaultModelKeys(routes: readonly ModelRoute[]): [string, string] {
-  const pick = (provider: ModelRoute['provider']) => {
-    const ofProvider = routes.filter((route) => route.provider === provider)
-    const preferred = ofProvider.find((route) => route.key === PREFERRED_DEFAULTS[provider])
-    return (
-      (preferred && isRouteEnabled(preferred) ? preferred : undefined) ??
-      ofProvider.find(isRouteEnabled) ??
-      preferred ??
-      ofProvider[0] ??
-      MODEL_ROUTES.find((route) => route.provider === provider)!
-    ).key
-  }
-  return [pick('openai'), pick('anthropic')]
 }
 
 function encodeCursor(updatedAt: number, id: string): string {
@@ -119,7 +102,13 @@ export async function listEvaluations(deps: Deps, userId: string, cursor: string
 export async function createEvaluation(deps: Deps, userId: string, input: z.output<typeof createEvaluationSchema>, requestId: string) {
   const now = deps.now()
   const id = deps.newId()
-  const draft: Draft = { schemaVersion: 1, ...makeExampleDraft(deps.newId, defaultModelKeys(deps.routes)) }
+  // Spec 02 (D-71): an imported scenario starts the case instead of the example, after the same caps as a save.
+  if (input.draft) {
+    const capError = configurationCapError(deps, input.draft.configurations.length) ?? samplesCapError(deps, input.draft.samplesPerAnswer)
+    if (capError) throw capError
+  }
+  const draft: Draft = { schemaVersion: 1, ...(input.draft ?? makeExampleDraft(deps.newId, defaultModelKeys(deps.routes))) }
+  const origin = input.origin && input.draft ? { kind: input.origin.kind, scenarioHash: await scenarioHash(scenarioSourceOfDraft(draft)) } : null
   try {
     await runGuarded(
       deps.db,
@@ -128,20 +117,24 @@ export async function createEvaluation(deps: Deps, userId: string, input: z.outp
       [
         deps.db
           .prepare(
-            `INSERT INTO evaluations (id, owner_user_id, title, task_description, draft_json, revision, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+            `INSERT INTO evaluations (id, owner_user_id, title, task_description, draft_json, revision, created_at, updated_at, origin_kind, origin_scenario_hash)
+             VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
           )
-          .bind(id, userId, input.title, input.taskDescription, JSON.stringify(draft), now, now),
-        auditStatement(deps.db, { eventType: 'evaluation.create', requestId, outcome: 'ok', actorUserId: userId, evaluationId: id }, now),
+          .bind(id, userId, input.title, input.taskDescription, JSON.stringify(draft), now, now, origin?.kind ?? null, origin?.scenarioHash ?? null),
+        auditStatement(deps.db, { eventType: 'evaluation.create', requestId, outcome: 'ok', actorUserId: userId, evaluationId: id, ...(origin ? { metadata: { origin: origin.kind } } : {}) }, now),
       ],
     )
   } catch (error) {
     if (error instanceof GuardFailed) {
-      throw new ApiError(429, 'QUOTA_EXHAUSTED', `You can keep up to ${LIMITS.ownEvaluationsPerUser} evaluations. Delete one to create another.`)
+      throw caseQuotaError()
     }
     throw error
   }
   return { id, revision: 1, draft }
+}
+
+export function caseQuotaError(): ApiError {
+  return new ApiError(429, 'QUOTA_EXHAUSTED', `You can keep up to ${LIMITS.ownEvaluationsPerUser} evaluations. Delete one to create another.`)
 }
 
 export function parseStoredDraft(row: Pick<EvaluationRow, 'draft_json'>): Draft {
@@ -163,23 +156,32 @@ export async function getEvaluation(deps: Deps, userId: string, evaluationId: st
   const { evaluation, role } = await loadEvaluationAccess(deps.db, evaluationId, userId)
   if (role === 'owner') {
     const runs = await deps.db
-      .prepare('SELECT id, status, revision, created_at FROM runs WHERE evaluation_id = ? ORDER BY created_at DESC, id DESC')
+      .prepare('SELECT id, status, revision, created_at, snapshot_json FROM runs WHERE evaluation_id = ? ORDER BY created_at DESC, id DESC')
       .bind(evaluationId)
-      .all<{ id: string; status: RunStatus; revision: number; created_at: number }>()
+      .all<{ id: string; status: RunStatus; revision: number; created_at: number; snapshot_json: string }>()
+    const draft = parseStoredDraft(evaluation)
+    // Scenario versions (D-68): computed from the frozen snapshots, owner only.
+    const versions = await caseVersions(runs.results, draft)
     return {
       id: evaluation.id,
       role,
       title: evaluation.title,
       taskDescription: evaluation.task_description,
       revision: evaluation.revision,
-      draft: parseStoredDraft(evaluation),
+      draft,
+      draftScenarioHash: versions.draftScenarioHash,
+      draftScenarioVersion: versions.draftScenarioVersion,
+      nextScenarioVersion: versions.nextScenarioVersion,
+      draftDiff: versions.draftDiff,
       imports: (
         await deps.db
           .prepare('SELECT configuration_key, case_key, text, text_sha256, byte_length, updated_at FROM evaluation_imports WHERE evaluation_id = ? ORDER BY configuration_key, case_key')
           .bind(evaluationId)
           .all<{ configuration_key: string; case_key: string; text: string; text_sha256: string; byte_length: number; updated_at: number }>()
       ).results.map((row) => ({ configurationKey: row.configuration_key, caseKey: row.case_key, text: row.text, sha256: row.text_sha256, byteLength: row.byte_length, updatedAt: row.updated_at })),
-      runs: runs.results.map((run) => ({ id: run.id, status: run.status, revision: run.revision, createdAt: run.created_at })),
+      runs: runs.results.map((run) => ({ id: run.id, status: run.status, revision: run.revision, createdAt: run.created_at, ...versions.byRun.get(run.id)! })),
+      // Spec 02 (D-71): where this case came from, and how many live copies were made of it.
+      ...(await caseOrigin(deps.db, evaluation)),
       updatedAt: evaluation.updated_at,
     }
   }
