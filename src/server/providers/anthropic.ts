@@ -7,7 +7,7 @@
 
 import type { TranscriptMessage } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
-import { classifyHttpError, finishText, isFailure, isRecord, nonNegativeInt, postJson, subRecord, type Adapter } from './common'
+import { classifyHttpError, featureRejection, featuresOf, finishText, isFailure, isRecord, nonNegativeInt, postJson, subRecord, type Adapter, type RequestFeatures } from './common'
 
 export const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages'
 export const ANTHROPIC_VERSION = '2026-10-21'
@@ -23,24 +23,38 @@ export const ANTHROPIC_VERSION = '2026-10-21'
  */
 export type AnthropicThinking = 'disabled' | 'between_tools' | 'adaptive-low'
 
-/** With a single user message and thinking `disabled` this is byte-identical to the v1 body (D-39). */
-export function anthropicRequestBody(modelId: string, system: string, messages: readonly TranscriptMessage[], maxOutputTokens: number, thinking: AnthropicThinking = 'disabled') {
+/**
+ * With a single user message and thinking `disabled` this is byte-identical to the v1 body (D-39).
+ * Features (spec 04 §6.3, D-86; `anthropic-messages-v3`, `-between-tools-v2` and
+ * `-adaptive-low-v2` only): a base64 `document` block before the first user text, and
+ * `output_config.format` (GA, no beta header), merged with `effort` on adaptive-low into one
+ * object. Without features the body is the predecessor's.
+ */
+export function anthropicRequestBody(modelId: string, system: string, messages: readonly TranscriptMessage[], maxOutputTokens: number, thinking: AnthropicThinking = 'disabled', features: RequestFeatures = {}) {
+  const firstUser = messages.findIndex((message) => message.role === 'user')
   const base = {
     model: modelId,
     max_tokens: thinking === 'adaptive-low' ? maxOutputTokens + LIMITS.reasoningHeadroomTokens : maxOutputTokens,
     system,
-    messages: messages.map((message) => ({ role: message.role, content: message.content })),
+    messages: messages.map((message, index) =>
+      features.document && index === firstUser
+        ? { role: message.role, content: [{ type: 'document', source: { type: 'base64', media_type: features.document.mediaType, data: features.document.base64 } }, { type: 'text', text: message.content }] }
+        : { role: message.role, content: message.content },
+    ),
   }
-  if (thinking === 'adaptive-low') return { ...base, thinking: { type: 'adaptive', display: 'omitted' }, output_config: { effort: 'low' } }
-  return { ...base, thinking: { type: thinking } }
+  const format = features.responseFormat ? { format: { type: 'json_schema', schema: features.responseFormat.schema } } : null
+  if (thinking === 'adaptive-low') return { ...base, thinking: { type: 'adaptive', display: 'omitted' }, output_config: { effort: 'low', ...format } }
+  return { ...base, thinking: { type: thinking }, ...(format ? { output_config: format } : {}) }
 }
 
-export const makeAnthropicAdapter = (thinking: AnthropicThinking): Adapter => async (fetchFn, request, timeoutSignal) => {
+/** `withFeatures`: the version may carry structured output and a PDF (spec 04 §6.4); older versions never send them. */
+export const makeAnthropicAdapter = (thinking: AnthropicThinking, withFeatures = false): Adapter => async (fetchFn, request, timeoutSignal) => {
+  const features = withFeatures ? featuresOf(request) : {}
   const raw = await postJson(
     fetchFn,
     ANTHROPIC_MESSAGES_URL,
     { 'x-api-key': request.apiKey, 'anthropic-version': ANTHROPIC_VERSION },
-    anthropicRequestBody(request.modelId, request.system, request.messages, request.maxOutputTokens, thinking),
+    anthropicRequestBody(request.modelId, request.system, request.messages, request.maxOutputTokens, thinking, features),
     request.signal,
     timeoutSignal,
     'request-id',
@@ -53,7 +67,7 @@ export const makeAnthropicAdapter = (thinking: AnthropicThinking): Adapter => as
     const message = typeof error.message === 'string' ? error.message.toLowerCase() : ''
     const code = raw.status === 529
       ? 'PROVIDER_UNAVAILABLE'
-      : classifyHttpError(raw.status, {
+      : featureRejection(raw.status, typeof error.message === 'string' ? error.message : '', features) ?? classifyHttpError(raw.status, {
           quota: error.type === 'billing_error' || message.includes('credit balance'),
           modelMissing: error.type === 'not_found_error',
         })

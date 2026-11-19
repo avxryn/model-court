@@ -8,7 +8,7 @@
 
 import type { TranscriptMessage } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
-import { classifyHttpError, finishText, isFailure, isRecord, nonNegativeInt, postJson, subRecord, type Adapter } from './common'
+import { classifyHttpError, featureRejection, featuresOf, finishText, isFailure, isRecord, nonNegativeInt, postJson, subRecord, type Adapter, type RequestFeatures } from './common'
 
 export const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
 
@@ -19,26 +19,43 @@ export const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
  */
 export type OpenAiReasoning = 'none' | 'low'
 
-/** With a single user message and reasoning `none` this is byte-identical to the v1 body (D-39). */
-export function openAiRequestBody(modelId: string, system: string, messages: readonly TranscriptMessage[], maxOutputTokens: number, reasoning: OpenAiReasoning = 'none') {
+/**
+ * With a single user message and reasoning `none` this is byte-identical to the v1 body (D-39).
+ * Features (spec 04 §6.2, D-86; `openai-responses-v3` and `-reasoning-low-v2` only): a PDF as an
+ * `input_file` part before the first user text, with the fixed name `document.pdf` and `detail`
+ * unset; a strict `json_schema` text format. Without features the body is the predecessor's.
+ */
+export function openAiRequestBody(modelId: string, system: string, messages: readonly TranscriptMessage[], maxOutputTokens: number, reasoning: OpenAiReasoning = 'none', features: RequestFeatures = {}) {
+  const firstUser = messages.findIndex((message) => message.role === 'user')
   return {
     model: modelId,
     instructions: system,
-    input: messages.map((message) =>
-      message.role === 'user' ? { role: 'user', content: [{ type: 'input_text', text: message.content }] } : { role: 'assistant', content: [{ type: 'output_text', text: message.content }] },
+    input: messages.map((message, index) =>
+      message.role === 'user'
+        ? {
+            role: 'user',
+            content: [
+              ...(features.document && index === firstUser ? [{ type: 'input_file', filename: 'document.pdf', file_data: `data:${features.document.mediaType};base64,${features.document.base64}` }] : []),
+              { type: 'input_text', text: message.content },
+            ],
+          }
+        : { role: 'assistant', content: [{ type: 'output_text', text: message.content }] },
     ),
+    ...(features.responseFormat ? { text: { format: { type: 'json_schema', name: features.responseFormat.name, strict: true, schema: features.responseFormat.schema } } } : {}),
     max_output_tokens: reasoning === 'none' ? maxOutputTokens : maxOutputTokens + LIMITS.reasoningHeadroomTokens,
     reasoning: { effort: reasoning },
     store: false,
   }
 }
 
-export const makeOpenAiAdapter = (reasoning: OpenAiReasoning): Adapter => async (fetchFn, request, timeoutSignal) => {
+/** `withFeatures`: the version may carry structured output and a PDF (spec 04 §6.4); older versions never send them. */
+export const makeOpenAiAdapter = (reasoning: OpenAiReasoning, withFeatures = false): Adapter => async (fetchFn, request, timeoutSignal) => {
+  const features = withFeatures ? featuresOf(request) : {}
   const raw = await postJson(
     fetchFn,
     OPENAI_RESPONSES_URL,
     { authorization: `Bearer ${request.apiKey}` },
-    openAiRequestBody(request.modelId, request.system, request.messages, request.maxOutputTokens, reasoning),
+    openAiRequestBody(request.modelId, request.system, request.messages, request.maxOutputTokens, reasoning, features),
     request.signal,
     timeoutSignal,
     'x-request-id',
@@ -48,10 +65,12 @@ export const makeOpenAiAdapter = (reasoning: OpenAiReasoning): Adapter => async 
 
   if (raw.status < 200 || raw.status >= 300) {
     const error = isRecord(raw.json) && isRecord(raw.json.error) ? raw.json.error : {}
-    const code = classifyHttpError(raw.status, {
-      quota: error.code === 'insufficient_quota' || error.type === 'insufficient_quota',
-      modelMissing: error.code === 'model_not_found',
-    })
+    const code =
+      featureRejection(raw.status, typeof error.message === 'string' ? error.message : '', features) ??
+      classifyHttpError(raw.status, {
+        quota: error.code === 'insufficient_quota' || error.type === 'insufficient_quota',
+        modelMissing: error.code === 'model_not_found',
+      })
     return { kind: 'failure', code, definite: true, ...base }
   }
 

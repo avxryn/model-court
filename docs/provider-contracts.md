@@ -139,6 +139,23 @@ Routes now use `openai-responses-v2` and `anthropic-messages-v2`. With one user 
 | | openai | gpt-6-luna | multi | | |
 | | anthropic | claude-haiku-5-5 | multi | | |
 
+## Structured and PDF checks (spec 04 §6.5, D-86): pending
+
+Extraction hearings record each route's feature successor (`openai-responses-v3`, `openai-responses-reasoning-low-v2`, `anthropic-messages-v3`, `anthropic-messages-between-tools-v2`, `anthropic-messages-adaptive-low-v2`). Without a schema or a PDF each successor's body is byte-identical to its predecessor's (unit-tested), and plain hearings keep recording the plain versions. With features:
+
+- OpenAI Responses: `text: {format: {type: "json_schema", name: "extraction", strict: true, schema}}`; a PDF as `{type: "input_file", filename: "document.pdf", file_data: "data:application/pdf;base64,…"}` before the first `input_text`; `detail` unset (decision 5).
+- Anthropic Messages: `output_config: {format: {type: "json_schema", schema}}` (merged with `effort: "low"` on adaptive-low into one object; no beta header, never `output_format`); a PDF as `{type: "document", source: {type: "base64", media_type: "application/pdf", data}}` before the first text block. Citations stay off.
+- A 400 whose message names the schema is `PROVIDER_SCHEMA_REJECTED`, one that names the PDF `PROVIDER_DOCUMENT_REJECTED` (both definite); hints pinned in `adapters-v3.test.ts` from the documented messages, to revise after the live check.
+
+`structuredVerifiedAt` and `pdfVerifiedAt` stay null until `npm run smoke:providers` succeeds in mode `json` (a fixed six-field schema on a short text) or `pdf` (the same schema on `tests/fixtures/extraction/invoice-1p.pdf`) and the output parses and fits the schema (the script prints `structured.parsed` and `structured.fitsSchema`). Record input tokens for `pdf`: the per-page estimate (4,500 tokens) is corrected from it. Until then an extraction hearing is refused at Start (`structured_unverified`).
+
+| Date | Provider | Model | Mode | Outcome | Parsed / fits | Tokens in/out | Recorded by |
+|---|---|---|---|---|---|---|---|
+| | openai | gpt-6-luna | json | | | | |
+| | anthropic | claude-haiku-5-5 | json | | | | |
+| | openai | gpt-6-luna | pdf | | | | |
+| | anthropic | claude-haiku-5-5 | pdf | | | | |
+
 ## Deployed check (V12): pending
 
 A real run in the deployed app, using keys saved through Settings, with the browser closed during generation.

@@ -16,6 +16,33 @@ export interface ProviderRequest {
   maxOutputTokens: number
   apiKey: string
   signal: AbortSignal
+  /** Structured output (spec 04 §6.1): only adapter versions with `structuredOutput` send it. */
+  responseFormat?: { name: 'extraction'; schema: Record<string, unknown> }
+  /** A PDF attached to the first user message: only versions with `pdfInput` send it. */
+  document?: { mediaType: 'application/pdf'; base64: string }
+}
+
+/** What a feature-carrying adapter version adds to the body; absent means the predecessor's exact body. */
+export interface RequestFeatures {
+  responseFormat?: ProviderRequest['responseFormat']
+  document?: ProviderRequest['document']
+}
+
+export function featuresOf(request: Pick<ProviderRequest, 'responseFormat' | 'document'>): RequestFeatures {
+  return { ...(request.responseFormat ? { responseFormat: request.responseFormat } : {}), ...(request.document ? { document: request.document } : {}) }
+}
+
+/**
+ * Spec 04 §5: a 400 that names the schema or the PDF gets its own (definite) code; anything else
+ * stays `PROVIDER_REJECTED_REQUEST`. The hints are pinned in tests from the documented messages
+ * and revised after the live check.
+ */
+export function featureRejection(status: number, message: string, features: RequestFeatures): ProviderErrorCode | null {
+  if (status !== 400) return null
+  const text = message.toLowerCase()
+  if (features.document && /\b(pdf|document|input_file|file_data|pages?|encrypt)/u.test(text) && !text.includes('schema')) return 'PROVIDER_DOCUMENT_REJECTED'
+  if (features.responseFormat && /(schema|response_format|output_config|text\.format|grammar)/u.test(text)) return 'PROVIDER_SCHEMA_REJECTED'
+  return null
 }
 
 export type ProviderErrorCode =
@@ -26,6 +53,10 @@ export type ProviderErrorCode =
   | 'PROVIDER_RATE_LIMITED'
   | 'PROVIDER_UNAVAILABLE'
   | 'PROVIDER_REJECTED_REQUEST'
+  /** Spec 04: the provider refused the field list (definite). */
+  | 'PROVIDER_SCHEMA_REJECTED'
+  /** Spec 04: the provider couldn't read the PDF (definite). */
+  | 'PROVIDER_DOCUMENT_REJECTED'
   | 'PROVIDER_BLOCKED'
   | 'PROVIDER_REDIRECT_REFUSED'
   | 'PROVIDER_TIMEOUT'

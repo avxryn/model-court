@@ -4,7 +4,7 @@ import { makeExampleDraft } from '../example'
 import { EXTRACTION_STARTERS } from '../extraction/starters'
 import { buildKitRequest, MESSAGE_TEMPLATES } from '../messages'
 import { rubricLines } from '../rubric'
-import { buildSnapshot } from '../snapshot'
+import { buildSnapshot, describeIssue, readinessIssues } from '../snapshot'
 import { MODEL_ROUTES } from '../registry'
 import { endsIncomplete, EXTRACTION_V1, type ExtractionSettings } from './extraction'
 import { kitReadinessIssues } from './registry'
@@ -183,6 +183,21 @@ describe('extract-v1 template', () => {
     const snap = buildSnapshot(draft as never, MODEL_ROUTES, 'test', 0)
     expect(snap.messageTemplateVersion).toBe('extract-v1')
     expect(snap.rubricVersion).toBe('extraction-v1')
+    // Spec 04 §6.4 (D-86): an extraction hearing records each route's feature successor; a plain one does not.
+    expect(snap.configurations.map((c) => ('adapterVersion' in c ? c.adapterVersion : null))).toEqual(['openai-responses-v3', 'anthropic-messages-v3'])
+    const plain = buildSnapshot({ ...draft, kit: undefined, cases: [{ ...testCase, kitFields: undefined }] } as never, MODEL_ROUTES, 'test', 0)
+    expect(plain.configurations.map((c) => ('adapterVersion' in c ? c.adapterVersion : null))).toEqual(['openai-responses-v2', 'anthropic-messages-v2'])
+  })
+
+  it('Start needs a recorded structured-output check on every generated party', () => {
+    const example = makeExampleDraft(() => crypto.randomUUID(), ['openai-gpt-6-luna', 'anthropic-claude-haiku-5-5'])
+    const draft = { ...example, kit: { version: 'extraction-v1' as const, settings }, cases: [testCase] }
+    const issues = readinessIssues(draft, MODEL_ROUTES)
+    expect(issues.map((issue) => issue.kind)).toEqual(['structured_unverified', 'structured_unverified'])
+    expect(describeIssue(issues[0])).toContain('OpenAI GPT-6 Luna hasn\'t yet')
+    const checked = MODEL_ROUTES.map((route) => ({ ...route, structuredVerifiedAt: '2026-11-19' }))
+    expect(readinessIssues(draft, checked)).toEqual([])
+    expect(readinessIssues({ ...draft, kit: undefined, cases: [{ ...testCase, kitFields: undefined }] }, MODEL_ROUTES)).toEqual([])
   })
 })
 

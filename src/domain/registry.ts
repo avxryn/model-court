@@ -33,14 +33,50 @@ export type ReasoningMode = 'off' | 'low'
  * `src/server/providers/index.ts`.
  */
 export const ADAPTER_PROFILES = {
-  'openai-responses-v1': { provider: 'openai', multiTurn: false, reasoning: 'off' },
-  'openai-responses-v2': { provider: 'openai', multiTurn: true, reasoning: 'off' },
-  'openai-responses-reasoning-low-v1': { provider: 'openai', multiTurn: true, reasoning: 'low' },
-  'anthropic-messages-v1': { provider: 'anthropic', multiTurn: false, reasoning: 'off' },
-  'anthropic-messages-v2': { provider: 'anthropic', multiTurn: true, reasoning: 'off' },
-  'anthropic-messages-between-tools-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'off' },
-  'anthropic-messages-adaptive-low-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'low' },
-} as const satisfies Record<string, { provider: ProviderId; multiTurn: boolean; reasoning: ReasoningMode }>
+  'openai-responses-v1': { provider: 'openai', multiTurn: false, reasoning: 'off', structuredOutput: false, pdfInput: false },
+  'openai-responses-v2': { provider: 'openai', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false },
+  'openai-responses-reasoning-low-v1': { provider: 'openai', multiTurn: true, reasoning: 'low', structuredOutput: false, pdfInput: false },
+  'anthropic-messages-v1': { provider: 'anthropic', multiTurn: false, reasoning: 'off', structuredOutput: false, pdfInput: false },
+  'anthropic-messages-v2': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false },
+  'anthropic-messages-between-tools-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false },
+  'anthropic-messages-adaptive-low-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'low', structuredOutput: false, pdfInput: false },
+  // Spec 04 §6.4 (D-86): structured output and PDF input. Without either feature each body is
+  // byte-identical to its predecessor's (unit-tested).
+  'openai-responses-v3': { provider: 'openai', multiTurn: true, reasoning: 'off', structuredOutput: true, pdfInput: true },
+  'openai-responses-reasoning-low-v2': { provider: 'openai', multiTurn: true, reasoning: 'low', structuredOutput: true, pdfInput: true },
+  'anthropic-messages-v3': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: true, pdfInput: true },
+  'anthropic-messages-between-tools-v2': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: true, pdfInput: true },
+  'anthropic-messages-adaptive-low-v2': { provider: 'anthropic', multiTurn: true, reasoning: 'low', structuredOutput: true, pdfInput: true },
+} as const satisfies Record<string, { provider: ProviderId; multiTurn: boolean; reasoning: ReasoningMode; structuredOutput: boolean; pdfInput: boolean }>
+
+/**
+ * The version that adds structured output and PDF input to a plain version (spec 04 §6.4, D-86).
+ * Plain hearings keep recording the plain version, so an older hearing's comparison never shows
+ * an adapter change; a hearing that needs a feature records the successor.
+ */
+export const FEATURE_SUCCESSOR: Partial<Record<AdapterVersion, AdapterVersion>> = {
+  'openai-responses-v2': 'openai-responses-v3',
+  'openai-responses-reasoning-low-v1': 'openai-responses-reasoning-low-v2',
+  'anthropic-messages-v2': 'anthropic-messages-v3',
+  'anthropic-messages-between-tools-v1': 'anthropic-messages-between-tools-v2',
+  'anthropic-messages-adaptive-low-v1': 'anthropic-messages-adaptive-low-v2',
+}
+
+/** Provider-request features a hearing needs from its adapter version. */
+export interface AdapterFeatures {
+  structuredOutput?: boolean
+  pdfInput?: boolean
+}
+
+/** The version a route records for a hearing with these features: itself, its successor, or null if none can carry them. */
+export function adapterVersionFor(adapterVersion: string, features: AdapterFeatures): string | null {
+  const profile = adapterProfile(adapterVersion)
+  if (!profile) return null
+  const fits = (p: (typeof ADAPTER_PROFILES)[AdapterVersion]) => (!features.structuredOutput || p.structuredOutput) && (!features.pdfInput || p.pdfInput)
+  if (fits(profile)) return adapterVersion
+  const next = FEATURE_SUCCESSOR[adapterVersion as AdapterVersion]
+  return next && fits(ADAPTER_PROFILES[next]) ? next : null
+}
 
 export type AdapterVersion = keyof typeof ADAPTER_PROFILES
 
@@ -74,6 +110,13 @@ export interface ModelRoute {
    * conversation can run only on routes where this is set.
    */
   multiTurnVerifiedAt: string | null
+  /**
+   * ISO date of a recorded live structured-output call (`smoke:providers` mode `json`, spec 04
+   * §6.5). Extraction hearings run only on routes where this is set. Documentation never sets it.
+   */
+  structuredVerifiedAt: string | null
+  /** ISO date of a recorded live PDF call (mode `pdf`). Native-PDF questions need it. */
+  pdfVerifiedAt: string | null
   /** One of `ADAPTER_VERSIONS` (unit-tested); typed as a string because snapshots keep whatever they recorded. */
   adapterVersion: string
 }
@@ -98,6 +141,8 @@ function openai(modelId: string, label: string, line: string, reasoning: Reasoni
     docsUrl: OPENAI_DOCS + modelId,
     verifiedAt: null,
     multiTurnVerifiedAt: null,
+    structuredVerifiedAt: null,
+    pdfVerifiedAt: null,
     adapterVersion: reasoning === 'low' ? 'openai-responses-reasoning-low-v1' : 'openai-responses-v2',
     ...extra,
   }
@@ -118,6 +163,8 @@ function anthropic(modelId: string, label: string, line: string, adapterVersion:
     docsUrl: ANTHROPIC_DOCS,
     verifiedAt: null,
     multiTurnVerifiedAt: null,
+    structuredVerifiedAt: null,
+    pdfVerifiedAt: null,
     adapterVersion,
     ...extra,
   }

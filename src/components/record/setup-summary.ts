@@ -28,6 +28,8 @@ export const ERROR_SHORT: Record<string, string> = {
   PROVIDER_RATE_LIMITED: 'rate limited',
   PROVIDER_UNAVAILABLE: 'provider unavailable',
   PROVIDER_REJECTED_REQUEST: 'request rejected',
+  PROVIDER_SCHEMA_REJECTED: 'field list refused',
+  PROVIDER_DOCUMENT_REJECTED: 'PDF refused',
   PROVIDER_BLOCKED: 'blocked',
   PROVIDER_REDIRECT_REFUSED: 'redirect refused',
   PROVIDER_TIMEOUT: 'timed out',

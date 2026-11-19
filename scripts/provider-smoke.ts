@@ -13,18 +13,44 @@
  * Each route is tested through the adapter version it records (D-48), so a
  * success is evidence for that route's request body, not just its provider.
  *
+ * Modes `json` and `pdf` (spec 04 §6.5, D-86) send one extraction request through the route's
+ * structured adapter version: a fixed six-field schema on a short text (`json`), or on
+ * tests/fixtures/extraction/invoice-1p.pdf (`pdf`). A success whose output parses and fits the
+ * schema is the evidence for `structuredVerifiedAt` / `pdfVerifiedAt`; record it with its input
+ * tokens in docs/provider-contracts.md ("Structured and PDF checks").
+ *
  * This verifies direct API access from your machine. It does not replace the
  * deployed check (V12): a real run in the deployed app with keys saved in
  * Settings.
  */
 
+import { readFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { Writable } from 'node:stream'
-import { buildConversation, CHAT_TEMPLATE_VERSION, MESSAGE_TEMPLATE_VERSION } from '../src/domain/messages'
+import { buildConversation, buildExtractV1, CHAT_TEMPLATE_VERSION, MESSAGE_TEMPLATE_VERSION, type KitRequest } from '../src/domain/messages'
 import { EXAMPLE_CASES, EXAMPLE_POLICY, DEFAULT_SYSTEM_PROMPT } from '../src/domain/example'
+import { parseOutput } from '../src/domain/extraction/render'
+import type { ExtractionSchema } from '../src/domain/extraction/schema'
+import { validateAgainstSchema } from '../src/domain/extraction/validate'
 import { LIMITS } from '../src/domain/limits'
-import { MODEL_ROUTES } from '../src/domain/registry'
+import { adapterVersionFor, MODEL_ROUTES } from '../src/domain/registry'
 import { adapterFor } from '../src/server/providers'
+
+/** The fixed six-field schema of the `json` and `pdf` modes (spec 04 §6.5). */
+const SMOKE_SCHEMA: ExtractionSchema = {
+  type: 'object',
+  properties: {
+    supplier: { type: 'string' },
+    purchaseOrder: { type: 'string' },
+    lineCount: { type: 'integer' },
+    total: { type: 'number' },
+    issueDate: { type: 'string', format: 'date' },
+    currency: { type: 'string', enum: ['USD', 'EUR', 'GBP'] },
+    lines: { type: 'array', items: { type: 'object', properties: { description: { type: 'string' }, amount: { type: 'number' } }, required: ['description', 'amount'] } },
+  },
+  required: ['supplier', 'lineCount', 'total', 'issueDate', 'currency', 'lines'],
+}
+const SMOKE_TEXT = 'Northwind Office Supply. Invoice NW-2291, issued 2026-10-02. Standing desk 380.00; cable tray 32.50. Total due USD 412.50.'
 
 function ask(question: string, hidden = false): Promise<string> {
   let muted = false
@@ -56,9 +82,17 @@ async function main() {
     .filter((key) => key !== '')
     .map((key) => ({ key, route: MODEL_ROUTES.find((r) => r.key === key) }))
   // "multi" sends a short conversation (D-39): its success is the evidence for a route's multiTurnVerifiedAt.
-  const mode = (await ask('Single question or a multi-message conversation? [single/multi] (blank = single): ')) === 'multi' ? 'multi' : 'single'
-  const conversation =
-    mode === 'multi'
+  const answer = await ask('Mode? [single/multi/json/pdf] (blank = single): ')
+  const mode = answer === 'multi' || answer === 'json' || answer === 'pdf' ? answer : 'single'
+  const extraction = mode === 'json' || mode === 'pdf'
+  const conversation: KitRequest | null = extraction
+    ? buildExtractV1({
+        systemPrompt: 'You extract fields from invoices.',
+        prompt: { reference: '', input: 'Extract the fields from the document.' },
+        settings: { schema: SMOKE_SCHEMA, compare: {} },
+        document: mode === 'pdf' ? { kind: 'pdf', base64: readFileSync('tests/fixtures/extraction/invoice-1p.pdf').toString('base64') } : { kind: 'text', text: SMOKE_TEXT },
+      })
+    : mode === 'multi'
       ? buildConversation(CHAT_TEMPLATE_VERSION, DEFAULT_SYSTEM_PROMPT, {
           reference: EXAMPLE_POLICY,
           input: 'And if I lost the receipt?',
@@ -74,7 +108,10 @@ async function main() {
       console.log(`Skipping unknown route ${key}`)
       continue
     }
-    const adapter = adapterFor(route.adapterVersion, route.provider, conversation.messages.length)
+    if (!conversation) return
+    const features = extraction ? { structuredOutput: true, pdfInput: mode === 'pdf' } : {}
+    const adapterVersion = adapterVersionFor(route.adapterVersion, features)
+    const adapter = adapterVersion ? adapterFor(adapterVersion, route.provider, conversation.messages.length, features) : null
     if (!adapter) {
       console.log(`Skipping ${route.key}: adapter ${route.adapterVersion} cannot send this request`)
       continue
@@ -84,10 +121,27 @@ async function main() {
     // Asked per route, so a key is held only for its one request.
     let apiKey = await ask(`${route.provider} API key (input hidden): `, true)
     const timeout = AbortSignal.timeout(LIMITS.providerTimeoutMs)
-    const outcome = await adapter(fetch, { modelId: route.modelId, system: conversation.system, messages: conversation.messages, maxOutputTokens: LIMITS.maxOutputTokens, apiKey, signal: timeout }, timeout)
+    const options = conversation.requestOptions
+    const outcome = await adapter(
+      fetch,
+      {
+        modelId: route.modelId,
+        system: conversation.system,
+        messages: conversation.messages,
+        maxOutputTokens: options?.maxOutputTokens ?? LIMITS.maxOutputTokens,
+        apiKey,
+        signal: timeout,
+        ...(options ? { responseFormat: options.responseFormat } : {}),
+        ...(options?.document ? { document: options.document } : {}),
+      },
+      timeout,
+    )
     apiKey = ''
     const date = new Date().toISOString().slice(0, 10)
-    console.log(JSON.stringify({ date, routeKey: route.key, provider: route.provider, mode, messageCount: conversation.messages.length, modelId: route.modelId, adapterVersion: route.adapterVersion, outcome: { ...outcome, text: outcome.kind === 'success' ? outcome.text.slice(0, 400) : undefined } }, null, 2))
+    const parsed = extraction && outcome.kind === 'success' ? parseOutput(outcome.text) : null
+    const schemaIssues = parsed?.status === 'parsed' ? validateAgainstSchema(SMOKE_SCHEMA, parsed.value) : null
+    const structured = parsed ? { parsed: parsed.status === 'parsed', fitsSchema: schemaIssues !== null && schemaIssues.length === 0, issues: schemaIssues ?? [] } : undefined
+    console.log(JSON.stringify({ date, routeKey: route.key, provider: route.provider, mode, messageCount: conversation.messages.length, modelId: route.modelId, adapterVersion, structured, outcome: { ...outcome, text: outcome.kind === 'success' ? outcome.text.slice(0, 400) : undefined } }, null, 2))
   }
 }
 

@@ -1,0 +1,13 @@
+Northwind Office Supply
+200 Harbor Road, Portland, OR 97201
+
+INVOICE NW-2291
+Issue date: 2026-10-02     Due date: 2026-11-01
+Bill to: Fabrikam Studio
+
+Description              Qty     Amount (USD)
+Standing desk             1          380.00
+Cable tray                2           32.50
+
+Total due: USD 412.50
+This is a fictitious invoice made for Model Court tests.

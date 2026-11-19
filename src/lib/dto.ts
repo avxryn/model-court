@@ -5,6 +5,7 @@
  * ESLint boundary rule permits exactly this (allowTypeImports).
  */
 
+import type { ExtractionLimits } from '@/domain/extraction/limits'
 import type { QuotaStanding } from '@/domain/quota'
 import type { CredentialMetadata, KeyCheckView } from '@/server/services/credentials'
 import type { EvaluationSummary, getEvaluation } from '@/server/services/evaluations'
@@ -45,6 +46,10 @@ export interface CatalogModel {
   enabled: boolean
   verifiedAt: string | null
   multiTurnVerifiedAt: string | null
+  /** Spec 04 (D-86): a recorded live structured-output call; extraction hearings need it. */
+  structuredVerifiedAt: string | null
+  /** A recorded live PDF call; native-PDF questions need it. */
+  pdfVerifiedAt: string | null
 }
 
 export interface CatalogView {
@@ -54,5 +59,5 @@ export interface CatalogView {
   providers: Array<{ id: 'openai' | 'anthropic'; name: string }>
   models: CatalogModel[]
   priceTable: { version: string; readOn: string; sources: Record<'openai' | 'anthropic', string> }
-  limits: { maxCases: number; configurations: number; samplesPerAnswer: number; minConfigurations: number; maxOutputTokens: number; reasoningHeadroomTokens: number; maxAttemptsPerGeneration: number; credentialTtlDays: number; dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number }
+  limits: { maxCases: number; configurations: number; samplesPerAnswer: number; minConfigurations: number; maxOutputTokens: number; reasoningHeadroomTokens: number; maxAttemptsPerGeneration: number; credentialTtlDays: number; dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number; extraction: ExtractionLimits }
 }

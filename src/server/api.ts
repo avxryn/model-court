@@ -25,6 +25,7 @@ import {
 } from '../domain/contracts'
 import { LIMITS } from '../domain/limits'
 import { isRouteEnabled, PROVIDER_NAMES, PROVIDER_REGISTRY_VERSION } from '../domain/registry'
+import { extractionLimits } from '../domain/extraction/limits'
 import { hitRateLimit } from './db/sql'
 import type { Deps, VerifiedCaller } from './deps'
 import { ApiError, errorResponse, idempotencyKey, ifMatchRevision, noContent, ok, pathId, readBody, requestIdOf } from './http'
@@ -192,8 +193,10 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
         enabled: isRouteEnabled(route),
         verifiedAt: route.verifiedAt,
         multiTurnVerifiedAt: route.multiTurnVerifiedAt,
+        structuredVerifiedAt: route.structuredVerifiedAt,
+        pdfVerifiedAt: route.pdfVerifiedAt,
       })),
-      limits: { maxCases: LIMITS.maxCases, configurations: deps(c).config.maxConfigurationsPerRun, samplesPerAnswer: deps(c).config.maxSamplesPerAnswer, minConfigurations: LIMITS.minConfigurationsPerRun, maxOutputTokens: LIMITS.maxOutputTokens, reasoningHeadroomTokens: LIMITS.reasoningHeadroomTokens, maxAttemptsPerGeneration: LIMITS.maxAttemptsPerGeneration, credentialTtlDays: Math.round(deps(c).config.credentialTtlMs / 86_400_000), ...deps(c).config.limits },
+      limits: { maxCases: LIMITS.maxCases, configurations: deps(c).config.maxConfigurationsPerRun, samplesPerAnswer: deps(c).config.maxSamplesPerAnswer, minConfigurations: LIMITS.minConfigurationsPerRun, maxOutputTokens: LIMITS.maxOutputTokens, reasoningHeadroomTokens: LIMITS.reasoningHeadroomTokens, maxAttemptsPerGeneration: LIMITS.maxAttemptsPerGeneration, credentialTtlDays: Math.round(deps(c).config.credentialTtlMs / 86_400_000), ...deps(c).config.limits, extraction: extractionLimits() },
     }),
   )
 

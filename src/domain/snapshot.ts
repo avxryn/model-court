@@ -8,7 +8,7 @@ import { isImported, type CaseInput, type ComparisonMode, type Configuration, ty
 import { kitFor, kitReadinessIssues } from './kits/registry'
 import type { KitReadinessIssue } from './kits/types'
 import type { MessageTemplateVersion } from './messages'
-import { findRoute, isRouteEnabled, PROVIDER_NAMES, PROVIDER_REGISTRY_VERSION, type ModelRoute, type ProviderId } from './registry'
+import { adapterVersionFor, findRoute, isRouteEnabled, PROVIDER_NAMES, PROVIDER_REGISTRY_VERSION, type ModelRoute, type ProviderId } from './registry'
 import type { RubricVersion } from './rubric'
 
 /** A generated party, frozen with its resolved route. Older snapshots have no `source` field. */
@@ -72,17 +72,29 @@ export type ReadinessIssue =
   | { kind: 'imported_requires_configuration_mode' }
   | { kind: 'imported_text_missing'; configurationKey: string; caseKey: string }
   | { kind: 'history_unverified'; configurationKey: string }
+  /** Spec 04 §6.5 (D-86): an extraction hearing on a route without a recorded structured-output check. */
+  | { kind: 'structured_unverified'; configurationKey: string; modelKey: string }
   | KitReadinessIssue
+
+/** A kit whose parties answer in JSON (extraction) sends a structured-output schema. */
+export function needsStructuredOutput(draft: { kit?: { version: string } | undefined }): boolean {
+  return kitFor(draft.kit?.version).outputContract.kind === 'json'
+}
+
+/** The features a structured hearing's adapter version must carry (its successor has both, spec 04 §6.4). */
+const FEATURES = { structuredOutput: true, pdfInput: true } as const
 
 export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configurations'> & Partial<Pick<Draft, 'cases' | 'kit'>>, routes: readonly ModelRoute[]): ReadinessIssue[] {
   const issues: ReadinessIssue[] = []
   const models = generatedParties(draft.configurations)
   const hasHistory = (draft.cases ?? []).some((testCase) => (testCase.messages?.length ?? 0) > 0)
+  const structured = needsStructuredOutput(draft)
   for (const configuration of models) {
     const route = findRoute(configuration.modelKey, routes)
     if (!route) issues.push({ kind: 'unknown_model', configurationKey: configuration.key })
     else if (!isRouteEnabled(route)) issues.push({ kind: 'model_unavailable', configurationKey: configuration.key, modelKey: route.key })
     else if (hasHistory && !route.multiTurnVerifiedAt) issues.push({ kind: 'history_unverified', configurationKey: configuration.key })
+    else if (structured && (!route.structuredVerifiedAt || !adapterVersionFor(route.adapterVersion, FEATURES))) issues.push({ kind: 'structured_unverified', configurationKey: configuration.key, modelKey: route.key })
   }
   if (draft.comparisonMode === 'model') {
     if (models.length < draft.configurations.length) issues.push({ kind: 'imported_requires_configuration_mode' })
@@ -127,6 +139,10 @@ export function describeIssue(issue: ReadinessIssue, cases?: ReadonlyArray<Pick<
       return 'An imported party is missing an answer for at least one question. Add every answer and save it.'
     case 'history_unverified':
       return 'A question has a conversation, but a selected model has not yet passed a live multi-message check. Remove the conversation or wait for that check.'
+    case 'structured_unverified': {
+      const route = findRoute(issue.modelKey)
+      return `Pulling fields from documents needs a model that has passed a live structured-output check (one real call, recorded). ${route ? `${PROVIDER_NAMES[route.provider]} ${route.label}` : 'A selected model'} hasn't yet. Choose a checked model or record that check first.`
+    }
     case 'kit_input_unsupported': {
       const name = kitFor(issue.kitVersion).name
       const what = issue.inputKind === 'conversation' ? 'a conversation' : `${issue.inputKind} input`
@@ -151,6 +167,7 @@ export function requiredProviders(configurations: readonly Configuration[], rout
 
 export function buildSnapshot(draft: Draft, routes: readonly ModelRoute[], appCommit: string, createdAt: number, imports: readonly ImportMeta[] = []): RunSnapshot {
   const kit = draft.kit as { version: string; settings: unknown } | undefined
+  const structured = needsStructuredOutput(draft)
   return {
     schemaVersion: 1,
     canonicalizationVersion: CANONICALIZATION_VERSION,
@@ -170,7 +187,9 @@ export function buildSnapshot(draft: Draft, routes: readonly ModelRoute[], appCo
       }
       const route = findRoute(configuration.modelKey, routes)
       if (!route) throw new Error('buildSnapshot requires validated routes')
-      return { ...configuration, provider: route.provider, modelId: route.modelId, adapterVersion: route.adapterVersion }
+      // Spec 04 §6.4 (D-86): a structured hearing records the route's feature successor; a plain one the plain version.
+      const adapterVersion = structured ? (adapterVersionFor(route.adapterVersion, FEATURES) ?? route.adapterVersion) : route.adapterVersion
+      return { ...configuration, provider: route.provider, modelId: route.modelId, adapterVersion }
     }),
     rubricVersion: draft.rubricVersion ?? kitFor(kit?.version).defaultRubricVersion,
     messageTemplateVersion: kitFor(kit?.version).selectTemplate(draft.cases),

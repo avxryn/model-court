@@ -8,6 +8,8 @@ export const ERROR_TEXT: Record<string, string> = {
   PROVIDER_RATE_LIMITED: 'The provider rate-limited the request.',
   PROVIDER_UNAVAILABLE: 'The provider was unavailable.',
   PROVIDER_REJECTED_REQUEST: 'The provider rejected the request.',
+  PROVIDER_SCHEMA_REJECTED: 'The provider refused the field list. Simplify it (fewer optional fields, less nesting) and try again.',
+  PROVIDER_DOCUMENT_REJECTED: "The provider couldn't read this PDF.",
   PROVIDER_BLOCKED: 'The provider blocked the response without text.',
   PROVIDER_REDIRECT_REFUSED: 'The provider redirected the request; Model Court refused to forward the key.',
   PROVIDER_TIMEOUT: 'No response within 90 seconds. The provider may still have processed (and charged for) the request.',
