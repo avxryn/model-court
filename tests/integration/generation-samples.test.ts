@@ -101,7 +101,8 @@ describe('migration 0009_generation_samples', () => {
 
     // Same rows and values; every existing testimony is sample 1.
     expect(after.generations).toEqual(before.generations.map((row) => ({ ...row, sample_no: 1 })))
-    for (const table of CHILDREN) expect(after[table], table).toEqual(before[table])
+    // 0014_tool_steps (spec 06, D-101) adds three attempt columns; existing rows read their defaults.
+    for (const table of CHILDREN) expect(after[table], table).toEqual(table === 'generation_attempts' ? before[table].map((row) => ({ ...row, kind: 'single', trace_json: null, steps_used: null })) : before[table])
 
     // The children now reference the renamed parent, and no scratch table is left behind.
     const schema = await rows(db, `SELECT type, name, tbl_name, sql FROM sqlite_master WHERE tbl_name IN ('generations','generation_attempts','outbox','attempt_reservations') OR name LIKE '%_next'`)

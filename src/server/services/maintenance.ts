@@ -8,6 +8,7 @@ import type { Deps } from '../deps'
 import { expireCredentials } from './credentials'
 import { sweepUnreferencedDocumentBlobs } from './documents'
 import { dispatchOutbox, reconcileLeases } from './generation'
+import { dispatchStepOutbox, reconcileStepLeases } from './tool-loop'
 import { dispatchGraderOutbox, reconcileGraderLeases } from './special-master'
 
 export interface MaintenanceReport {
@@ -48,6 +49,9 @@ export async function runMaintenance(deps: Deps): Promise<MaintenanceReport> {
 
   report.dispatched = await dispatchOutbox(deps)
   report.leasesExpired = await reconcileLeases(deps)
+  // Spec 06 §7.5–7.6: tool steps left pending after a crash, and steps whose lease ran out.
+  report.dispatched += await dispatchStepOutbox(deps)
+  report.leasesExpired += await reconcileStepLeases(deps)
   // Special master (D-40): same repair for grader calls.
   report.dispatched += await dispatchGraderOutbox(deps)
   report.leasesExpired += await reconcileGraderLeases(deps)
@@ -60,11 +64,14 @@ export async function runMaintenance(deps: Deps): Promise<MaintenanceReport> {
          SELECT 1 FROM generation_attempts a JOIN generations g ON g.id = a.generation_id JOIN runs r ON r.id = g.run_id
          WHERE r.evaluation_id = e.id AND a.status = 'running' AND a.deadline_at > ?)
        AND NOT EXISTS (
+         SELECT 1 FROM generation_steps s JOIN generations gs ON gs.id = s.generation_id JOIN runs rs ON rs.id = gs.run_id
+         WHERE rs.evaluation_id = e.id AND s.status = 'running' AND s.deadline_at > ?)
+       AND NOT EXISTS (
          SELECT 1 FROM grader_attempts ga JOIN grader_items gi ON gi.id = ga.grader_item_id JOIN grader_runs gr ON gr.id = gi.grader_run_id JOIN runs r2 ON r2.id = gr.run_id
          WHERE r2.evaluation_id = e.id AND ga.status = 'running' AND ga.deadline_at > ?)
        ORDER BY e.deleted_at LIMIT 10`,
     )
-    .bind(now, now)
+    .bind(now, now, now)
     .all<{ id: string }>()
   for (const row of tombstoned.results) {
     try {

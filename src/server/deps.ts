@@ -20,6 +20,15 @@ export interface GenerationJob {
   attemptNo: number
 }
 
+/** Spec 06 §7.3 (D-101): one tool step k ≥ 2 of a tool-loop attempt. IDs and numbers only. */
+export interface ToolStepJob {
+  stepOutboxId: string
+  stepId: string
+  generationId: string
+  attemptNo: number
+  stepNo: number
+}
+
 export interface Deps {
   db: D1Database
   /** Make sure the schema exists before use (idempotent). */
@@ -36,6 +45,8 @@ export interface Deps {
   enqueueGeneration: (job: GenerationJob) => Promise<string>
   /** Special-master grading jobs (D-40); IDs only. */
   enqueueGrading: (job: { outboxId: string; graderItemId: string; attemptNo: number }) => Promise<string>
+  /** Spec 06 (D-101): tool steps 2..N (IDs and numbers only). */
+  enqueueToolStep: (job: ToolStepJob) => Promise<string>
   /** Best-effort safe invalidation notices; failures never fail a command. */
   publishNotices: (notices: Array<{ recipientUserId: string; evaluationId: string; runId: string | null }>) => Promise<void>
   /** Remove every notice that refers to a purged evaluation. */

@@ -22,6 +22,8 @@ import { dispatchOutbox, notifyRun, reconcileLeases } from './generation'
 import { guestNames } from './guest-jurors'
 import { admissionDocuments, unavailableDocuments } from './documents'
 import { admissionSources, listDraftSources, sourceRefsOf, verifiedPromptSources } from './sources'
+import { callsPerAnswer } from '../../domain/quota'
+import { isToolHearing, reconcileStepLeases, reserveStepsStatement, stopToolLoopsStatements } from './tool-loop'
 
 export interface GenerationRow {
   id: string
@@ -250,15 +252,19 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
     // D-65: one generation per (question, party, sample). Sample k is first dispatched (k − 1) minutes
     // later, so the minute cron spreads a repeated hearing's burst instead of sending it all at once.
     const samples = samplesPerAnswer(snapshot)
+    // Spec 06 §7.1 (D-101): a tool question's answer may make up to its step cap of calls; all are reserved now.
+    const tools = isToolHearing(snapshot)
     const generations = snapshot.cases.flatMap((testCase) =>
       generatedParties(snapshot.configurations).flatMap((configuration) =>
-        Array.from({ length: samples }, (_, index) => ({ id: deps.newId(), outboxId: deps.newId(), caseKey: testCase.key, configurationKey: configuration.key, provider: configuration.provider, sampleNo: index + 1, dispatchAt: now + index * LIMITS.sampleStaggerMs })),
+        Array.from({ length: samples }, (_, index) => ({ id: deps.newId(), outboxId: deps.newId(), caseKey: testCase.key, configurationKey: configuration.key, provider: configuration.provider, sampleNo: index + 1, dispatchAt: now + index * LIMITS.sampleStaggerMs, steps: tools ? callsPerAnswer(testCase) : 0 })),
       ),
     )
+    const units = generations.reduce((sum, generation) => sum + (tools ? generation.steps : 1), 0)
     const imported = snapshot.configurations.filter(isImportedSnapshot).flatMap((configuration) => configuration.imports.map((item) => ({ id: deps.newId(), configurationKey: configuration.key, ...item })))
     // With nothing to generate, the hearing is ready for review at once and touches no budget.
     const initialStatus: RunStatus = generations.length > 0 ? 'generating' : 'ready'
-    const response = { status: 202 as const, data: { runId, status: initialStatus, revision: 1, plannedCalls: generations.length, scenarioHash: scenario } }
+    // Spec 06 §5.2: for a tool hearing the planned calls are the worst case, and say so.
+    const response = { status: 202 as const, data: { runId, status: initialStatus, revision: 1, plannedCalls: units, ...(tools ? { plannedCallsAreUpperBound: true } : {}), scenarioHash: scenario } }
 
     const credentialChecks = providers.map((provider) =>
       cond(
@@ -281,7 +287,7 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
       ...providers.map((provider) =>
         db.prepare('INSERT INTO run_credentials (run_id, provider, credential_id) VALUES (?, ?, ?)').bind(runId, provider, input.credentialIdsByProvider[provider]),
       ),
-      ...(generations.length > 0 ? reserveBudget(db, subjects, generations.length, deps.config.limits, now) : []),
+      ...(units > 0 ? reserveBudget(db, subjects, units, deps.config.limits, now) : []),
       ...documents.statements,
       ...sources.statements,
       // Freeze each imported answer exactly as hashed into the snapshot (D-38).
@@ -303,18 +309,21 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
              VALUES (?, ?, ?, ?, ?, 'pending', 1, ?, ?, ?)`,
           )
           .bind(generation.id, runId, generation.caseKey, generation.configurationKey, generation.provider, now, now, generation.sampleNo),
-        db
-          .prepare(
-            `INSERT INTO attempt_reservations (generation_id, attempt_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at)
+        // A tool generation's units are its step reservations, one per planned call; no attempt reservation.
+        tools
+          ? reserveStepsStatement(db, { generationId: generation.id, attemptNo: 1, steps: generation.steps, subjects, now })
+          : db
+              .prepare(
+                `INSERT INTO attempt_reservations (generation_id, attempt_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at)
              VALUES (?, 1, ?, ?, ?, ?, 'reserved', ?)`,
-          )
-          .bind(generation.id, subjects.actor, subjects.global, subjects.lifetime, subjects.windowStart, now),
+              )
+              .bind(generation.id, subjects.actor, subjects.global, subjects.lifetime, subjects.windowStart, now),
         db
           .prepare(`INSERT INTO outbox (id, generation_id, attempt_no, status, next_dispatch_at, created_at, updated_at) VALUES (?, ?, 1, 'pending', ?, ?, ?)`)
           .bind(generation.outboxId, generation.id, generation.dispatchAt, now, now),
       ]),
       db.prepare('UPDATE evaluations SET updated_at = ? WHERE id = ?').bind(now, evaluationId),
-      auditStatement(db, { eventType: 'run.create', requestId, outcome: 'ok', actorUserId: userId, evaluationId, runId, metadata: { plannedCalls: generations.length, providers: providers.join(','), ...(samples > 1 ? { samplesPerAnswer: samples } : {}) } }, now),
+      auditStatement(db, { eventType: 'run.create', requestId, outcome: 'ok', actorUserId: userId, evaluationId, runId, metadata: { plannedCalls: units, providers: providers.join(','), ...(samples > 1 ? { samplesPerAnswer: samples } : {}), ...(tools ? { plannedCallsAreUpperBound: true } : {}) } }, now),
     ]
 
     try {
@@ -422,7 +431,7 @@ export async function getRun(deps: Deps, userId: string, runId: string) {
   let access = await loadRunAccess(deps.db, runId, userId)
   if (access.role === 'owner' && (access.run.status === 'generating' || access.run.status === 'ready')) {
     // Cheap per-run lease reconciliation so abandoned work does not wait for cron (§10.2).
-    if ((await reconcileLeases(deps, runId)) > 0) access = await loadRunAccess(deps.db, runId, userId)
+    if ((await reconcileLeases(deps, runId)) + (await reconcileStepLeases(deps, runId)) > 0) access = await loadRunAccess(deps.db, runId, userId)
     // A complete hearing whose automatic opening has not happened yet (imported-only, or a missed job hook).
     if (access.run.status === 'ready' && (await autoOpenReview(deps, runId, `auto_${runId}`))) {
       await notifyRun(deps, runId)
@@ -579,29 +588,36 @@ export async function retryGenerations(deps: Deps, userId: string, runId: string
     const subjects = budgetSubjects(userId, now)
     const providers = [...new Set(targets.map((generation) => generation.provider))]
     const repins = planRepins(await loadPinnedKeys(db, runId, now), providers, input.credentialIdsByProvider ?? {})
-    const response = { status: 202 as const, data: { runId, status: 'generating' as RunStatus, retried: targets.length, repinned: repins.map((repin) => repin.provider) } }
+    // Spec 06 §7.8 (D-101): a tool generation's retry restarts at step 1 and reserves its step cap again.
+    const snapshot = parseSnapshot(access.run.snapshot_json)
+    const tools = isToolHearing(snapshot)
+    const stepsOf = (generation: GenerationRow) => callsPerAnswer(snapshot.cases.find((testCase) => testCase.key === generation.case_key))
+    const units = targets.reduce((sum, generation) => sum + (tools ? stepsOf(generation) : 1), 0)
+    const response = { status: 202 as const, data: { runId, status: 'generating' as RunStatus, retried: targets.length, repinned: repins.map((repin) => repin.provider), plannedCalls: units, ...(tools ? { plannedCallsAreUpperBound: true } : {}) } }
     const outboxIds: string[] = []
     const statements: D1PreparedStatement[] = [
       receipt(response, runId),
       ...repins.flatMap((repin) => repinStatements(db, { runId, evaluationId: access.run.evaluation_id, userId, requestId, now, ...repin })),
-      ...reserveBudget(db, subjects, targets.length, deps.config.limits, now),
+      ...reserveBudget(db, subjects, units, deps.config.limits, now),
       ...targets.flatMap((generation) => {
         const attemptNo = generation.attempt_count + 1
         const outboxId = deps.newId()
         outboxIds.push(outboxId)
         return [
           db.prepare(`UPDATE generations SET status = 'pending', attempt_count = ?, last_error_code = NULL, updated_at = ? WHERE id = ?`).bind(attemptNo, now, generation.id),
-          db
-            .prepare(
-              `INSERT INTO attempt_reservations (generation_id, attempt_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at)
+          tools
+            ? reserveStepsStatement(db, { generationId: generation.id, attemptNo, steps: stepsOf(generation), subjects, now })
+            : db
+                .prepare(
+                  `INSERT INTO attempt_reservations (generation_id, attempt_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at)
                VALUES (?, ?, ?, ?, ?, ?, 'reserved', ?)`,
-            )
-            .bind(generation.id, attemptNo, subjects.actor, subjects.global, subjects.lifetime, subjects.windowStart, now),
+                )
+                .bind(generation.id, attemptNo, subjects.actor, subjects.global, subjects.lifetime, subjects.windowStart, now),
           db.prepare(`INSERT INTO outbox (id, generation_id, attempt_no, status, next_dispatch_at, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?, ?)`).bind(outboxId, generation.id, attemptNo, now, now, now),
         ]
       }),
       db.prepare(`UPDATE runs SET status = 'generating', revision = revision + 1, updated_at = ? WHERE id = ?`).bind(now, runId),
-      auditStatement(db, { eventType: 'run.retry', requestId, outcome: 'ok', actorUserId: userId, runId, evaluationId: access.run.evaluation_id, metadata: { count: targets.length } }, now),
+      auditStatement(db, { eventType: 'run.retry', requestId, outcome: 'ok', actorUserId: userId, runId, evaluationId: access.run.evaluation_id, metadata: { count: targets.length, plannedCalls: units } }, now),
     ]
     try {
       await runGuarded(
@@ -665,6 +681,8 @@ export async function cancelRun(deps: Deps, userId: string, runId: string, _inpu
       cond(`EXISTS (SELECT 1 FROM runs WHERE id = ? AND owner_user_id = ? AND revision = ? AND status IN ('generating','ready'))`, runId, userId, ifMatch),
       [
         ...releaseReservations(db, cond(`r.generation_id IN (${inRun})`, runId), 'reserved', now),
+        // Spec 06 §7.7 (D-101): a tool loop between steps still holds reserved units for steps never sent.
+        ...stopToolLoopsStatements(db, inRun, [runId], 'CANCELED', 'canceled', now),
         db.prepare(`UPDATE outbox SET status = 'terminal', last_error_code = 'CANCELED', updated_at = ? WHERE status IN ('pending','dispatched') AND generation_id IN (${inRun})`).bind(now, runId),
         // An in-flight request may still be billed; its late output will be fenced out.
         db.prepare(`UPDATE generation_attempts SET status = 'canceled', error_code = 'CANCELED', finished_at = ? WHERE status = 'running' AND generation_id IN (${inRun})`).bind(now, runId),

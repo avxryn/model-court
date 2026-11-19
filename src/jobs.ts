@@ -6,10 +6,11 @@
 
 import type { Job, JobContext } from 'deepspace/worker'
 import type { Env } from '../worker'
-import type { GenerationJob } from './server/deps'
+import type { GenerationJob, ToolStepJob } from './server/deps'
 import { platformDeps } from './server/platform'
 import { GENERATION_JOB_TYPE, handleGenerationJob } from './server/services/generation'
 import { GRADING_JOB_TYPE, handleGradingJob, type GradingJob } from './server/services/special-master'
+import { handleToolStepJob, TOOL_STEP_JOB_TYPE } from './server/services/tool-loop'
 
 function isGenerationJob(payload: unknown): payload is GenerationJob {
   const value = payload as Partial<GenerationJob> | null
@@ -21,7 +22,18 @@ function isGradingJob(payload: unknown): payload is GradingJob {
   return !!value && typeof value.outboxId === 'string' && typeof value.graderItemId === 'string' && typeof value.attemptNo === 'number'
 }
 
+/** Spec 06 §7.3: IDs and numbers only. */
+export function isToolStepJob(payload: unknown): payload is ToolStepJob {
+  const value = payload as Partial<ToolStepJob> | null
+  return !!value && typeof value.stepOutboxId === 'string' && typeof value.stepId === 'string' && typeof value.generationId === 'string' && typeof value.attemptNo === 'number' && typeof value.stepNo === 'number'
+}
+
 export async function runJob(job: Job, ctx: JobContext, env: Env): Promise<unknown> {
+  if (job.type === TOOL_STEP_JOB_TYPE && isToolStepJob(job.payload)) {
+    const deps = platformDeps(env)
+    await deps.ensureSchema()
+    return { handled: true, outcome: await handleToolStepJob(deps, job.payload, ctx.signal, `job_${job.id}`) }
+  }
   if (job.type === GRADING_JOB_TYPE && isGradingJob(job.payload)) {
     const deps = platformDeps(env)
     await deps.ensureSchema()

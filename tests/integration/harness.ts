@@ -19,9 +19,10 @@ import { MODEL_ROUTES, PRICE_TABLES, type ModelRoute, type PriceTable } from '..
 import { createApi } from '../../src/server/api'
 import { parseConfig, type ConfigEnv } from '../../src/server/config'
 import { ensureMigrated, migrate, MIGRATIONS } from '../../src/server/db/migrations'
-import type { Deps, GenerationJob } from '../../src/server/deps'
+import type { Deps, GenerationJob, ToolStepJob } from '../../src/server/deps'
 import { handleGenerationJob, type JobOutcome } from '../../src/server/services/generation'
 import { handleGradingJob, type GradingJob } from '../../src/server/services/special-master'
+import { handleToolStepJob } from '../../src/server/services/tool-loop'
 
 const ISSUER = 'https://auth.model-court.test'
 
@@ -144,6 +145,7 @@ export async function createHarness(options: HarnessOptions = {}) {
   let clock = Date.UTC(2026, 10, 18, 15, 0, 0)
   const jobs: GenerationJob[] = []
   const gradingJobs: GradingJob[] = []
+  const toolStepJobs: ToolStepJob[] = []
   const notices: Array<{ recipientUserId: string; evaluationId: string; runId: string | null }> = []
   const logs: Array<Record<string, unknown>> = []
   const providerCalls: ProviderCall[] = []
@@ -177,7 +179,7 @@ export async function createHarness(options: HarnessOptions = {}) {
     get config() {
       return parseConfig(env)
     },
-    routes: options.routes ?? MODEL_ROUTES.map((route) => ({ ...route, verifiedAt: '2026-11-16', multiTurnVerifiedAt: '2026-11-16', structuredVerifiedAt: '2026-11-16', pdfVerifiedAt: '2026-11-16' })),
+    routes: options.routes ?? MODEL_ROUTES.map((route) => ({ ...route, verifiedAt: '2026-11-16', multiTurnVerifiedAt: '2026-11-16', structuredVerifiedAt: '2026-11-16', pdfVerifiedAt: '2026-11-16', toolsVerifiedAt: '2026-11-16' })),
     priceTables: options.priceTables ?? PRICE_TABLES,
     now: () => clock,
     newId: () => {
@@ -197,6 +199,11 @@ export async function createHarness(options: HarnessOptions = {}) {
       if (enqueueFails) throw new Error('enqueue unavailable')
       gradingJobs.push(job)
       return `grade_${gradingJobs.length}`
+    },
+    enqueueToolStep: async (job) => {
+      if (enqueueFails) throw new Error('enqueue unavailable')
+      toolStepJobs.push(job)
+      return `step_${toolStepJobs.length}`
     },
     publishNotices: async (batch) => {
       notices.push(...batch)
@@ -249,9 +256,12 @@ export async function createHarness(options: HarnessOptions = {}) {
 
   async function drainJobs(signal: AbortSignal = new AbortController().signal): Promise<JobOutcome[]> {
     const outcomes: JobOutcome[] = []
-    while (jobs.length > 0) {
-      const job = jobs.shift()!
-      outcomes.push(await handleGenerationJob(deps, job, signal, 'req_job_test'))
+    // Spec 06: a tool step's commit enqueues the next step, so drain until both queues are empty.
+    while (jobs.length > 0 || toolStepJobs.length > 0) {
+      const job = jobs.shift()
+      if (job) outcomes.push(await handleGenerationJob(deps, job, signal, 'req_job_test'))
+      const step = toolStepJobs.shift()
+      if (step) outcomes.push(await handleToolStepJob(deps, step, signal, 'req_step_test'))
     }
     while (gradingJobs.length > 0) {
       const job = gradingJobs.shift()!
@@ -267,6 +277,7 @@ export async function createHarness(options: HarnessOptions = {}) {
     app,
     jobs,
     gradingJobs,
+    toolStepJobs,
     notices,
     logs,
     providerCalls,
