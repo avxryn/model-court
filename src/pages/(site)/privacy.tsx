@@ -53,6 +53,9 @@ export default function PrivacyPage() {
           <strong>Sources.</strong> For an “answers from sources” case, each request also contains that question’s numbered sources, in your order, with their titles, and the same instructions on how to cite them. Every party’s provider gets the same sources. If you run the AI grader after unsealing, its request contains them and your grounding key too. Your notes on the sources (where a passage came from) and your grounding key (whether the sources answer the question, and which sources a good answer cites) are never sent to a model. Jurors of the hearing see the sources and the grounding key, but not your notes.
         </p>
         <p>
+          <strong>Tools.</strong> For a “tool use” case, each request also contains the tools you defined (their names, descriptions and argument schemas). When a model asks to call a tool, nothing real runs: Model Court picks your canned response for that call and sends it back to the same model in its next request, together with everything that model said and asked for earlier in that answer (including its own reasoning data when the model returns it). A model receives only the responses to calls it made, never your whole response table, and never the expectations you set (required and forbidden calls, target, expected answer). One answer may make up to your step cap of requests, each billed to your key. That reasoning data is kept only until the answer finishes. Jurors see the tools and each party’s calls and results; which canned response answered a call is shown only after unsealing.
+        </p>
+        <p>
           When you choose <strong>Check key</strong> (or leave it on when saving a key), Model Court asks OpenAI or Anthropic to list its models using your key. This is free and sends no questions, answers, or case content.
         </p>
         <p>

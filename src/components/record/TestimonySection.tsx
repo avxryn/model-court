@@ -6,6 +6,9 @@ import type { CheckResult } from '@/domain/kits/types'
 import { DIMENSIONS, rubricLines } from '@/domain/rubric'
 import { TestimonyChecks } from '@/components/record/TestimonyChecks'
 import { CitedText } from '@/components/review/CitedTestimony'
+import { ToolTraceView } from '@/components/review/ToolTrace'
+import { jurorTrace, type ToolTrace } from '@/domain/tools/trace'
+import type { StepUsage } from '@/lib/dto'
 import { showSource, SourceList, type ListedSource } from '@/components/review/SourceList'
 import type { Span } from '@/domain/grounded/match'
 import { groundingKeyText } from '@/domain/grounded/sources'
@@ -89,7 +92,10 @@ function QuestionRecord({ testCase, labels, checkLabels, rubricVersion, sources 
                 {response.truncated && ' · truncated at the output limit'}
               </span>
             </div>
-            {response.text ? (
+            {(response as { trace?: ToolTrace }).trace ? (
+              // Spec 06 §3 (D-103): after unsealing, which response answered each call and per-step usage.
+              <ToolTraceView label={labels[response.configurationKey] ?? ''} trace={jurorTrace((response as { trace: ToolTrace }).trace)} full={(response as { trace: ToolTrace }).trace} usage={(response as { steps?: StepUsage[] }).steps} maxSteps={(testCase as { kitFields?: { maxSteps?: number } | null }).kitFields?.maxSteps} />
+            ) : response.text ? (
               <div className="max-h-72 overflow-y-auto rounded-md bg-paper px-4 py-3 font-heading text-reading leading-relaxed break-words whitespace-pre-wrap ring-1 ring-border outline-none ring-inset focus-visible:ring-3 focus-visible:ring-ring/50" tabIndex={0} role="region" aria-label={`${labels[response.configurationKey]} testimony`}>
                 {sources ? <CitedText text={response.text} caseKey={`record-${testCase.key}`} sources={sources} /> : response.text}
               </div>

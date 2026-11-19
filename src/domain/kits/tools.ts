@@ -198,8 +198,7 @@ export const TOOLS_V1: TaskKit<ToolsSettings, ToolsFields> = {
   family: 'tools',
   name: 'Tool use (mock tools)',
   description: 'Each party may call tools you define; Model Court answers every call from your canned responses, and jurors judge the whole path and the final answer.',
-  // Step 5 lists it once the editor exists.
-  listed: false,
+  listed: true,
   inputKinds: ['tools'],
   outputContract: { kind: 'toolTrace' },
   settingsSchema: toolsSettingsSchema,

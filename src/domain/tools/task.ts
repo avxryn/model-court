@@ -175,6 +175,23 @@ export function promptToolsOf(task: Pick<ToolTask, 'tools'>): PromptTool[] {
   return task.tools.map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters as ToolSchema }))
 }
 
+/** A blank tool that saves as is (the editor's "Add a tool"). */
+export function blankTool(n: number): ToolDefinition {
+  return {
+    name: `tool_${n}`,
+    description: 'Say what the tool does and when to use it.',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    responses: [],
+    defaultResponse: { output: 'What the tool returns when no response below matches.', isError: false },
+    errorResponse: { output: 'The arguments did not fit this tool.' },
+  }
+}
+
+/** A new tool-use question's starting task: one blank tool, the default step cap, no expectations. */
+export function blankToolTask(): ToolsFields {
+  return { kind: 'tools', tools: [blankTool(1)], maxSteps: LIMITS.tools.defaultMaxSteps, expect: { requiredCalls: [], requireOrder: false, forbiddenTools: [] } }
+}
+
 /** A starter task for "Insert example" and the new-case template (fictitious data). */
 export const EXAMPLE_TOOL_TASK: ToolTask = {
   tools: [

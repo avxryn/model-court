@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ExtractionQuestionFields } from '@/components/evaluations/ExtractionQuestion'
 import { GroundedQuestionFields } from '@/components/evaluations/SourcesEditor'
+import { ToolsQuestionFields } from '@/components/evaluations/ToolTaskEditor'
 import type { CaseInput } from '@/domain/contracts'
 import type { ExtractionSettings } from '@/domain/kits/extraction'
 import type { ClassificationFields, ClassificationSettings } from '@/domain/kits/classification'
@@ -39,6 +40,8 @@ export function QuestionKitFields({ kit, settings, testCase, index, errors, onCh
   if (kit.family === 'extraction') return <ExtractionQuestionFields settings={settings as ExtractionSettings} testCase={testCase} index={index} errors={errors} onChange={onChange} />
   // Spec 05 (D-95): numbered sources and the grounding key.
   if (kit.family === 'grounded') return <GroundedQuestionFields testCase={testCase} index={index} errors={errors} onChange={onChange} />
+  // Spec 06 (D-103): the tools, canned responses, step cap and expectations.
+  if (kit.family === 'tools') return <ToolsQuestionFields testCase={testCase} index={index} errors={errors} onChange={onChange} />
   const body =
     kit.family === 'summarization' ? (
       <SummaryFields fields={(own as SummarizationFields | undefined) ?? { kind: 'summarization', requiredPoints: [], mustNotMention: [] }} id={id} error={error} onChange={(kitFields) => onChange({ kitFields })} />

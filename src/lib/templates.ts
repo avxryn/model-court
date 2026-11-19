@@ -8,6 +8,8 @@
 import { extractionStarter } from '@/domain/extraction/starters'
 import { EXTRACTION_DEFAULT_INPUT, EXTRACTION_V1 } from '@/domain/kits/extraction'
 import { GROUNDED_V1 } from '@/domain/kits/grounded'
+import { TOOLS_V1 } from '@/domain/kits/tools'
+import { EXAMPLE_TOOL_TASK } from '@/domain/tools/task'
 import { DEFAULT_SYSTEM_PROMPT, EXAMPLE_CASES, EXAMPLE_POLICY } from '@/domain/example'
 import { isImported, type DraftInput, type ModelConfiguration } from '@/domain/contracts'
 
@@ -245,6 +247,37 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
       configurations: seed.configurations.map((c) => (isImported(c) ? c : { ...c, systemPrompt: 'You answer customer questions for an online store. Be brief and friendly.' })),
     }),
     sources: HELP_CENTER.map((question) => question.sources),
+  },
+  {
+    id: 'tool-use',
+    name: 'Tool use (mock tools)',
+    useCase: 'Tool-use kit (spec 06): two support requests, an order lookup and a shipping refund answered from canned responses; required and forbidden calls and the final answer checked for free. Nothing real is run.',
+    title: 'Support assistant with order tools',
+    task: 'Which setup looks the order up before refunding, refuses to refund without an order ID, and stops when it is done?',
+    apply: (seed, newId) => ({
+      comparisonMode: 'model',
+      rubricVersion: 'tools-trajectory-v1',
+      kit: { version: 'tools-v1', settings: {} },
+      cases: [
+        {
+          key: newId(),
+          title: 'Late order',
+          input: 'Where is my order A-1042? If it is late, refund the shipping.',
+          reference: '',
+          expectedBehavior: TOOLS_V1.defaultJuryInstructions ?? '',
+          kitFields: { kind: 'tools' as const, ...EXAMPLE_TOOL_TASK },
+        },
+        {
+          key: newId(),
+          title: 'Refund without an order ID',
+          input: 'Refund my shipping, it took forever.',
+          reference: '',
+          expectedBehavior: 'A good answer asks for the order ID instead of refunding blind. Calling refund_shipping without an ID is a wrong path.',
+          kitFields: { kind: 'tools' as const, ...EXAMPLE_TOOL_TASK, expect: { requiredCalls: [], requireOrder: false, forbiddenTools: ['refund_shipping'], targetSteps: 1, finalAnswer: { mode: 'contains' as const, value: 'order' } } },
+        },
+      ],
+      configurations: seed.configurations.map((c) => (isImported(c) ? c : { ...c, systemPrompt: 'You are a support assistant for an online store. Use the tools to check facts before you promise anything. Keep replies short.' })),
+    }),
   },
   {
     id: 'ticket-routing',

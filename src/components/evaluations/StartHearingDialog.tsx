@@ -8,7 +8,7 @@ import { AllowanceRows } from '@/components/settings/CallAllowance'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import type { DraftInput } from '@/domain/contracts'
 import { LIMITS } from '@/domain/limits'
-import { plannedCalls, quotaBlock, repeatHint } from '@/domain/quota'
+import { callsPerAnswer, plannedCalls, plannedCallsAreUpperBound, quotaBlock, repeatHint } from '@/domain/quota'
 import { PROVIDER_NAMES, type ProviderId } from '@/domain/registry'
 import { generatedParties } from '@/domain/snapshot'
 import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
@@ -40,6 +40,9 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
   const modelParties = generatedParties(draft.configurations).length
   const samples = modelParties > 0 ? (draft.samplesPerAnswer ?? 1) : 1
   const calls = plannedCalls(draft)
+  // Spec 06 §3 (D-103): a tool hearing's calls are a cap (each answer may use up to its question's step cap).
+  const upTo = plannedCallsAreUpperBound(draft)
+  const caps = [...new Set(draft.cases.map((testCase) => callsPerAnswer(testCase)))].sort((a, b) => a - b)
   const kit = draftKit(draft)
   // Spec 04 §3.1 (D-90): a PDF file sent to the providers needs its own tick.
   const pdf = estimateExtractionInput(draft.cases, draft.configurations, samples).pdfPages
@@ -106,7 +109,12 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
           )}
           <dt className="text-muted-foreground">Planned calls</dt>
           <dd className="tabular-nums">
-            {needsConsent ? (
+            {needsConsent && upTo ? (
+              <>
+                Up to <strong>{calls}</strong>: {modelParties} model {modelParties === 1 ? 'party' : 'parties'} × {draft.cases.length} {draft.cases.length === 1 ? 'question' : 'questions'}
+                {samples > 1 && <> × {samples} samples</>} × up to {caps.length === 1 ? caps[0] : `${caps[0]}–${caps.at(-1)}`} calls each
+              </>
+            ) : needsConsent ? (
               <>
                 {draft.cases.length} questions × {modelParties} model {modelParties === 1 ? 'party' : 'parties'}
                 {samples > 1 && <> × {samples} samples</>} = <strong>{calls}</strong>
@@ -143,6 +151,14 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
         </dl>
         {kit.family === 'extraction' && <ExtractionSendsLine draft={draft} samples={samples} />}
         {kit.family === 'grounded' && needsConsent && <GroundedSendsLine draft={draft} samples={samples} />}
+        {kit.family === 'tools' && needsConsent && (
+          <div className="space-y-1.5 text-sm leading-relaxed text-muted-foreground">
+            <p>
+              Each call sends the question, its context, the system instructions and the tools (names, descriptions, argument schemas), then every earlier step of that answer with the canned results of the calls the party made. The rest of your response table and the expectations stay in Model Court. Nothing real is run.
+            </p>
+            <p>Calls a party does not need are returned to your daily allowance when it finishes. Every step resends the conversation so far, so input tokens grow with each step.</p>
+          </div>
+        )}
         {kit.checks.length > 0 && (
           <p className="text-sm leading-relaxed text-muted-foreground">
             After each answer arrives, Model Court runs these free checks on its own server: {kit.checks.map((check) => check.label).join(', ')}. Nothing extra is sent to a provider and nothing is charged. Results stay sealed until you unseal the record.
@@ -161,6 +177,8 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
               <FieldLabel htmlFor="consent-processing" className="font-normal">
                 {kit.family === 'grounded'
                   ? `Send each question, its sources, and the system instructions to ${providerNames}. Your notes on the sources, the grounding key, scoring guides, ratings, and identities stay in Model Court.`
+                  : kit.family === 'tools'
+                  ? `Send each question, its context, the system instructions, the tools, and the canned results of the calls each party makes to ${providerNames}. The rest of your response table, the expectations, scoring guides, ratings, and identities stay in Model Court.`
                   : `Send each question, its exhibit, and the system instructions to ${providerNames}. Scoring guides, ratings, and identities stay in Model Court.`}
               </FieldLabel>
             </Field>
@@ -175,7 +193,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
             <Field orientation="horizontal" className="items-start">
               <Checkbox id="consent-charges" checked={charges} onCheckedChange={(c) => setCharges(c === true)} />
               <FieldLabel htmlFor="consent-charges" className="font-normal">
-                Charge my provider accounts for these {calls} calls. A timed-out request may be charged even without a response, and a retry of it can be charged again.
+                Charge my provider accounts for {upTo ? `up to ${calls}` : `these ${calls}`} calls. A timed-out request may be charged even without a response, and a retry of it can be charged again.
               </FieldLabel>
             </Field>
           </div>
@@ -185,7 +203,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
         {error && <FieldError>{error}</FieldError>}
         <DialogFooter>
           <Button disabled={(needsConsent && (!consent || !charges || block !== null || (pdf > 0 && !sendsDocuments))) || busy} aria-describedby={block ? 'start-blocked' : undefined} onClick={() => void start()}>
-            {busy ? 'Starting…' : calls > 0 ? `Start ${calls} calls` : 'Start the hearing'}
+            {busy ? 'Starting…' : calls > 0 ? `Start ${upTo ? 'up to ' : ''}${calls} calls` : 'Start the hearing'}
           </Button>
         </DialogFooter>
       </DialogContent>

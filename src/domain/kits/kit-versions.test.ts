@@ -519,7 +519,7 @@ const PINNED: Record<string, unknown> = {
     "version": "tools-v1",
     "family": "tools",
     "name": "Tool use (mock tools)",
-    "listed": false,
+    "listed": true,
     "inputKinds": [
       "tools"
     ],
