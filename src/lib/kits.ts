@@ -4,6 +4,7 @@
  */
 
 import type { CaseInput, DraftInput } from '@/domain/contracts'
+import { GROUNDED_DEFAULT_FIELDS } from '@/domain/kits/grounded'
 import { DEFAULT_KIT_VERSION, inputKindOf, kitFor } from '@/domain/kits/registry'
 import type { TaskKit } from '@/domain/kits/types'
 import { plural } from '@/lib/format'
@@ -15,7 +16,7 @@ export interface KitSwitch {
 }
 
 function fieldsName(kind: string): string {
-  return kind === 'summarization' ? 'required points and phrases to avoid' : kind === 'classification' ? 'answer keys' : 'task-kit fields'
+  return kind === 'summarization' ? 'required points and phrases to avoid' : kind === 'classification' ? 'answer keys' : kind === 'grounded' ? 'grounding keys' : 'task-kit fields'
 }
 
 /** The draft after choosing `version`, and what that removes. Choosing General answers removes `kit` and every `kitFields`. */
@@ -26,7 +27,9 @@ export function switchKit(draft: DraftInput, version: string): KitSwitch {
   if ((current?.version ?? DEFAULT_KIT_VERSION) === kit.version) return { draft, removals: [] }
 
   const otherFields = draft.cases.filter((testCase) => testCase.kitFields && (testCase.kitFields as { kind: string }).kind !== kit.family)
-  const takes = (testCase: CaseInput) => kit.inputKinds.includes(inputKindOf(testCase)) || (inputKindOf(testCase) === 'text' && kit.inputKinds.includes('document'))
+  // A document or sources kit's question is plain text plus material stored beside it (specs 04, 05).
+  const beside = kit.inputKinds.includes('document') || kit.inputKinds.includes('sources')
+  const takes = (testCase: CaseInput) => kit.inputKinds.includes(inputKindOf(testCase)) || (inputKindOf(testCase) === 'text' && beside)
   const conversations = draft.cases.filter((testCase) => !takes(testCase))
   const removals: string[] = []
   const kinds = [...new Set(otherFields.map((testCase) => (testCase.kitFields as { kind: string }).kind))]
@@ -35,8 +38,10 @@ export function switchKit(draft: DraftInput, version: string): KitSwitch {
     removals.push(`Switching to ${kit.name} removes ${fieldsName(kind)} from ${plural(count, 'question')}.`)
   }
   // Spec 04: a document kit's question keeps its source as an uploaded document, not in the exhibit.
-  const exhibits = kit.inputKinds.includes('document') ? draft.cases.filter((testCase) => testCase.reference !== '') : []
-  if (exhibits.length > 0) removals.push(`${kit.name} keeps each question's source as a document, so switching clears the exhibit of ${plural(exhibits.length, 'question')}. Paste it as the document afterwards.`)
+  const exhibits = beside ? draft.cases.filter((testCase) => testCase.reference !== '') : []
+  if (exhibits.length > 0 && kit.inputKinds.includes('document')) removals.push(`${kit.name} keeps each question's source as a document, so switching clears the exhibit of ${plural(exhibits.length, 'question')}. Paste it as the document afterwards.`)
+  // Spec 05 (D-95): a sources kit keeps its evidence as numbered sources.
+  if (exhibits.length > 0 && kit.inputKinds.includes('sources')) removals.push(`${kit.name} keeps each question's evidence as numbered sources, so switching clears the exhibit of ${plural(exhibits.length, 'question')}. Paste it as a source afterwards.`)
   if (conversations.length > 0) removals.push(`${kit.name} questions can't carry a conversation yet, so switching removes the earlier conversation from ${plural(conversations.length, 'question')}.`)
 
   const cases = draft.cases.map((testCase): CaseInput => {
@@ -49,7 +54,9 @@ export function switchKit(draft: DraftInput, version: string): KitSwitch {
       const { messages: _removed, ...rest } = next
       next = rest
     }
-    if (kit.inputKinds.includes('document') && next.reference !== '') next = { ...next, reference: '' }
+    if (beside && next.reference !== '') next = { ...next, reference: '' }
+    // Spec 05: every grounded question starts with the default key (the sources answer it, none required).
+    if (kit.family === 'grounded' && !next.kitFields) next = { ...next, kitFields: { ...GROUNDED_DEFAULT_FIELDS } }
     return next
   })
   // A rubric the judge never chose (absent, or the previous kit's default) follows the kit.

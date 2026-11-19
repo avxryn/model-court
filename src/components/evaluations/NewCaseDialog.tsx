@@ -76,6 +76,11 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
             const caseKey = applied.cases[index]?.key
             if (caseKey) revision = (await api<{ revision: number }>('PUT', `/evaluations/${result.id}/documents/${caseKey}`, { body: { kind: 'text', text }, revision })).revision
           }
+          // Spec 05 (D-95): and its sources, question by question.
+          for (const [index, sources] of (template.sources ?? []).entries()) {
+            const caseKey = applied.cases[index]?.key
+            if (caseKey) revision = (await api<{ revision: number }>('PUT', `/evaluations/${result.id}/sources/${caseKey}`, { body: { sources: sources.map((source, n) => ({ number: n + 1, ...source })) }, revision })).revision
+          }
         } catch {
           toast.error('The case was opened with the default example; the template could not be applied.')
         }

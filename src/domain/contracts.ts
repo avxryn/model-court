@@ -228,8 +228,13 @@ export const sourceSchema = z.strictObject({
 })
 export type SourceInput = z.infer<typeof sourceSchema>
 
-/** Replaces one question's sources (`PUT /evaluations/:id/sources/:caseKey`). */
-export const putSourcesSchema = z.strictObject({
+/**
+ * Replaces one question's sources (`PUT /evaluations/:id/sources/:caseKey`). `requiredSources`, when
+ * given, replaces the question's "A good answer cites" in the same write, so moving or removing a
+ * source renumbers it atomically (D-95).
+ */
+export const putSourcesSchema = z
+  .strictObject({
   sources: z
     .array(sourceSchema)
     .min(G.sourcesPerQuestion.min, 'Add at least one source')
@@ -237,7 +242,13 @@ export const putSourcesSchema = z.strictObject({
     .refine((sources) => sources.every((source, index) => source.number === index + 1), 'Sources are numbered 1, 2, 3… in order')
     .refine((sources) => sources.reduce((sum, source) => sum + codePointLength(source.text), 0) <= G.questionChars, `A question’s sources are at most ${G.questionChars.toLocaleString('en-US')} characters`)
     .refine((sources) => utf8ByteLength(JSON.stringify(sources)) <= G.questionBytes, `A question’s sources exceed ${G.questionBytes / 1024} KiB`),
-})
+    requiredSources: z
+      .array(z.number().int().min(1).max(G.sourcesPerQuestion.max))
+      .max(G.sourcesPerQuestion.max)
+      .refine((numbers) => new Set(numbers).size === numbers.length, 'Each required source once')
+      .optional(),
+  })
+  .refine((input) => (input.requiredSources ?? []).every((n) => n <= input.sources.length), { message: 'A required source must be one of the sources', path: ['requiredSources'] })
 
 /** Re-hear (D-69): copy a hearing's frozen questions and/or parties back into the draft. */
 export const restoreDraftSchema = z

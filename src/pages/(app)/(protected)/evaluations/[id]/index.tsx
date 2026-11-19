@@ -10,6 +10,7 @@ import { HearingList } from '@/components/evaluations/HearingList'
 import { ImportedAnswers } from '@/components/evaluations/ImportedAnswers'
 import { JurorCaseView } from '@/components/evaluations/JurorCaseView'
 import { ExtractionDocumentsProvider } from '@/components/evaluations/ExtractionQuestion'
+import { GroundedSourcesProvider } from '@/components/evaluations/SourcesEditor'
 import { KitPicker } from '@/components/evaluations/KitPicker'
 import { KitSettingsEditor } from '@/components/evaluations/KitSettingsEditor'
 import { MissingKeys, SavedKeys } from '@/components/evaluations/KeyStatus'
@@ -195,12 +196,18 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                 <RubricPicker value={draft.rubricVersion} onChange={(rubricVersion) => c.change({ ...draft, rubricVersion })} />
                 {/* Spec 04 (D-88): documents are saved on their own; a save reloads the case with the server's revision and draft. */}
                 <ExtractionDocumentsProvider value={{ evaluationId: evaluation.id, revision: c.revision, saved: !c.dirty, documents: evaluation.documents, onSaved: () => void reload() }}>
-                  <QuestionsEditor cases={draft.cases} errors={c.errors} newId={newIntentKey} kit={draftKit(draft)} kitSettings={draftKitSettings(draft)} onChange={(cases) => c.change({ ...draft, cases })} />
+                  {/* Spec 05 (D-95): likewise sources; a save reloads the case. */}
+                  <GroundedSourcesProvider value={{ evaluationId: evaluation.id, revision: c.revision, saved: !c.dirty, sources: evaluation.sources, onSaved: () => void reload() }}>
+                    <QuestionsEditor cases={draft.cases} errors={c.errors} newId={newIntentKey} kit={draftKit(draft)} kitSettings={draftKitSettings(draft)} onChange={(cases) => c.change({ ...draft, cases })} />
+                  </GroundedSourcesProvider>
                 </ExtractionDocumentsProvider>
               </TabsContent>
               <TabsContent value="configurations">
                 {rehearing && <RehearBanner source={rehearing} runs={evaluation.runs} matches={workingScenario === null || workingScenario === rehearing.scenarioHash} onClose={() => setParam('rehearing', null)} />}
                 {credentials.data && <MissingKeys missing={missingProviders} />}
+                {draftKit(draft).family === 'grounded' && (
+                  <p className="mb-6 rounded-md bg-slip px-4 py-3 text-sm text-muted-foreground">The kit adds the citation format and the “not in the sources” sentence to each request. Don’t ask for a different citation style in the system instructions.</p>
+                )}
                 {repeatedImported.length > 0 && (
                   <Alert className="mb-6">
                     <AlertTriangle aria-hidden />

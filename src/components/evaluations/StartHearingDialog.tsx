@@ -14,6 +14,7 @@ import { generatedParties } from '@/domain/snapshot'
 import { api, ApiClientError, describeError, newIntentKey } from '@/lib/api-client'
 import type { CredentialMetadata, QuotaView } from '@/lib/dto'
 import { estimateExtractionInput } from '@/domain/extraction/estimate'
+import { estimateGroundedInput } from '@/domain/grounded/estimate'
 import { draftKit } from '@/lib/kits'
 import { useApi } from '@/lib/use-api'
 
@@ -141,6 +142,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
           )}
         </dl>
         {kit.family === 'extraction' && <ExtractionSendsLine draft={draft} samples={samples} />}
+        {kit.family === 'grounded' && needsConsent && <GroundedSendsLine draft={draft} samples={samples} />}
         {kit.checks.length > 0 && (
           <p className="text-sm leading-relaxed text-muted-foreground">
             After each answer arrives, Model Court runs these free checks on its own server: {kit.checks.map((check) => check.label).join(', ')}. Nothing extra is sent to a provider and nothing is charged. Results stay sealed until you unseal the record.
@@ -157,7 +159,9 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
             <Field orientation="horizontal" className="items-start">
               <Checkbox id="consent-processing" checked={consent} onCheckedChange={(c) => setConsent(c === true)} />
               <FieldLabel htmlFor="consent-processing" className="font-normal">
-                Send each question, its exhibit, and the system instructions to {providerNames}. Scoring guides, ratings, and identities stay in Model Court.
+                {kit.family === 'grounded'
+                  ? `Send each question, its sources, and the system instructions to ${providerNames}. Your notes on the sources, the grounding key, scoring guides, ratings, and identities stay in Model Court.`
+                  : `Send each question, its exhibit, and the system instructions to ${providerNames}. Scoring guides, ratings, and identities stay in Model Court.`}
               </FieldLabel>
             </Field>
             {pdf > 0 && (
@@ -186,6 +190,19 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Spec 05 §3, §10 (D-95): what each grounded call sends, and an input-token estimate. */
+function GroundedSendsLine({ draft, samples }: { draft: DraftInput; samples: number }) {
+  const estimate = estimateGroundedInput(draft.cases, draft.configurations, samples)
+  return (
+    <div className="space-y-1.5 text-sm leading-relaxed text-muted-foreground">
+      <p>Each call sends the party’s instructions, the question’s sources in your order, the request, and the citation format. Your notes, the grounding key and the jury instructions are never sent.</p>
+      <p className="tabular-nums">
+        About {estimate.total.toLocaleString('en-US')} input tokens across {estimate.calls} {estimate.calls === 1 ? 'call' : 'calls'}, billed to your keys. This is an estimate. Sources are sent with every call, so long sources cost more on every party.
+      </p>
+    </div>
   )
 }
 

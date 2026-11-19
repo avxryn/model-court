@@ -204,7 +204,7 @@ export const GROUNDED_V1: TaskKit<GroundedSettings, GroundedFields> = {
   family: 'grounded',
   name: 'Answers from sources',
   description: 'Answers from numbered passages your retriever returned, with citations and quotes checked against them; jurors judge faithfulness and refusals.',
-  listed: false,
+  listed: true,
   inputKinds: ['sources'],
   outputContract: { kind: 'text' },
   settingsSchema: groundedSettingsSchema,

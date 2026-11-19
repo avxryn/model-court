@@ -442,3 +442,21 @@ describe('grounded sources: generation and checks', () => {
     expect(record.cases.find((c: { key: string }) => c.key === q1).kitFields.answerable).toBe('yes')
   })
 })
+
+describe('grounded sources: renumbering the required sources (D-95)', () => {
+  it('a PUT can carry the renumbered "A good answer cites" in the same write', async () => {
+    const { setup, q1, q2, revision } = await groundedCase()
+    const first = await putSources(setup, q1, revision, SOURCES_Q1)
+    expect(first.json.data.draft.cases[0].kitFields.requiredSources).toEqual([1, 3])
+    // S3 moved to the front, S2 removed: the judge's editor sends [1, 2] for the old S1 and S3.
+    const moved = await h.request('PUT', `/evaluations/${setup.evaluationId}/sources/${q1}`, { as: OWNER, ifMatch: revision + 1, body: { sources: [{ ...SOURCES_Q1[2], number: 1 }, { ...SOURCES_Q1[0], number: 2 }], requiredSources: [2, 1] } })
+    expect(moved.status, JSON.stringify(moved.json)).toBe(200)
+    expect(moved.json.data.draft.cases[0].kitFields.requiredSources).toEqual([1, 2])
+    const beyond = await h.request('PUT', `/evaluations/${setup.evaluationId}/sources/${q1}`, { as: OWNER, ifMatch: revision + 2, body: { sources: [SOURCES_Q1[0]], requiredSources: [2] } })
+    expect(beyond.status).toBe(422)
+    const onNo = await h.request('PUT', `/evaluations/${setup.evaluationId}/sources/${q2}`, { as: OWNER, ifMatch: revision + 2, body: { sources: SOURCES_Q2, requiredSources: [1] } })
+    expect(onNo.status).toBe(422)
+    expect(onNo.json.error.message).toBe('A question the sources cannot answer has no required sources.')
+    expect((await h.request('PUT', `/evaluations/${setup.evaluationId}/sources/${q2}`, { as: OWNER, ifMatch: revision + 2, body: { sources: SOURCES_Q2, requiredSources: [] } })).status).toBe(200)
+  })
+})

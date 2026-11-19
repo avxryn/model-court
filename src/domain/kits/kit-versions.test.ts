@@ -412,7 +412,7 @@ const PINNED: Record<string, unknown> = {
     "version": "grounded-v1",
     "family": "grounded",
     "name": "Answers from sources",
-    "listed": false,
+    "listed": true,
     "inputKinds": [
       "sources"
     ],

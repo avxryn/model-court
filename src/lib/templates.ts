@@ -7,6 +7,7 @@
 
 import { extractionStarter } from '@/domain/extraction/starters'
 import { EXTRACTION_DEFAULT_INPUT, EXTRACTION_V1 } from '@/domain/kits/extraction'
+import { GROUNDED_V1 } from '@/domain/kits/grounded'
 import { DEFAULT_SYSTEM_PROMPT, EXAMPLE_CASES, EXAMPLE_POLICY } from '@/domain/example'
 import { isImported, type DraftInput, type ModelConfiguration } from '@/domain/contracts'
 
@@ -20,7 +21,44 @@ export interface CaseTemplate {
   apply: ((seed: DraftInput, newId: () => string) => DraftInput) | null
   /** Spec 04: text documents to upload after the draft is saved, by question position. */
   documents?: readonly string[]
+  /** Spec 05 (D-95): numbered sources to save after the draft, by question position. */
+  sources?: ReadonlyArray<ReadonlyArray<{ title?: string; text: string; origin?: string }>>
 }
+
+/** Fictitious help-center passages for the answers-from-sources template (spec 05), as a retriever might return them. */
+const HELP_CENTER = [
+  {
+    title: 'Where is my order?',
+    input: 'My order shipped four days ago and has not arrived. When will it get here, and can I get express shipping next time?',
+    answerable: 'yes' as const,
+    requiredSources: [1, 2],
+    sources: [
+      { title: 'Shipping times', text: 'Standard orders ship within 2 business days and arrive 3–7 business days after they ship. Tracking links are emailed when an order leaves the warehouse.', origin: 'help-center/shipping-times, retrieved Nov 12' },
+      { title: 'Express shipping', text: 'Express shipping arrives 1–2 business days after an order ships. It is available for addresses in the contiguous United States only and is chosen at checkout.', origin: 'help-center/express, retrieved Nov 12' },
+      { title: 'Gift wrapping', text: 'Gift wrapping can be added to any order for a flat fee. A gift note of up to 200 characters is printed on the packing slip.', origin: 'help-center/gifts, retrieved Nov 12' },
+    ],
+  },
+  {
+    title: 'Refund to a closed card',
+    input: 'I returned a jacket last week, but the card I paid with is closed. How will I get my money back, and how long does it take?',
+    answerable: 'partly' as const,
+    requiredSources: [1],
+    sources: [
+      { title: 'Refunds', text: 'Refunds are issued to the original payment method within 5 business days after the return is received. The bank may take a few more days to show it.', origin: 'help-center/refunds, retrieved Nov 12' },
+      { title: 'Return window', text: 'Most items can be returned within 30 days of delivery in their original condition. Final-sale items cannot be returned.', origin: 'help-center/returns, retrieved Nov 12' },
+    ],
+  },
+  {
+    title: 'Paying with a gift card',
+    input: 'Can I pay for part of my order with a gift card and the rest with a credit card?',
+    answerable: 'no' as const,
+    requiredSources: [],
+    sources: [
+      { title: 'Payment methods', text: 'We accept Visa, Mastercard, American Express and PayPal. Payment is taken when the order ships.', origin: 'help-center/payments, retrieved Nov 12' },
+      { title: 'Order changes', text: 'An order can be changed or canceled until it ships. After that, use a return instead.', origin: 'help-center/order-changes, retrieved Nov 12' },
+    ],
+  },
+]
 
 const HR_HANDBOOK =
   'Full-time employees accrue 1.5 days of paid leave per month, up to 30 days. Leave requests need manager approval at least 10 working days in advance, except for illness. Unused leave above 10 days is forfeited on January 1. Part-time leave is pro-rated; the handbook does not give the formula.'
@@ -185,6 +223,28 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
       configurations: seed.configurations.map((c) => (isImported(c) ? c : { ...c, systemPrompt: 'You extract contact details from emails for a CRM. Copy values as written. Leave a field empty when the email does not give it.' })),
     }),
     documents: INTAKE_EMAILS.map((email) => email.text),
+  },
+  {
+    id: 'sources',
+    name: 'Answers from sources',
+    useCase: 'Answers-from-sources kit (spec 05): three help-center questions with the passages a retriever returned, one the sources answer only in part and one they cannot answer; citations and quotes checked for free.',
+    title: 'Help-center answers from retrieved passages',
+    task: 'Which setup answers only from the retrieved passages, cites them, and says so when they do not contain the answer?',
+    apply: (seed, newId) => ({
+      comparisonMode: 'model',
+      rubricVersion: 'grounded-v1',
+      kit: { version: 'grounded-v1', settings: {} },
+      cases: HELP_CENTER.map((question) => ({
+        key: newId(),
+        title: question.title,
+        input: question.input,
+        reference: '',
+        expectedBehavior: GROUNDED_V1.defaultJuryInstructions ?? '',
+        kitFields: { kind: 'grounded' as const, answerable: question.answerable, requiredSources: question.requiredSources },
+      })),
+      configurations: seed.configurations.map((c) => (isImported(c) ? c : { ...c, systemPrompt: 'You answer customer questions for an online store. Be brief and friendly.' })),
+    }),
+    sources: HELP_CENTER.map((question) => question.sources),
   },
   {
     id: 'ticket-routing',

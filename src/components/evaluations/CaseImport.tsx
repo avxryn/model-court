@@ -8,7 +8,7 @@ import { Download, Upload } from 'lucide-react'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import type { CaseInput } from '@/domain/contracts'
-import { CASE_IMPORT_COLUMNS, CLASSIFICATION_IMPORT_COLUMNS, parseCasesCsv, type ImportIssue } from '@/domain/case-import'
+import { CASE_IMPORT_COLUMNS, CLASSIFICATION_IMPORT_COLUMNS, GROUNDED_IMPORT_COLUMNS, parseCasesCsv, type ImportIssue } from '@/domain/case-import'
 import { toCsv } from '@/domain/csv'
 import { LIMITS } from '@/domain/limits'
 import { saveBlob } from '@/lib/api-client'
@@ -17,6 +17,8 @@ const TEMPLATE_ROW = ['Outside the return window', 'I bought this 45 days ago. P
 
 export function CaseImport({ currentCount, newId, onImport, disabled, kitVersion }: { currentCount: number; newId: () => string; onImport: (cases: CaseInput[]) => void; disabled?: boolean; /** Spec 03 (D-78): a classification case also takes expected_label and also_accept. */ kitVersion?: string }) {
   const classification = kitVersion?.startsWith('classification-') ?? false
+  // Spec 05 (D-95): an answers-from-sources case also takes answerable and required_sources, and keeps no exhibit.
+  const grounded = kitVersion?.startsWith('grounded-') ?? false
   const input = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState<{ cases: CaseInput[]; fileName: string } | null>(null)
   const [issues, setIssues] = useState<ImportIssue[]>([])
@@ -34,7 +36,11 @@ export function CaseImport({ currentCount, newId, onImport, disabled, kitVersion
   }
 
   const downloadTemplate = () => {
-    const csv = classification ? toCsv([...CASE_IMPORT_COLUMNS, ...CLASSIFICATION_IMPORT_COLUMNS], [[...TEMPLATE_ROW, 'Billing', 'Other']]) : toCsv(CASE_IMPORT_COLUMNS, [TEMPLATE_ROW])
+    const csv = classification
+      ? toCsv([...CASE_IMPORT_COLUMNS, ...CLASSIFICATION_IMPORT_COLUMNS], [[...TEMPLATE_ROW, 'Billing', 'Other']])
+      : grounded
+        ? toCsv([...CASE_IMPORT_COLUMNS, ...GROUNDED_IMPORT_COLUMNS], [[TEMPLATE_ROW[0], TEMPLATE_ROW[1], '', TEMPLATE_ROW[3], TEMPLATE_ROW[4], 'yes', 'S1']])
+        : toCsv(CASE_IMPORT_COLUMNS, [TEMPLATE_ROW])
     saveBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'model-court-questions-template.csv')
   }
 
@@ -48,7 +54,7 @@ export function CaseImport({ currentCount, newId, onImport, disabled, kitVersion
           <Download aria-hidden /> Download a CSV template
         </Button>
         <span className="text-xs text-muted-foreground">
-          Columns: title, input, reference, expected_behavior, and an optional language{classification && ', expected_label and also_accept (labels separated by |)'}. Up to {LIMITS.maxCases} rows. Importing replaces the current questions.
+          Columns: title, input, reference, expected_behavior, and an optional language{classification && ', expected_label and also_accept (labels separated by |)'}{grounded && ', answerable (yes, partly or no) and required_sources (like 1;3). Leave reference empty: sources are imported below'}. Up to {LIMITS.maxCases} rows. Importing replaces the current questions.
         </span>
         <input
           ref={input}

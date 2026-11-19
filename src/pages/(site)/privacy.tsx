@@ -24,7 +24,7 @@ export default function PrivacyPage() {
             <strong>Your account:</strong> your name, email address and user ID from the sign-in service (DeepSpace, through GitHub or Google). We use them to sign you in and to show your name to people on your cases.
           </li>
           <li>
-            <strong>Your cases:</strong> titles, questions, reference evidence (exhibits), scoring guides, system instructions, party names, imported answers, the AI answers a hearing collects, jurors’ scores and notes, and your judgment. We keep a record of who did what and when, so the record can be trusted.
+            <strong>Your cases:</strong> titles, questions, reference evidence (exhibits), sources and your notes on them, scoring guides, system instructions, party names, imported answers, the AI answers a hearing collects, jurors’ scores and notes, and your judgment. We keep a record of who did what and when, so the record can be trusted.
           </li>
           <li>
             <strong>Provider API keys:</strong> encrypted before they are stored and never shown again. We record when each key was last used, and when it was last checked and whether it worked.
@@ -50,6 +50,9 @@ export default function PrivacyPage() {
           <strong>Field lists and documents.</strong> For a “pull fields from documents” case, each request also contains the document for that question and your field list (field names, descriptions and allowed values). If you upload a PDF and choose <strong>Send the PDF file</strong>, the file itself is sent to OpenAI or Anthropic with your key, and the provider reads its text and an image of each page. If you choose <strong>Send the text only</strong>, the PDF never leaves your browser; only the text you reviewed is saved and sent. Answer keys and jury instructions are never sent to a model. Anthropic keeps a compiled copy of the field list (not the document) for up to 24 hours to speed up later requests, so don’t put personal data in field names, descriptions, or allowed values.
         </p>
         <p>
+          <strong>Sources.</strong> For an “answers from sources” case, each request also contains that question’s numbered sources, in your order, with their titles, and the same instructions on how to cite them. Every party’s provider gets the same sources. Your notes on the sources (where a passage came from) and your grounding key (whether the sources answer the question, and which sources a good answer cites) are never sent to a model. Jurors of the hearing see the sources and the grounding key, but not your notes.
+        </p>
+        <p>
           When you choose <strong>Check key</strong> (or leave it on when saving a key), Model Court asks OpenAI or Anthropic to list its models using your key. This is free and sends no questions, answers, or case content.
         </p>
         <p>
@@ -73,6 +76,9 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Documents</strong> are stored with the case. Replacing or removing one deletes it within 24 hours unless a hearing still uses it; deleting the case deletes all of them within 24 hours. We don’t keep the file’s name. Deleting here can’t delete what a provider already received.
+          </li>
+          <li>
+            <strong>Sources</strong> are stored with the case, and each hearing keeps its own unchangeable copy. Replacing or removing a question’s sources deletes the draft copy at once; deleting the case deletes all of them within 24 hours. Deleting here can’t delete what a provider already received.
           </li>
           <li>
             <strong>API keys</strong> expire 7 days after they are saved or renewed (an operator can set up to 90). A removed or expired key’s encrypted copy is deleted within a day, unless a hearing still records which key it used, in which case it is deleted with that case.

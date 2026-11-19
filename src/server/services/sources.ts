@@ -113,8 +113,23 @@ function requireGroundedQuestion(draft: Draft, caseKey: string): void {
   if (!draft.cases.some((testCase) => testCase.key === caseKey)) throw notFound()
 }
 
+function withRequiredSources(draft: Draft, caseKey: string, required: number[]): Draft {
+  return {
+    ...draft,
+    cases: draft.cases.map((testCase) => {
+      if (testCase.key !== caseKey) return testCase
+      const fields = testCase.kitFields as GroundedFields | undefined
+      const base = fields?.kind === 'grounded' ? fields : GROUNDED_DEFAULT_FIELDS
+      if (base.answerable === 'no' && required.length > 0) {
+        throw new ApiError(422, 'VALIDATION_FAILED', 'A question the sources cannot answer has no required sources.', { fields: [{ path: 'requiredSources', message: 'Clear them, or mark the question answerable' }] })
+      }
+      return { ...testCase, kitFields: { ...base, requiredSources: required } }
+    }),
+  }
+}
+
 /** Replaces one question's sources and bumps the revision (spec 05 §5.1). */
-export async function putSources(deps: Deps, userId: string, evaluationId: string, caseKey: string, input: { sources: SourceInput[] }, ifMatch: number, requestId: string) {
+export async function putSources(deps: Deps, userId: string, evaluationId: string, caseKey: string, input: { sources: SourceInput[]; requiredSources?: number[] }, ifMatch: number, requestId: string) {
   const access = await loadEvaluationAccess(deps.db, evaluationId, userId)
   requireOwner(access)
   const draft = parseStoredDraft(access.evaluation)
@@ -133,7 +148,10 @@ export async function putSources(deps: Deps, userId: string, evaluationId: strin
   }
   const next = new Map(current)
   next.set(caseKey, rows)
-  const nextDraft = withSourceRefs(draft, next)
+  // D-95: the judge's renumbered "A good answer cites", written in the same batch as the sources.
+  const required = input.requiredSources ? [...new Set(input.requiredSources)].sort((a, b) => a - b) : null
+  const keyed = required ? withRequiredSources(draft, caseKey, required) : draft
+  const nextDraft = withSourceRefs(keyed, next)
   const draftJson = JSON.stringify(nextDraft)
   if (utf8ByteLength(draftJson) > LIMITS.draftJsonBytes) throw new ApiError(422, 'VALIDATION_FAILED', 'Draft exceeds 96 KiB')
   try {
