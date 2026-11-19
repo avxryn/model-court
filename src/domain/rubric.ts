@@ -208,6 +208,37 @@ export const RUBRICS = {
       },
     },
   },
+  // Spec 05 §9 (D-92): the grounded kit's default.
+  'grounded-v1': {
+    name: 'Grounded answers',
+    description: "Answers from numbered sources: faithfulness, coverage, and refusing when the sources don't say.",
+    lines: {
+      correctness: {
+        label: 'Faithfulness',
+        anchors: {
+          0: 'States something the sources contradict or do not support, or a citation or quote misrepresents its source',
+          1: 'Mostly supported, but one claim goes beyond the sources or cites the wrong source',
+          2: 'Every claim is supported by the source it cites, and quotes are accurate',
+        },
+      },
+      completeness: {
+        label: 'Coverage',
+        anchors: {
+          0: 'Misses the core of the request, or ignores sources the jury instructions say are needed',
+          1: 'Answers the core, but leaves out a relevant point or a required source',
+          2: 'Uses every relevant source and covers every point the sources support',
+        },
+      },
+      grounding: {
+        label: 'Correct refusal',
+        anchors: {
+          0: 'Answers when the sources do not contain the answer, or refuses when they do',
+          1: 'Makes the right call, but hedges, adds outside knowledge, or is unclear about what is missing',
+          2: 'Answers when the sources support it, and says plainly when they do not (and what is missing, if they answer only in part)',
+        },
+      },
+    },
+  },
 } as const satisfies Record<string, { name: string; description: string; lines: RubricLines }>
 
 export type RubricVersion = keyof typeof RUBRICS

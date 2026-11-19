@@ -172,6 +172,10 @@ export function describeIssue(issue: ReadinessIssue, cases?: ReadonlyArray<Pick<
         : `${kitFor(issue.kitVersion).name} needs a document in the exhibit of every question. Add one to ${questionName(issue.caseKey, cases)}.`
     case 'kit_unknown':
       return 'This case uses a task kit this version of Model Court does not know. Choose another task kit.'
+    case 'kit_sources_missing':
+      return `Add at least one source to every question. ${questionName(issue.caseKey, cases)} has none.`
+    case 'kit_required_source_unknown':
+      return `A required source no longer exists: ${questionName(issue.caseKey, cases)} has no S${issue.number}. Check "A good answer cites".`
   }
 }
 

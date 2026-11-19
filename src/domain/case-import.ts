@@ -8,6 +8,9 @@
  *   reference                         optional (empty when absent)
  *   expected_label, also_accept       optional, only for a classification case (D-78);
  *                                     also_accept is `|`-separated
+ *   answerable, required_sources      optional, only for an answers-from-sources case (D-92);
+ *                                     answerable is yes / partly / no (empty = yes), required_sources
+ *                                     lists S numbers: `1;3`, `S1 S3` or `S1, S3`
  * Header names are case-insensitive; spaces, hyphens and camelCase map to the
  * same column (`Expected behavior`, `expected-behavior`, `expectedBehavior`).
  * Cell values are kept exactly as written: no trimming, no normalization, and
@@ -22,11 +25,13 @@ import { utf8ByteLength } from './text'
 export const CASE_IMPORT_COLUMNS = ['title', 'input', 'reference', 'expected_behavior', 'language'] as const
 /** Spec 03 (D-78): accepted only when the draft's kit is classification. */
 export const CLASSIFICATION_IMPORT_COLUMNS = ['expected_label', 'also_accept'] as const
-type KitColumn = (typeof CLASSIFICATION_IMPORT_COLUMNS)[number]
+/** Spec 05 §5.5 (D-92): accepted only when the draft's kit is grounded. */
+export const GROUNDED_IMPORT_COLUMNS = ['answerable', 'required_sources'] as const
+type KitColumn = (typeof CLASSIFICATION_IMPORT_COLUMNS)[number] | (typeof GROUNDED_IMPORT_COLUMNS)[number]
 type Column = (typeof CASE_IMPORT_COLUMNS)[number] | KitColumn
 const REQUIRED: readonly Column[] = ['title', 'input', 'expected_behavior']
 const FIELD: Record<(typeof CASE_IMPORT_COLUMNS)[number], 'title' | 'input' | 'reference' | 'expectedBehavior' | 'language'> = { title: 'title', input: 'input', reference: 'reference', expected_behavior: 'expectedBehavior', language: 'language' }
-const isKitColumn = (column: Column): column is KitColumn => (CLASSIFICATION_IMPORT_COLUMNS as readonly string[]).includes(column)
+const isKitColumn = (column: Column): column is KitColumn => ([...CLASSIFICATION_IMPORT_COLUMNS, ...GROUNDED_IMPORT_COLUMNS] as readonly string[]).includes(column)
 
 export interface ImportIssue {
   /** 1-based data row (the header is row 0); null for file-level problems. */
@@ -37,7 +42,7 @@ export interface ImportIssue {
 
 export type CaseImportResult = { ok: true; cases: CaseInput[] } | { ok: false; issues: ImportIssue[] }
 
-function normalizeHeader(name: string): string {
+export function normalizeHeader(name: string): string {
   return name
     .trim()
     .replace(/([a-z])([A-Z])/g, '$1_$2')
@@ -51,7 +56,8 @@ function normalizeHeader(name: string): string {
  */
 export function parseCasesCsv(text: string, newId: () => string, options: { kitVersion?: string } = {}): CaseImportResult {
   const kitFamily = options.kitVersion?.split('-v')[0] ?? 'general'
-  const allowed: readonly Column[] = kitFamily === 'classification' ? [...CASE_IMPORT_COLUMNS, ...CLASSIFICATION_IMPORT_COLUMNS] : CASE_IMPORT_COLUMNS
+  const allowed: readonly Column[] =
+    kitFamily === 'classification' ? [...CASE_IMPORT_COLUMNS, ...CLASSIFICATION_IMPORT_COLUMNS] : kitFamily === 'grounded' ? [...CASE_IMPORT_COLUMNS, ...GROUNDED_IMPORT_COLUMNS] : CASE_IMPORT_COLUMNS
   if (utf8ByteLength(text) > LIMITS.caseImportCsvBytes) {
     return { ok: false, issues: [{ row: null, field: null, message: `The file is larger than ${LIMITS.caseImportCsvBytes / 1024} KiB.` }] }
   }
@@ -66,6 +72,10 @@ export function parseCasesCsv(text: string, newId: () => string, options: { kitV
     if ((allowed as readonly string[]).includes(normalized)) return normalized as Column
     if ((CLASSIFICATION_IMPORT_COLUMNS as readonly string[]).includes(normalized)) {
       issues.push({ row: null, field: null, message: `Column "${name}" needs the Classification task kit. Choose it first, or remove the column.` })
+      return null
+    }
+    if ((GROUNDED_IMPORT_COLUMNS as readonly string[]).includes(normalized)) {
+      issues.push({ row: null, field: null, message: `Column "${name}" needs the Answers from sources task kit. Choose it first, or remove the column.` })
       return null
     }
     issues.push({ row: null, field: null, message: `Unknown column "${name}". Allowed: ${allowed.join(', ')}.` })
@@ -91,17 +101,26 @@ export function parseCasesCsv(text: string, newId: () => string, options: { kitV
     }
     const candidate: CaseInput = { key: newId(), title: '', input: '', reference: '', expectedBehavior: '' }
     const kitFields: { kind: 'classification'; expectedLabel?: string; alsoAccept?: string[] } = { kind: 'classification' }
+    const grounded: { kind: 'grounded'; answerable: string; requiredSources: number[] } = { kind: 'grounded', answerable: 'yes', requiredSources: [] }
     columns.forEach((column, i) => {
       // An empty language cell means "untagged", not an invalid blank tag.
       if (column === 'language' && cells[i].trim() === '') return
       if (column === 'expected_label') {
         if (cells[i].trim() !== '') kitFields.expectedLabel = cells[i]
+      } else if (column === 'answerable') {
+        const value = cells[i].trim().toLowerCase()
+        if (value !== '') grounded.answerable = value
+      } else if (column === 'required_sources') {
+        const parsed = parseSourceNumbers(cells[i])
+        if (parsed === null) issues.push({ row, field: 'required_sources', message: 'List source numbers like 1;3 or S1 S3.' })
+        else grounded.requiredSources = parsed
       } else if (column === 'also_accept') {
         const labels = cells[i].split('|').filter((label) => label.trim() !== '')
         if (labels.length > 0) kitFields.alsoAccept = labels
       } else if (column) candidate[FIELD[column]] = cells[i]
     })
     if (kitFamily === 'classification') candidate.kitFields = kitFields
+    if (kitFamily === 'grounded') candidate.kitFields = grounded as CaseInput['kitFields']
     const result = caseInputSchema.safeParse(candidate)
     if (result.success) {
       cases.push(result.data)
@@ -109,7 +128,15 @@ export function parseCasesCsv(text: string, newId: () => string, options: { kitV
     }
     for (const issue of result.error.issues) {
       const field =
-        issue.path[0] === 'kitFields' ? (issue.path[1] === 'alsoAccept' ? 'also_accept' : 'expected_label') : (CASE_IMPORT_COLUMNS.find((column) => !isKitColumn(column) && FIELD[column] === issue.path[0]) ?? null)
+        issue.path[0] === 'kitFields'
+          ? kitFamily === 'grounded'
+            ? issue.path[1] === 'answerable'
+              ? 'answerable'
+              : 'required_sources'
+            : issue.path[1] === 'alsoAccept'
+              ? 'also_accept'
+              : 'expected_label'
+          : (CASE_IMPORT_COLUMNS.find((column) => !isKitColumn(column) && FIELD[column] === issue.path[0]) ?? null)
       issues.push({ row, field, message: issue.message })
     }
   })
@@ -118,6 +145,21 @@ export function parseCasesCsv(text: string, newId: () => string, options: { kitV
   const all = casesSchema.safeParse(cases)
   if (!all.success) return { ok: false, issues: all.error.issues.map((issue) => ({ row: null, field: null, message: issue.message })) }
   return { ok: true, cases: all.data }
+}
+
+/**
+ * Source numbers in a cell: `1;3`, `S1 S3`, `S1, S3` (any of `;`, `,` and spaces between).
+ * An empty cell is no numbers; anything else that isn't 1–99 with an optional S is null.
+ */
+export function parseSourceNumbers(cell: string): number[] | null {
+  const parts = cell.split(/[;,\s]+/u).filter((part) => part !== '')
+  const out: number[] = []
+  for (const part of parts) {
+    const match = /^[Ss]?(\d{1,2})$/u.exec(part)
+    if (!match || Number(match[1]) < 1) return null
+    out.push(Number(match[1]))
+  }
+  return out
 }
 
 /**

@@ -9,7 +9,7 @@ import { z } from 'zod'
 import type { CaseInput } from '../contracts'
 import { KIT_VERSIONS, KITS } from './registry'
 import { runChecks } from './runner'
-import type { TaskKit } from './types'
+import type { CheckMaterials, TaskKit } from './types'
 
 function metadata(kit: TaskKit<unknown, unknown>) {
   return {
@@ -408,6 +408,111 @@ const PINNED: Record<string, unknown> = {
       "additionalProperties": false
     }
   },
+  'grounded-v1': {
+    "version": "grounded-v1",
+    "family": "grounded",
+    "name": "Answers from sources",
+    "listed": false,
+    "inputKinds": [
+      "sources"
+    ],
+    "outputContract": {
+      "kind": "text"
+    },
+    "template": "grounded-v1",
+    "defaultRubricVersion": "grounded-v1",
+    "defaultJuryInstructions": "Check each claim against the source it cites. A claim the cited source does not support is not grounded, even if it is true.",
+    "checks": [
+      {
+        "id": "cites-something",
+        "label": "Cites a source"
+      },
+      {
+        "id": "citations-exist",
+        "label": "Citations point to real sources"
+      },
+      {
+        "id": "quotes-match",
+        "label": "Quotes match their sources"
+      },
+      {
+        "id": "required-cited",
+        "label": "Required sources cited"
+      },
+      {
+        "id": "refusal",
+        "label": "Refuses only when it should"
+      }
+    ],
+    "settingsSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "caseFieldsSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "grounded"
+        },
+        "answerable": {
+          "type": "string",
+          "enum": [
+            "yes",
+            "partly",
+            "no"
+          ]
+        },
+        "requiredSources": {
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "sources": {
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "byteLength": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "number",
+              "sha256",
+              "byteLength"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "answerable",
+        "requiredSources"
+      ],
+      "additionalProperties": false
+    }
+  },
 }
 
 const extractionSettings = {"schema":{"type":"object","properties":{"vendor":{"type":"string","title":"Vendor"},"total":{"type":"number"},"po":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}}},"required":["vendor","total","tags"]},"compare":{"/total":{"tolerance":0.01}}}
@@ -432,8 +537,11 @@ const summaryCase: CaseInput = {
   kitFields: { kind: 'summarization', requiredPoints: [{ text: 'Refund window', anyOf: ['30 days'] }, { text: 'Photo needed', anyOf: ['photo', 'picture'] }], mustNotMention: ['Dana'] },
 }
 
+const groundedCase: CaseInput = {"key":"00000000-0000-4000-8000-000000000005","title":"Refunds","input":"How long do I have?","reference":"","expectedBehavior":"Check each claim.","kitFields":{"kind":"grounded","answerable":"yes","requiredSources":[1,2],"sources":[{"number":1,"sha256":"1111111111111111111111111111111111111111111111111111111111111111","byteLength":60},{"number":2,"sha256":"2222222222222222222222222222222222222222222222222222222222222222","byteLength":40}]}} as CaseInput
+const groundedMaterials: CheckMaterials = {"sources":[{"number":1,"title":"Refunds","text":"Customers can request a refund within 30 days of purchase."},{"number":2,"title":null,"text":"Refunds go back to the original card."}]}
+
 /** Fixed inputs → expected check results, per kit version. */
-const OUTPUTS: Record<string, Array<{ case: CaseInput; settings: unknown; text: string; expected: unknown }>> = {
+const OUTPUTS: Record<string, Array<{ case: CaseInput; settings: unknown; text: string; expected: unknown; materials?: CheckMaterials }>> = {
   'general-v1': [
     {
       case: { key: '00000000-0000-4000-8000-000000000001', title: 'T', input: 'Q', reference: '', expectedBehavior: 'E' },
@@ -458,6 +566,12 @@ const OUTPUTS: Record<string, Array<{ case: CaseInput; settings: unknown; text: 
     { case: classificationCase, settings: classificationSettings, text: 'Probably a billing issue.', expected: [{"checkId":"label-format","status":"fail","reason":"The first line, 'Probably a billing issue.', names no allowed label.","detail":{"predicted":null}},{"checkId":"label-correct","status":"fail","reason":"No allowed label, so it cannot match Billing.","detail":{"expected":"Billing","predicted":null}},{"checkId":"reasoning-given","status":"fail","reason":"0 words of reasoning; at least 5 expected.","detail":{"words":0}}] },
     { case: { ...classificationCase, kitFields: { kind: 'classification' as const } }, settings: { ...classificationSettings, minReasoningWords: 0 }, text: 'Other', expected: [{"checkId":"label-format","status":"pass","reason":"Names Other.","detail":{"predicted":"Other"}},{"checkId":"label-correct","status":"na","reason":"No expected label for this question.","detail":{"expected":null,"predicted":null}},{"checkId":"reasoning-given","status":"na","reason":"The reasoning check is off for this case.","detail":{"words":0}}] },
   ],
+  'grounded-v1': [
+    { case: groundedCase, settings: {}, materials: groundedMaterials, text: "30 days [S1: \"within 30 days\"], back to your card [S2].", expected: [{"checkId":"cites-something","status":"pass","reason":"2 citations to the sources.","detail":{"citations":2,"toRealSources":2}},{"checkId":"citations-exist","status":"pass","reason":"Every citation points to S1–S2.","detail":{"unknown":[]}},{"checkId":"quotes-match","status":"pass","reason":"The quote was found in its source.","detail":{"quotes":1,"found":1,"missing":[]}},{"checkId":"required-cited","status":"pass","reason":"Cites every required source (S1 and S2).","detail":{"required":[1,2],"missing":[]}},{"checkId":"refusal","status":"pass","reason":"Answers without saying the sources lack the answer.","detail":{"refused":false}}] },
+    { case: groundedCase, settings: {}, materials: groundedMaterials, text: "Thirty days [S1: \"within thirty days\"] [S7].", expected: [{"checkId":"cites-something","status":"pass","reason":"1 citation to the sources.","detail":{"citations":2,"toRealSources":1}},{"checkId":"citations-exist","status":"fail","reason":"Cites S7; this question has 2 sources.","detail":{"unknown":[7]}},{"checkId":"quotes-match","status":"fail","reason":"0 of 1 quote found; the quote cited to S1 is not in S1.","detail":{"quotes":1,"found":0,"missing":[1]}},{"checkId":"required-cited","status":"fail","reason":"S2 is required and not cited.","detail":{"required":[1,2],"missing":[2]}},{"checkId":"refusal","status":"pass","reason":"Answers without saying the sources lack the answer.","detail":{"refused":false}}] },
+    { case: groundedCase, settings: {}, materials: groundedMaterials, text: "The sources do not contain the answer.", expected: [{"checkId":"cites-something","status":"fail","reason":"No citation in the [S1] format.","detail":{"citations":0,"toRealSources":0}},{"checkId":"citations-exist","status":"na","reason":"No citations.","detail":{}},{"checkId":"quotes-match","status":"na","reason":"No quotes.","detail":{}},{"checkId":"required-cited","status":"fail","reason":"S1 and S2 are required and not cited.","detail":{"required":[1,2],"missing":[1,2]}},{"checkId":"refusal","status":"fail","reason":"Says the sources do not contain the answer, but the judge marked them as answering it.","detail":{"refused":true}}] },
+    { case: { ...groundedCase, kitFields: {"kind":"grounded","answerable":"no","requiredSources":[],"sources":[{"number":1,"sha256":"1111111111111111111111111111111111111111111111111111111111111111","byteLength":60},{"number":2,"sha256":"2222222222222222222222222222222222222222222222222222222222222222","byteLength":40}]} } as CaseInput, settings: {}, materials: groundedMaterials, text: "The sources do not contain the answer.", expected: [{"checkId":"cites-something","status":"na","reason":"The judge marked this question as not answerable from the sources.","detail":{}},{"checkId":"citations-exist","status":"na","reason":"No citations.","detail":{}},{"checkId":"quotes-match","status":"na","reason":"No quotes.","detail":{}},{"checkId":"required-cited","status":"na","reason":"The judge marked this question as not answerable from the sources.","detail":{}},{"checkId":"refusal","status":"pass","reason":"Says the sources do not contain the answer.","detail":{"refused":true}}] },
+  ],
 }
 
 describe('published kit versions', () => {
@@ -472,7 +586,7 @@ describe('published kit versions', () => {
 
     it(`${version}: check outputs on fixed inputs are unchanged`, () => {
       for (const row of OUTPUTS[version] ?? []) {
-        expect(runChecks(KITS[version] as TaskKit<unknown, unknown>, row.settings, row.case, { kind: 'text', text: row.text }).results).toEqual(row.expected)
+        expect(runChecks(KITS[version] as TaskKit<unknown, unknown>, row.settings, row.case, { kind: 'text', text: row.text }, row.materials).results).toEqual(row.expected)
       }
     })
   }

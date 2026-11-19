@@ -11,7 +11,7 @@
 import type { CaseInput } from '../contracts'
 import { LIMITS } from '../limits'
 import { utf8ByteLength } from '../text'
-import type { CheckCase, CheckContext, CheckDetail, CheckResult, CheckStatus, TaskKit, Testimony } from './types'
+import type { CheckCase, CheckContext, CheckDetail, CheckMaterials, CheckResult, CheckStatus, TaskKit, Testimony } from './types'
 
 export const CHECK_ERROR_REASON = 'This check could not run. That is a fault in Model Court, not in the answer.'
 /** The check id of the single result a runner-level fault yields. */
@@ -63,7 +63,7 @@ export function checkCaseOf(testCase: CaseInput | CheckCase): CheckCase {
   }
 }
 
-export function runChecks(kit: TaskKit<unknown, unknown>, settings: unknown, testCase: CaseInput | CheckCase, testimony: Testimony): { kitVersion: string; results: CheckResult[] } {
+export function runChecks(kit: TaskKit<unknown, unknown>, settings: unknown, testCase: CaseInput | CheckCase, testimony: Testimony, materials?: CheckMaterials): { kitVersion: string; results: CheckResult[] } {
   try {
     const checkCase = checkCaseOf(testCase)
     const raw = checkCase.kitFields as { kind?: string } | undefined
@@ -72,6 +72,8 @@ export function runChecks(kit: TaskKit<unknown, unknown>, settings: unknown, tes
       testCase: checkCase,
       fields: raw && raw.kind === kit.family ? raw : undefined,
       settings,
+      // Spec 05 (D-92): origin notes are not part of a check's view of a source.
+      ...(materials?.sources ? { materials: { sources: materials.sources.map((source) => ({ number: source.number, title: source.title, text: source.text })) } } : {}),
     }
     const results = kit.checks.map((check): CheckResult => {
       try {

@@ -4,6 +4,7 @@
  */
 
 import { Plain } from '@/components/court/Paper'
+import { groundingKeyText } from '@/domain/grounded/sources'
 import type { KitJurorCaseView } from '@/domain/kits/types'
 
 export function KitFacts({ view, kitName }: { view: KitJurorCaseView; kitName: string }) {
@@ -41,6 +42,8 @@ export function KitFacts({ view, kitName }: { view: KitJurorCaseView; kitName: s
             </>
           )}
         </dl>
+      ) : view.kind === 'grounded' ? (
+        <p className="mt-2 text-muted-foreground">{groundingKeyText(view)}</p>
       ) : view.kind === 'extraction' ? (
         <dl className="mt-2 grid gap-x-4 gap-y-1.5 text-muted-foreground sm:grid-cols-[auto_1fr]">
           <dt className="font-medium text-foreground">Fields</dt>

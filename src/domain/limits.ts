@@ -99,4 +99,22 @@ export const LIMITS = {
     /** Allowance for the provider's own schema prompt (spec 04 §10.3). */
     estimatedSchemaPromptTokens: 300,
   },
+  /** Answers from supplied sources (spec 05 §10, D-92). */
+  grounded: {
+    sourcesPerQuestion: { min: 1, max: 10 },
+    sourceText: { min: 1, max: 6_000 },
+    sourceTitle: { min: 1, max: 120 },
+    sourceOrigin: { min: 1, max: 300 },
+    /** Sum of source text per question, in code points. */
+    questionChars: 24_000,
+    /** Sum of source text over every question of a case, in code points. */
+    caseChars: 60_000,
+    /** UTF-8 of one question's sources as JSON, so its PUT fits the 128 KiB body cap. */
+    questionBytes: 100 * 1024,
+    importCsvBytes: 256 * 1024,
+    maxCitationsParsed: 200,
+    citationQuote: { min: 1, max: 1_000 },
+    /** Juror reading-time hint (spec 05 §10). */
+    readingWordsPerMinute: 250,
+  },
 } as const

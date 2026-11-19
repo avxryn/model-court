@@ -211,6 +211,34 @@ export const putTextDocumentSchema = z.strictObject({
     .refine((value) => !hasDisallowedControlChars(value), 'The document contains control characters'),
 })
 
+const G = LIMITS.grounded
+
+/**
+ * Spec 05 §4.3 (D-92): one source of a grounded question. `text` is kept exactly as written (no
+ * trimming); `title` and `origin` are optional display strings. `origin` is the judge's note and
+ * is never sent to a provider or shown to jurors.
+ */
+export const sourceSchema = z.strictObject({
+  number: z.number().int().min(1).max(G.sourcesPerQuestion.max),
+  title: text(G.sourceTitle, 'Source title').refine((value) => !/[\r\n]/u.test(value) && !hasDisallowedControlChars(value), 'A source title is one line').optional(),
+  origin: text(G.sourceOrigin, 'Source note').refine((value) => !hasDisallowedControlChars(value), 'The source note contains control characters').optional(),
+  text: text(G.sourceText, 'Source text')
+    .refine((value) => value.trim().length > 0, 'Source text cannot be blank')
+    .refine((value) => !hasDisallowedControlChars(value), 'Source text contains control characters'),
+})
+export type SourceInput = z.infer<typeof sourceSchema>
+
+/** Replaces one question's sources (`PUT /evaluations/:id/sources/:caseKey`). */
+export const putSourcesSchema = z.strictObject({
+  sources: z
+    .array(sourceSchema)
+    .min(G.sourcesPerQuestion.min, 'Add at least one source')
+    .max(G.sourcesPerQuestion.max, `At most ${G.sourcesPerQuestion.max} sources per question`)
+    .refine((sources) => sources.every((source, index) => source.number === index + 1), 'Sources are numbered 1, 2, 3… in order')
+    .refine((sources) => sources.reduce((sum, source) => sum + codePointLength(source.text), 0) <= G.questionChars, `A question’s sources are at most ${G.questionChars.toLocaleString('en-US')} characters`)
+    .refine((sources) => utf8ByteLength(JSON.stringify(sources)) <= G.questionBytes, `A question’s sources exceed ${G.questionBytes / 1024} KiB`),
+})
+
 /** Re-hear (D-69): copy a hearing's frozen questions and/or parties back into the draft. */
 export const restoreDraftSchema = z
   .strictObject({ fromRunId: uuid, questions: z.boolean(), parties: z.boolean() })

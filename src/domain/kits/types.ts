@@ -9,6 +9,7 @@
 
 import type { z } from 'zod'
 import type { CaseInput } from '../contracts'
+import type { PromptSource } from '../grounded/sources'
 import type { MessageTemplateVersion } from '../messages'
 import type { RubricVersion } from '../rubric'
 
@@ -37,6 +38,14 @@ export type Testimony = { kind: 'text'; text: string }
 export type CheckCase = Pick<CaseInput, 'key' | 'input' | 'reference' | 'expectedBehavior' | 'kitFields'>
 
 /**
+ * Frozen per-question materials a kit's checks read beside the question (spec 05 §8, D-92): the
+ * grounded kit's numbered sources, without their origin notes. Identical for every party.
+ */
+export interface CheckMaterials {
+  sources?: ReadonlyArray<PromptSource>
+}
+
+/**
  * Everything a check may read. Deliberately no tokens, timing, finish reason, truncation,
  * provider, model, party label or key, attempt number or imported-ness (the blinding rule, §9).
  */
@@ -46,6 +55,8 @@ export interface CheckContext<S, F> {
   /** The case's own kit fields, already narrowed to this kit's kind (or undefined when the question has none). */
   fields: F | undefined
   settings: S
+  /** The question's frozen materials; absent for kits that have none. */
+  materials?: CheckMaterials
 }
 
 export type CheckStatus = 'pass' | 'fail' | 'na' | 'error'
@@ -104,11 +115,17 @@ export type KitJurorCaseView =
   | { kind: 'classification'; labels: string[]; expectedLabel: string | null; alsoAccept: string[] }
   /** Spec 04 (D-85): the field list's labels in schema order. Never the answer key (decision 1). */
   | { kind: 'extraction'; fields: Array<{ label: string; mustFill: boolean }> }
+  /** Spec 05 §3 (D-92): the judge's grounding key, the same for every party. */
+  | { kind: 'grounded'; answerable: 'yes' | 'partly' | 'no'; requiredSources: number[] }
 
 export type KitReadinessIssue =
   | { kind: 'kit_input_unsupported'; caseKey: string; inputKind: InputKind; kitVersion: string }
   | { kind: 'kit_document_missing'; caseKey: string; kitVersion: string }
   | { kind: 'kit_unknown'; version: string }
+  /** Spec 05 §4.4 (D-92): a grounded question without sources. */
+  | { kind: 'kit_sources_missing'; caseKey: string; kitVersion: string }
+  /** Spec 05 §4.4: a required source number the question no longer has. */
+  | { kind: 'kit_required_source_unknown'; caseKey: string; kitVersion: string; number: number }
 
 export interface KitMetricInput<S> {
   settings: S
