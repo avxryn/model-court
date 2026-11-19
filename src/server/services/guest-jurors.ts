@@ -186,6 +186,9 @@ export async function resumeGuest(deps: Deps, input: z.output<typeof guestResume
 
 /** Routes a guest cookie may reach, with the hearing ID they name. Everything else needs a signed-in account. */
 export function guestRoute(method: string, path: string): string | null {
+  // Spec 04 §5 (D-89): exactly one more pattern, the hearing's document of one question (a UUID), read-only.
+  const document = /\/runs\/([0-9a-f-]{36})\/documents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.exec(path)
+  if (document) return method === 'GET' ? document[1] : null
   const match = /\/runs\/([0-9a-f-]{36})(\/review|\/review\/submit|\/results)?$/.exec(path)
   if (!match) return null
   const tail = match[2] ?? ''

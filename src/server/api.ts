@@ -38,7 +38,7 @@ import { getQuota } from './services/quota'
 import { cancelRun, getRun, openReview, retryGenerations, startRun } from './services/runs'
 import { getComparison, parseRunIds } from './services/comparison'
 import { duplicateEvaluation, exportScenario, restoreDraft } from './services/scenarios'
-import { deleteDocument, getDraftDocument, putTextDocument } from './services/documents'
+import { deleteDocument, getDraftDocument, getRunDocument, putPdfDocument, putTextDocument } from './services/documents'
 import { cancelSpecialMaster, getSpecialMaster, startSpecialMaster } from './services/special-master'
 import {
   GUEST_COOKIE_PREFIX,
@@ -62,6 +62,15 @@ type ApiContext = Context<{ Variables: Vars }>
 
 function optionalIfMatch(c: ApiContext): number | null {
   return c.req.header('If-Match') ? ifMatchRevision(c) : null
+}
+
+/** Spec 04 §5: a raw upload body (a PDF), refused before reading when its declared size is over the cap. */
+async function readRawBody(c: { req: { header: (name: string) => string | undefined; arrayBuffer: () => Promise<ArrayBuffer> } }, maxBytes: number): Promise<Uint8Array<ArrayBuffer>> {
+  const declared = Number(c.req.header('Content-Length') ?? '0')
+  if (declared > maxBytes) throw new ApiError(413, 'PAYLOAD_TOO_LARGE', `A PDF is at most ${maxBytes / 1024 / 1024} MiB.`)
+  const bytes = new Uint8Array(await c.req.arrayBuffer())
+  if (bytes.byteLength > maxBytes) throw new ApiError(413, 'PAYLOAD_TOO_LARGE', `A PDF is at most ${maxBytes / 1024 / 1024} MiB.`)
+  return bytes
 }
 
 /** Spec 04 §5: every document byte response downloads under a fixed name and never renders in the app's origin. */
@@ -260,6 +269,12 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
   // Spec 04 (D-87): the document of one extraction question. Text as JSON here; PDF bytes in step B.
   api.put('/evaluations/:id/documents/:caseKey', async (c) => {
     const ifMatch = ifMatchRevision(c)
+    // Spec 04 §5 (D-89): a PDF arrives as raw bytes under its own 4 MiB cap; anything else is the text JSON.
+    if ((c.req.header('Content-Type') ?? '').split(';')[0].trim().toLowerCase() === 'application/pdf') {
+      const bytes = await readRawBody(c, LIMITS.extraction.pdfBytes)
+      const pages = c.req.header('X-Page-Count') ?? ''
+      return ok(c, await putPdfDocument(deps(c), user(c), pathId(c, 'id'), pathId(c, 'caseKey'), bytes, /^\d{1,3}$/u.test(pages) ? Number(pages) : Number.NaN, ifMatch, rid(c)))
+    }
     const input = await readBody(c, putTextDocumentSchema)
     return ok(c, await putTextDocument(deps(c), user(c), pathId(c, 'id'), pathId(c, 'caseKey'), input.text, ifMatch, rid(c)))
   })
@@ -379,6 +394,12 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
     const input = await readBody(c, revealSchema)
     const result = await reveal(deps(c), user(c), pathId(c, 'runId'), input.acknowledgePendingCount, ifMatch, idempotencyKey(c), rid(c))
     return ok(c, result.data, result.status)
+  })
+  // Spec 04 §5 (D-89): the hearing's copy of a question's document, for the judge and the hearing's jurors (guests included).
+  api.get('/runs/:runId/documents/:caseKey', async (c) => {
+    const document = await getRunDocument(deps(c), user(c), pathId(c, 'runId'), pathId(c, 'caseKey'))
+    if (document.kind === 'text') return ok(c, document)
+    return documentBytes(document.bytes)
   })
   api.get('/runs/:runId/results', async (c) => ok(c, await getResults(deps(c), user(c), pathId(c, 'runId'))))
   // Certified record: owner-only, after reveal. JSON in the usual envelope, or CSV as a file.

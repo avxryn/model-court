@@ -197,6 +197,8 @@ export const startRunSchema = z.strictObject({
    * changed since (another tab) is refused with 409 instead of silently starting a different scenario.
    */
   expectedScenarioHash: z.string().regex(/^[0-9a-f]{64}$/, 'Invalid scenario hash').optional(),
+  /** Spec 04 §3.1 (D-89): required when any question sends a PDF file to the providers. */
+  acknowledgeSendsDocuments: z.literal(true).optional(),
 })
 
 /** Spec 04 §5 (D-87): a text document for one extraction question (≤ 64 KiB UTF-8). */

@@ -3,6 +3,7 @@
  * Provider HTTP is a stub: nothing here is a paid call or evidence that a real one works.
  */
 
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parseCsv } from '../../src/domain/csv'
 import { EXTRACTION_STARTERS } from '../../src/domain/extraction/starters'
@@ -383,6 +384,152 @@ describe('document deletion, sweep and backup', () => {
       const bytes = new TextEncoder().encode(DOCUMENT).length
       expect(buckets).toEqual([{ scope: 'global', used_bytes: bytes }, { scope: `user:${OWNER}`, used_bytes: bytes }])
       expect(await target.db.prepare('SELECT COUNT(*) AS n FROM run_documents').first<{ n: number }>()).toEqual({ n: 1 })
+    } finally {
+      await target.dispose()
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Step B1 (D-89): PDF documents
+// ---------------------------------------------------------------------------
+
+const PDF = new Uint8Array(readFileSync(new URL('../fixtures/extraction/invoice-1p.pdf', import.meta.url)))
+const ENCRYPTED = new Uint8Array(readFileSync(new URL('../fixtures/extraction/encrypted.pdf', import.meta.url)))
+
+async function uploadPdf(evaluationId: string, caseKey: string, revision: number, bytes: Uint8Array = PDF, pages = '1', user = OWNER) {
+  const response = await h.app.request(`https://model-court.test/api/v1/evaluations/${evaluationId}/documents/${caseKey}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${await h.token(user)}`, 'Content-Type': 'application/pdf', 'If-Match': `"${revision}"`, 'X-Page-Count': pages },
+    body: bytes,
+  })
+  const text = await response.text()
+  return { status: response.status, json: text ? JSON.parse(text) : null }
+}
+
+async function pdfHearing(stub = jsonStub) {
+  const { setup, caseKey } = await extractionCase()
+  const up = await uploadPdf(setup.evaluationId, caseKey, 2)
+  expect(up.status, JSON.stringify(up.json)).toBe(200)
+  h.setProvider(stub)
+  const body = { draftRevision: 3, credentialIdsByProvider: { openai: setup.openaiKeyId, anthropic: setup.anthropicKeyId }, consentToProviderProcessing: true, acknowledgeProviderCharges: true }
+  const refused = await h.request('POST', `/evaluations/${setup.evaluationId}/runs`, { as: OWNER, body })
+  expect(refused.status).toBe(422)
+  expect(refused.json.error.fields[0].path).toBe('acknowledgeSendsDocuments')
+  const started = await h.request('POST', `/evaluations/${setup.evaluationId}/runs`, { as: OWNER, body: { ...body, acknowledgeSendsDocuments: true } })
+  expect(started.status, JSON.stringify(started.json)).toBe(202)
+  const runId = started.json.data.runId as string
+  await h.drainJobs()
+  return { setup, caseKey, runId }
+}
+
+describe('PDF documents', () => {
+  beforeEach(async () => {
+    h = await createHarness()
+  })
+
+  it('stores a PDF with its page count, refuses what is not a readable PDF, and caps size and pages', async () => {
+    const { setup, caseKey } = await extractionCase()
+    expect((await uploadPdf(setup.evaluationId, caseKey, 2, ENCRYPTED)).json.error.details).toEqual({ reason: 'encrypted' })
+    expect((await uploadPdf(setup.evaluationId, caseKey, 2, new TextEncoder().encode('hello'))).json.error.details).toEqual({ reason: 'not_pdf' })
+    expect((await uploadPdf(setup.evaluationId, caseKey, 2, PDF.slice(0, PDF.length - 10))).json.error.details).toEqual({ reason: 'truncated' })
+    expect((await uploadPdf(setup.evaluationId, caseKey, 2, PDF, '21')).status).toBe(422)
+    expect((await uploadPdf(setup.evaluationId, caseKey, 2, PDF, 'x')).status).toBe(422)
+    const big = new Uint8Array(4 * 1024 * 1024 + 1)
+    big.set(PDF.slice(0, 20))
+    expect((await uploadPdf(setup.evaluationId, caseKey, 2, big)).status).toBe(413)
+    const ok = await uploadPdf(setup.evaluationId, caseKey, 2)
+    expect(ok.status).toBe(200)
+    expect(ok.json.data.document).toMatchObject({ kind: 'pdf', delivery: 'pdf_native', pageCount: 1, byteLength: PDF.length })
+    const draftCopy = await h.app.request(`https://model-court.test/api/v1/evaluations/${setup.evaluationId}/documents/${caseKey}`, { headers: { Authorization: `Bearer ${await h.token(OWNER)}` } })
+    expect(draftCopy.headers.get('Content-Disposition')).toBe('attachment; filename="document.pdf"')
+    expect(new Uint8Array(await draftCopy.arrayBuffer())).toEqual(PDF)
+  })
+
+  it('sends the PDF itself to both providers through the feature versions, after the acknowledgement', async () => {
+    const { runId } = await pdfHearing()
+    const base64 = Buffer.from(PDF).toString('base64')
+    const openai = h.providerCalls.find((call) => call.url.includes('openai'))!
+    const anthropic = h.providerCalls.find((call) => call.url.includes('anthropic'))!
+    const openAiContent = (openai.body.input as Array<{ content: Array<Record<string, string>> }>)[0].content
+    expect(openAiContent[0]).toEqual({ type: 'input_file', filename: 'document.pdf', file_data: `data:application/pdf;base64,${base64}` })
+    expect(openAiContent[1].text.startsWith('The attached PDF is the source')).toBe(true)
+    const anthropicContent = (anthropic.body.messages as Array<{ content: Array<Record<string, unknown>> }>)[0].content
+    expect(anthropicContent[0]).toEqual({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } })
+    expect(JSON.stringify(h.jobs)).not.toContain(base64.slice(0, 40))
+    expect(JSON.stringify(h.logs)).not.toContain(base64.slice(0, 40))
+    expect((await h.db.prepare('SELECT COUNT(*) AS n FROM testimony_checks WHERE run_id = ?').bind(runId).first<{ n: number }>())!.n).toBe(2)
+  })
+
+  it('the hearing copy is for the judge and the hearing\'s jurors only, with download-only headers', async () => {
+    const { runId, caseKey } = await pdfHearing()
+    await openDeliberation(h, runId)
+    expect((await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token: await invite(runId) } })).status).toBe(200)
+    const get = async (headers: Record<string, string>) => h.app.request(`https://model-court.test/api/v1/runs/${runId}/documents/${caseKey}`, { headers })
+    const owner = await get({ Authorization: `Bearer ${await h.token(OWNER)}` })
+    expect(owner.status).toBe(200)
+    expect(owner.headers.get('Content-Type')).toBe('application/pdf')
+    expect(owner.headers.get('Content-Disposition')).toBe('attachment; filename="document.pdf"')
+    expect(owner.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(owner.headers.get('Content-Security-Policy')).toBe("sandbox; default-src 'none'")
+    expect(owner.headers.get('Cache-Control')).toBe('private, no-store')
+    expect((await get({ Authorization: `Bearer ${await h.token(REVIEWER)}` })).status).toBe(200)
+    const guestJoin = await h.request('POST', '/invites/redeem-as-guest', { headers: { Origin: 'https://model-court.test' }, body: { token: await invite(runId), displayName: 'Dana' } })
+    const cookie = (guestJoin.headers.get('Set-Cookie') ?? '').split(';')[0]
+    expect((await get({ Cookie: cookie })).status).toBe(200)
+    const stranger = await get({ Authorization: `Bearer ${await h.token(OTHER)}` })
+    const ownerAuth = `Bearer ${await h.token(OWNER)}`
+    const unknownCase = await h.app.request(`https://model-court.test/api/v1/runs/${runId}/documents/${crypto.randomUUID()}`, { headers: { Authorization: ownerAuth } })
+    expect(stranger.status).toBe(404)
+    expect(unknownCase.status).toBe(404)
+    // A guest cookie reaches nothing but its own hearing's routes.
+    expect((await h.app.request(`https://model-court.test/api/v1/evaluations/${crypto.randomUUID()}/documents/${caseKey}`, { headers: { Cookie: cookie } })).status).toBe(401)
+    const review = (await h.request('GET', `/runs/${runId}/review`, { as: REVIEWER })).json.data
+    expect(review.cases[0].document).toEqual({ kind: 'pdf', pageCount: 1, byteLength: PDF.length, available: true })
+  })
+
+  it('a native-PDF question needs a route with a PDF check', async () => {
+    await h.dispose()
+    owners.clear()
+    h = await createHarness({ routes: MODEL_ROUTES.map((route) => ({ ...route, verifiedAt: '2026-11-16', structuredVerifiedAt: '2026-11-16' })) })
+    const { setup, caseKey } = await extractionCase()
+    await uploadPdf(setup.evaluationId, caseKey, 2)
+    const res = await h.request('POST', `/evaluations/${setup.evaluationId}/runs`, { as: OWNER, body: { draftRevision: 3, credentialIdsByProvider: { openai: setup.openaiKeyId, anthropic: setup.anthropicKeyId }, consentToProviderProcessing: true, acknowledgeProviderCharges: true, acknowledgeSendsDocuments: true } })
+    expect(res.status).toBe(422)
+    expect(res.json.error.details.issues.map((issue: { kind: string }) => issue.kind)).toEqual(['pdf_unverified', 'pdf_unverified'])
+    expect(h.providerCalls).toHaveLength(0)
+  })
+
+  it('backups leave PDF bytes out; after a restore the source reads as not restored, Start is refused, and uploading the same file restores it', async () => {
+    const { setup, caseKey, runId } = await pdfHearing()
+    const snapshot = await exportSnapshot(h.deps)
+    expect(snapshot.redactions.pdfChunksOmitted).toBeGreaterThan(0)
+    expect(snapshot.tables.document_blob_chunks).toHaveLength(0)
+    expect(snapshot.tables.document_blobs).toHaveLength(1)
+    const target = await createHarness()
+    try {
+      await restoreSnapshot(target.deps, { ...snapshot, appId: target.deps.config.appId })
+      expect(await target.db.prepare('SELECT COUNT(*) AS n FROM document_storage_buckets').first<{ n: number }>()).toEqual({ n: 0 })
+      const owner = { Authorization: `Bearer ${await target.token(OWNER)}` }
+      const missing = await target.app.request(`https://model-court.test/api/v1/runs/${runId}/documents/${caseKey}`, { headers: owner })
+      expect(missing.status).toBe(404)
+      expect((await missing.json()).error.details).toEqual({ reason: 'document_not_restored' })
+      const view = (await target.request('GET', `/evaluations/${setup.evaluationId}`, { as: OWNER })).json.data
+      expect(view.documents[0].available).toBe(false)
+      // A new hearing from the same draft is refused before any call (keys were revoked by the restore anyway).
+      const restart = await target.request('POST', `/evaluations/${setup.evaluationId}/runs`, { as: OWNER, body: { draftRevision: view.revision, credentialIdsByProvider: {}, consentToProviderProcessing: true, acknowledgeProviderCharges: true, acknowledgeSendsDocuments: true } })
+      expect(restart.status).toBe(422)
+      expect(JSON.stringify(restart.json.error.details.issues)).toContain('document_not_restored')
+      // Uploading the identical file restores the hearing's copy too (deduped by sha256 per owner).
+      const again = await target.app.request(`https://model-court.test/api/v1/evaluations/${setup.evaluationId}/documents/${caseKey}`, {
+        method: 'PUT',
+        headers: { ...owner, 'Content-Type': 'application/pdf', 'If-Match': `"${view.revision}"`, 'X-Page-Count': '1' },
+        body: PDF,
+      })
+      expect(again.status).toBe(200)
+      const restored = await target.app.request(`https://model-court.test/api/v1/runs/${runId}/documents/${caseKey}`, { headers: owner })
+      expect(restored.status).toBe(200)
+      expect(new Uint8Array(await restored.arrayBuffer())).toEqual(PDF)
     } finally {
       await target.dispose()
     }

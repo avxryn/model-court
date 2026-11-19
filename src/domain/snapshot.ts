@@ -74,6 +74,8 @@ export type ReadinessIssue =
   | { kind: 'history_unverified'; configurationKey: string }
   /** Spec 04 §6.5 (D-86): an extraction hearing on a route without a recorded structured-output check. */
   | { kind: 'structured_unverified'; configurationKey: string; modelKey: string }
+  /** Spec 04 §6.5: a native-PDF question on a route without a recorded PDF check. */
+  | { kind: 'pdf_unverified'; configurationKey: string; modelKey: string }
   /** Spec 04 §4.6: the question's document is gone from the store (a PDF a restore left out) or changed under the draft. */
   | { kind: 'document_not_restored'; caseKey: string }
   | KitReadinessIssue
@@ -81,6 +83,11 @@ export type ReadinessIssue =
 /** A kit whose parties answer in JSON (extraction) sends a structured-output schema. */
 export function needsStructuredOutput(draft: { kit?: { version: string } | undefined }): boolean {
   return kitFor(draft.kit?.version).outputContract.kind === 'json'
+}
+
+/** Spec 04 (D-89): a question whose document goes to the providers as the PDF file itself. */
+export function sendsPdfFile(cases: ReadonlyArray<Pick<CaseInput, 'kitFields'>>): boolean {
+  return cases.some((testCase) => (testCase.kitFields as { kind?: string; document?: { delivery?: string } } | undefined)?.document?.delivery === 'pdf_native')
 }
 
 /** The features a structured hearing's adapter version must carry (its successor has both, spec 04 §6.4). */
@@ -91,12 +98,14 @@ export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configura
   const models = generatedParties(draft.configurations)
   const hasHistory = (draft.cases ?? []).some((testCase) => (testCase.messages?.length ?? 0) > 0)
   const structured = needsStructuredOutput(draft)
+  const sendsPdf = sendsPdfFile(draft.cases ?? [])
   for (const configuration of models) {
     const route = findRoute(configuration.modelKey, routes)
     if (!route) issues.push({ kind: 'unknown_model', configurationKey: configuration.key })
     else if (!isRouteEnabled(route)) issues.push({ kind: 'model_unavailable', configurationKey: configuration.key, modelKey: route.key })
     else if (hasHistory && !route.multiTurnVerifiedAt) issues.push({ kind: 'history_unverified', configurationKey: configuration.key })
     else if (structured && (!route.structuredVerifiedAt || !adapterVersionFor(route.adapterVersion, FEATURES))) issues.push({ kind: 'structured_unverified', configurationKey: configuration.key, modelKey: route.key })
+    else if (structured && sendsPdf && !route.pdfVerifiedAt) issues.push({ kind: 'pdf_unverified', configurationKey: configuration.key, modelKey: route.key })
   }
   if (draft.comparisonMode === 'model') {
     if (models.length < draft.configurations.length) issues.push({ kind: 'imported_requires_configuration_mode' })
@@ -143,6 +152,10 @@ export function describeIssue(issue: ReadinessIssue, cases?: ReadonlyArray<Pick<
       return 'A question has a conversation, but a selected model has not yet passed a live multi-message check. Remove the conversation or wait for that check.'
     case 'document_not_restored':
       return `The source file of ${questionName(issue.caseKey, cases)} was not restored, so no call can be sent with it. Upload the same file again on that question.`
+    case 'pdf_unverified': {
+      const route = findRoute(issue.modelKey)
+      return `A question sends a PDF file, and ${route ? `${PROVIDER_NAMES[route.provider]} ${route.label}` : 'a selected model'} hasn't passed a live PDF check yet (one real call, recorded). Send the text only, choose a checked model, or record that check first.`
+    }
     case 'structured_unverified': {
       const route = findRoute(issue.modelKey)
       return `Pulling fields from documents needs a model that has passed a live structured-output check (one real call, recorded). ${route ? `${PROVIDER_NAMES[route.provider]} ${route.label}` : 'A selected model'} hasn't yet. Choose a checked model or record that check first.`

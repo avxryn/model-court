@@ -12,14 +12,14 @@
 
 import { toHex } from '../../domain/canonical'
 import type { Draft } from '../../domain/contracts'
-import { base64ToBytes, bytesToBase64, chunkBase64 } from '../../domain/extraction/bytes'
+import { base64ToBytes, bytesToBase64, chunkBase64, sniffPdf } from '../../domain/extraction/bytes'
 import type { DocumentRef, ExtractionFields } from '../../domain/kits/extraction'
 import { LIMITS } from '../../domain/limits'
 import type { TemplateDocument } from '../../domain/messages'
 import { auditStatement, classifyConstraint, cond, GuardFailed, hitRateLimitWindow, runGuarded } from '../db/sql'
 import type { Deps } from '../deps'
 import { ApiError, notFound, revisionConflict } from '../http'
-import { loadEvaluationAccess, requireOwner } from '../access'
+import { loadEvaluationAccess, loadRunAccess, requireOwner } from '../access'
 import { parseStoredDraft } from './evaluations'
 
 export const UPLOADS_PER_HOUR = 20
@@ -181,14 +181,21 @@ export async function putDocument(deps: Deps, userId: string, evaluationId: stri
   if (!limit.allowed) throw new ApiError(429, 'RATE_LIMITED', `At most ${UPLOADS_PER_HOUR} document uploads an hour. Try again later.`, { retryAfterSeconds: limit.retryAfterSeconds })
 
   const sha256 = toHex(await crypto.subtle.digest('SHA-256', input.bytes))
-  const existing = await db.prepare('SELECT id, media_type FROM document_blobs WHERE owner_user_id = ? AND sha256 = ?').bind(userId, sha256).first<{ id: string; media_type: string }>()
+  const existing = await db
+    .prepare('SELECT id, media_type, page_count, chunk_count, (SELECT COUNT(*) FROM document_blob_chunks c WHERE c.blob_id = b.id) AS chunks_present FROM document_blobs b WHERE owner_user_id = ? AND sha256 = ?')
+    .bind(userId, sha256)
+    .first<{ id: string; media_type: string; page_count: number | null; chunk_count: number; chunks_present: number }>()
   if (existing && existing.media_type !== input.mediaType) throw new ApiError(422, 'VALIDATION_FAILED', 'This file was saved before as another kind of document.')
+  // Spec 04 §4.6: the same bytes again after a restore that left them out put them back, for drafts and hearings alike.
+  const repair = !!existing && existing.chunks_present !== existing.chunk_count
   const blobId = existing?.id ?? deps.newId()
-  const chunks = existing ? [] : chunkBase64(bytesToBase64(input.bytes))
-  if (chunks.length > 16) throw new ApiError(413, 'PAYLOAD_TOO_LARGE', 'The document is too large.')
+  const chunks = existing && !repair ? [] : chunkBase64(bytesToBase64(input.bytes))
+  if (chunks.length > 16 || (repair && chunks.length !== existing!.chunk_count)) throw new ApiError(413, 'PAYLOAD_TOO_LARGE', 'The document is too large.')
+  // A stored blob keeps the page count it was stored with.
+  const pageCount = existing ? existing.page_count : input.pageCount
   const nextDraft = withDocumentRefs(draft, [
     ...(await listDraftDocuments(db, evaluationId)).filter((document) => document.caseKey !== caseKey),
-    { caseKey, sha256, byteLength: input.bytes.length, delivery: input.delivery, pageCount: input.pageCount },
+    { caseKey, sha256, byteLength: input.bytes.length, delivery: input.delivery, pageCount },
   ])
   const draftJson = JSON.stringify(nextDraft)
   if (new TextEncoder().encode(draftJson).byteLength > LIMITS.draftJsonBytes) throw new ApiError(422, 'VALIDATION_FAILED', 'Draft exceeds 96 KiB')
@@ -197,12 +204,16 @@ export async function putDocument(deps: Deps, userId: string, evaluationId: stri
     { scope: 'global', limit: deps.config.documentStorage.globalBytes },
   ]
   const statements: D1PreparedStatement[] = [
-    ...(existing
+    ...(existing && !repair
       ? []
       : [
-          db
-            .prepare('INSERT INTO document_blobs (id, owner_user_id, sha256, media_type, byte_length, page_count, chunk_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-            .bind(blobId, userId, sha256, input.mediaType, input.bytes.length, input.pageCount, chunks.length, now),
+          ...(repair
+            ? [db.prepare('DELETE FROM document_blob_chunks WHERE blob_id = ?').bind(blobId)]
+            : [
+                db
+                  .prepare('INSERT INTO document_blobs (id, owner_user_id, sha256, media_type, byte_length, page_count, chunk_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                  .bind(blobId, userId, sha256, input.mediaType, input.bytes.length, input.pageCount, chunks.length, now),
+              ]),
           ...chunks.map((chunk, index) => db.prepare('INSERT INTO document_blob_chunks (blob_id, chunk_no, data_base64) VALUES (?, ?, ?)').bind(blobId, index, chunk)),
           ...quotas.map((quota) =>
             db
@@ -221,14 +232,14 @@ export async function putDocument(deps: Deps, userId: string, evaluationId: stri
       .bind(evaluationId, caseKey, blobId, input.delivery, now),
     db.prepare('UPDATE evaluations SET draft_json = ?, revision = revision + 1, updated_at = ? WHERE id = ?').bind(draftJson, now, evaluationId),
     // Kind, size, pages and a hash prefix only: never a file name, title or text.
-    auditStatement(db, { eventType: 'document.upload', requestId, outcome: 'ok', actorUserId: userId, evaluationId, metadata: { mediaType: input.mediaType, byteLength: input.bytes.length, pageCount: input.pageCount, sha256Prefix: sha256.slice(0, 8) } }, now),
+    auditStatement(db, { eventType: 'document.upload', requestId, outcome: 'ok', actorUserId: userId, evaluationId, metadata: { mediaType: input.mediaType, byteLength: input.bytes.length, pageCount, sha256Prefix: sha256.slice(0, 8), ...(repair ? { restored: true } : {}) } }, now),
   ]
   try {
     await runGuarded(
       db,
       'document.upload',
       cond(
-        `EXISTS (SELECT 1 FROM evaluations WHERE id = ? AND owner_user_id = ? AND revision = ? AND deleted_at IS NULL)${existing ? ' AND EXISTS (SELECT 1 FROM document_blobs WHERE id = ?)' : ''}`,
+        `EXISTS (SELECT 1 FROM evaluations WHERE id = ? AND owner_user_id = ? AND revision = ? AND deleted_at IS NULL)${existing ? ` AND EXISTS (SELECT 1 FROM document_blobs b WHERE id = ? AND (SELECT COUNT(*) FROM document_blob_chunks c WHERE c.blob_id = b.id) ${repair ? '<' : '='} b.chunk_count)` : ''}`,
         evaluationId,
         userId,
         ifMatch,
@@ -244,11 +255,53 @@ export async function putDocument(deps: Deps, userId: string, evaluationId: stri
     if (kind === 'other' && /document_blobs/u.test(String(error))) throw revisionConflict()
     throw error
   }
-  return { revision: ifMatch + 1, draft: nextDraft, document: { kind: input.mediaType === 'application/pdf' ? ('pdf' as const) : ('text' as const), sha256, byteLength: input.bytes.length, pageCount: input.pageCount, delivery: input.delivery } }
+  return { revision: ifMatch + 1, draft: nextDraft, document: { kind: input.mediaType === 'application/pdf' ? ('pdf' as const) : ('text' as const), sha256, byteLength: input.bytes.length, pageCount, delivery: input.delivery } }
 }
 
 export async function putTextDocument(deps: Deps, userId: string, evaluationId: string, caseKey: string, text: string, ifMatch: number, requestId: string) {
   return putDocument(deps, userId, evaluationId, caseKey, { mediaType: 'text/plain', bytes: new TextEncoder().encode(text), pageCount: null, delivery: 'text' }, ifMatch, requestId)
+}
+
+const PDF_REFUSALS = {
+  not_pdf: "This file isn't a PDF.",
+  truncated: 'This PDF looks cut off (it has no end marker). Save it again and upload it once more.',
+  encrypted: "This PDF is password-protected or encrypted. Neither provider can read it: remove the protection and upload it again.",
+  empty: 'The file is empty.',
+} as const
+
+/**
+ * Spec 04 §8.3 (D-89): a PDF delivered as the file itself. Only cheap byte checks, never a parse:
+ * the header, the end marker, no encryption key near the end, at most 4 MiB. The page count is
+ * the judge's browser's (`X-Page-Count`), 1–20, and drives only the estimate and the cap.
+ */
+export async function putPdfDocument(deps: Deps, userId: string, evaluationId: string, caseKey: string, bytes: Uint8Array<ArrayBuffer>, pageCount: number, ifMatch: number, requestId: string) {
+  const sniff = sniffPdf(bytes, LIMITS.extraction.pdfBytes)
+  if (!sniff.ok) {
+    if (sniff.reason === 'too_large') throw new ApiError(413, 'PAYLOAD_TOO_LARGE', `A PDF is at most ${LIMITS.extraction.pdfBytes / 1024 / 1024} MiB.`)
+    throw new ApiError(422, 'VALIDATION_FAILED', PDF_REFUSALS[sniff.reason], { details: { reason: sniff.reason } })
+  }
+  if (!Number.isInteger(pageCount) || pageCount < 1 || pageCount > LIMITS.extraction.pdfPages) {
+    throw new ApiError(422, 'VALIDATION_FAILED', `A PDF has 1–${LIMITS.extraction.pdfPages} pages.`, { fields: [{ path: 'X-Page-Count', message: `1–${LIMITS.extraction.pdfPages} pages` }] })
+  }
+  return putDocument(deps, userId, evaluationId, caseKey, { mediaType: 'application/pdf', bytes, pageCount, delivery: 'pdf_native' }, ifMatch, requestId)
+}
+
+/**
+ * The hearing's copy (spec 04 §5): the owner, or a juror (signed in or guest) with a live session
+ * on this hearing, the same rule as the worksheet. Anyone else gets the same 404.
+ */
+export async function getRunDocument(deps: Deps, userId: string, runId: string, caseKey: string): Promise<{ kind: 'text'; text: string } | { kind: 'pdf'; bytes: Uint8Array<ArrayBuffer> }> {
+  const access = await loadRunAccess(deps.db, runId, userId)
+  if (access.role !== 'owner' && (!access.session || access.session.status === 'revoked')) throw notFound()
+  const row = await deps.db
+    .prepare('SELECT d.blob_id, b.media_type FROM run_documents d JOIN document_blobs b ON b.id = d.blob_id WHERE d.run_id = ? AND d.case_key = ?')
+    .bind(runId, caseKey)
+    .first<{ blob_id: string; media_type: string }>()
+  if (!row) throw notFound()
+  const base64 = await readBlobBase64(deps.db, row.blob_id)
+  if (base64 === null) throw new ApiError(404, 'NOT_FOUND', 'Source file not restored.', { details: { reason: 'document_not_restored' } })
+  const bytes = base64ToBytes(base64)
+  return row.media_type === 'application/pdf' ? { kind: 'pdf', bytes } : { kind: 'text', text: new TextDecoder().decode(bytes) }
 }
 
 export async function deleteDocument(deps: Deps, userId: string, evaluationId: string, caseKey: string, ifMatch: number, requestId: string) {

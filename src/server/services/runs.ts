@@ -8,7 +8,7 @@ import { cancelRunSchema, retrySchema, startRunSchema } from '../../domain/contr
 import { LIMITS } from '../../domain/limits'
 import { PROVIDER_NAMES, type ProviderId } from '../../domain/registry'
 import { scenarioHash, scenarioSourceOfSnapshot } from '../../domain/scenario'
-import { buildSnapshot, describeIssue, generatedParties, importCoverageIssues, isImportedSnapshot, readinessIssues, requiredProviders, samplesPerAnswer, type ImportMeta, type RunSnapshot } from '../../domain/snapshot'
+import { buildSnapshot, describeIssue, generatedParties, importCoverageIssues, isImportedSnapshot, readinessIssues, requiredProviders, samplesPerAnswer, type ImportMeta, type RunSnapshot, sendsPdfFile } from '../../domain/snapshot'
 import { canRun, isRetryable, type GenerationStatus, type RunStatus } from '../../domain/transitions'
 import { loadEvaluationAccess, loadRunAccess, requireOwner, type RunAccess } from '../access'
 import { all, auditStatement, budgetSubjects, classifyConstraint, cond, GuardFailed, releaseReservations, reserveBudget, runGuarded, type Condition } from '../db/sql'
@@ -189,6 +189,10 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
     const draft = parseStoredDraft(access.evaluation)
     const capError = configurationCapError(deps, draft.configurations.length) ?? samplesCapError(deps, draft.samplesPerAnswer)
     if (capError) throw capError
+    // Spec 04 §3.1 (D-89): a PDF file goes to the providers only with the judge's explicit acknowledgement.
+    if (sendsPdfFile(draft.cases) && !input.acknowledgeSendsDocuments) {
+      throw new ApiError(422, 'VALIDATION_FAILED', 'This hearing sends PDF files to the providers. Confirm that before starting.', { fields: [{ path: 'acknowledgeSendsDocuments', message: 'Required when a question sends a PDF file' }] })
+    }
     const issues = readinessIssues(draft, deps.routes)
     // Spec 04 §4.6 (D-87): no paid call is ever planned without its document's bytes.
     for (const caseKey of await unavailableDocuments(db, evaluationId, draft.cases)) issues.push({ kind: 'document_not_restored', caseKey })
