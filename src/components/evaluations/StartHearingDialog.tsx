@@ -123,6 +123,10 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
               <strong>None</strong>
             )}
           </dd>
+          <dt className="text-muted-foreground">Juror workload</dt>
+          <dd className="tabular-nums" data-testid="juror-workload">
+            Each juror will score {draft.configurations.length * draft.cases.length} answers ({draft.configurations.length} parties on {draft.cases.length} {draft.cases.length === 1 ? 'question' : 'questions'})
+          </dd>
           {needsConsent && scenario?.split && (
             <>
               <dt className="text-muted-foreground">Of these</dt>

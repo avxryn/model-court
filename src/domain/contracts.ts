@@ -6,6 +6,7 @@
 import { z } from 'zod'
 import { kitChoiceSchema, kitDraftIssues, kitFieldsSchema } from './kits/registry'
 import { LIMITS } from './limits'
+import { testimonyLimitMessage } from './parties'
 import { PROVIDERS, type ProviderId } from './registry'
 import { RUBRIC_VERSIONS } from './rubric'
 import { codePointLength, hasDisallowedControlChars, utf8ByteLength } from './text'
@@ -147,6 +148,11 @@ export const draftInputSchema = z
   .refine((draft) => utf8ByteLength(JSON.stringify(draft)) <= LIMITS.draftJsonBytes, {
     message: 'Draft exceeds 96 KiB',
   })
+  // Spec 07 §9.1 (D-110): every juror scores every testimony, so parties × questions is capped.
+  .superRefine((draft, ctx) => {
+    const message = testimonyLimitMessage(draft.configurations.length, draft.cases.length)
+    if (message) ctx.addIssue({ code: 'custom', path: ['configurations'], message })
+  })
   .refine((draft) => draft.samplesPerAnswer === undefined || draft.configurations.some((configuration) => !isImported(configuration)), {
     message: 'Imported answers are used once; repeats need at least one generated party',
     path: ['samplesPerAnswer'],
@@ -264,7 +270,8 @@ export const startSpecialMasterSchema = z.strictObject({
 })
 
 export const retrySchema = z.strictObject({
-  generationIds: z.array(uuid).min(1).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun * LIMITS.maxSamplesPerAnswer),
+  // Spec 07 §5: by testimonies, so five parties do not raise the limit (15 testimonies × 3 samples).
+  generationIds: z.array(uuid).min(1).max(LIMITS.maxTestimoniesPerHearing * LIMITS.maxSamplesPerAnswer),
   acknowledgePossiblePriorCharge: z.literal(true),
   /**
    * D-57: the judge's current key for a provider whose pinned key was removed or
@@ -314,7 +321,7 @@ export type DraftRating = z.infer<typeof draftRatingSchema>
 export type FieldFlag = NonNullable<DraftRating['fieldFlags']>[number]
 
 export const saveRatingsSchema = z.strictObject({
-  ratings: z.array(draftRatingSchema).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun),
+  ratings: z.array(draftRatingSchema).max(LIMITS.maxTestimoniesPerHearing),
 })
 
 export const revealSchema = z.strictObject({

@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { isImported, type ComparisonMode, type Configuration, type DraftInput, type ImportedConfiguration, type ModelConfiguration } from '@/domain/contracts'
 import { DEFAULT_SYSTEM_PROMPT } from '@/domain/example'
 import { LIMITS } from '@/domain/limits'
+import { maxQuestionsFor, testimonyLimitMessage } from '@/domain/parties'
 import type { CatalogView } from '@/lib/dto'
 import { cn } from '@/lib/utils'
 
@@ -49,6 +50,9 @@ export function ConfigurationsEditor({
   const hasImported = modelParties.length < draft.configurations.length
   const sharedPrompt = modelParties[0]?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT
   const hasHistory = draft.cases.some((testCase) => (testCase.messages?.length ?? 0) > 0)
+  // Spec 07 §9.1: every juror scores parties × questions answers, at most 15.
+  const overLimit = testimonyLimitMessage(draft.configurations.length, draft.cases.length)
+  const roomForParty = (draft.configurations.length + 1) * draft.cases.length <= LIMITS.maxTestimoniesPerHearing
 
   const append = (party: Configuration, mode = draft.comparisonMode) => onChange({ ...draft, comparisonMode: mode, configurations: [...draft.configurations, party] })
   const addModelParty = () => {
@@ -141,7 +145,20 @@ export function ConfigurationsEditor({
           </Card>
         ))}
       </div>
-      {maxParties > draft.configurations.length && (
+      {overLimit && (
+        <p role="alert" className="text-sm text-destructive" data-testid="testimony-limit">
+          {overLimit}
+        </p>
+      )}
+      {draft.configurations.length >= 4 && !overLimit && (
+        <p className="text-xs text-muted-foreground">More parties means fewer questions in one hearing: with {draft.configurations.length} parties, up to {maxQuestionsFor(draft.configurations.length)}. With 3 questions the count is less certain. To compare more setups on all 5 questions, re-hear this case with an anchor party.</p>
+      )}
+      {maxParties > draft.configurations.length && !roomForParty && !overLimit && (
+        <p className="text-xs text-muted-foreground">
+          To add a party, remove a question first: {draft.configurations.length + 1} parties allow up to {maxQuestionsFor(draft.configurations.length + 1)} questions, so each juror scores at most {LIMITS.maxTestimoniesPerHearing} answers.
+        </p>
+      )}
+      {maxParties > draft.configurations.length && roomForParty && (
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" onClick={addModelParty}>
             <Plus aria-hidden /> Add a model party ({draft.configurations.length}/{maxParties})

@@ -86,7 +86,7 @@ function positiveInt(value: string | undefined, fallback: number, problems: stri
 }
 
 function configurationCap(value: string | undefined, problems: string[]): number {
-  if (value === undefined || value.trim() === '') return LIMITS.maxConfigurationsPerRun
+  if (value === undefined || value.trim() === '') return LIMITS.defaultConfigurationsPerRun
   const parsed = Number(value)
   if (Number.isInteger(parsed) && parsed >= LIMITS.minConfigurationsPerRun && parsed <= LIMITS.maxConfigurationsPerRun) return parsed
   problems.push(`MAX_CONFIGURATIONS_PER_RUN must be ${LIMITS.minConfigurationsPerRun}–${LIMITS.maxConfigurationsPerRun}; using ${LIMITS.minConfigurationsPerRun}.`)

@@ -4,7 +4,15 @@ export const LIMITS = {
   maxCases: 5,
   /** F24: P1 allows a third configuration; operators may cap at 2 (MAX_CONFIGURATIONS_PER_RUN). */
   minConfigurationsPerRun: 2,
-  maxConfigurationsPerRun: 3,
+  /** Spec 07 §9.1 (D-110): up to five parties, within `maxTestimoniesPerHearing`. */
+  maxConfigurationsPerRun: 5,
+  /** Spec 07 Q5 (D-106): the deployment cap when MAX_CONFIGURATIONS_PER_RUN is unset; the live app stays at 3 until Avery raises it. */
+  defaultConfigurationsPerRun: 3,
+  /**
+   * Spec 07 §9.1: parties × questions per hearing, imported parties included, so each juror scores at
+   * most today's 15 testimonies (2–3 parties × 5 questions, or 4–5 parties × 3 questions).
+   */
+  maxTestimoniesPerHearing: 15,
   /** D-65: repeats. A hearing may ask each generated party 1–3 times per question; operators may lower it (MAX_SAMPLES_PER_ANSWER). */
   maxSamplesPerAnswer: 3,
   /** Sample k is first dispatched (k − 1) × this after the hearing starts, to spread the burst over cron ticks. */

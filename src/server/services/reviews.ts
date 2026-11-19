@@ -26,7 +26,8 @@ import { jurorTrace, type JurorToolTrace, type ToolTrace } from '../../domain/to
 import { extractionSettingsOf, fieldFlagIssues, jurorAnswer, type ExtractionView } from './extraction'
 import { notifyRun } from './generation'
 import { revokeGuestStatements } from './guest-jurors'
-import { buildAssignment, insertSessionStatement, parseSnapshot, pendingReviewCount, type AssignmentCase, type EligibleManifest } from './runs'
+import { buildAssignment, insertSessionStatement, parseSnapshot, pendingReviewCount, sessionCount, type AssignmentCase, type EligibleManifest } from './runs'
+import type { BlindLabel } from '../../domain/parties'
 
 function base64Url(bytes: Uint8Array): string {
   let binary = ''
@@ -129,6 +130,7 @@ export async function redeemInvite(deps: Deps, userId: string, token: string, re
 
   const manifest = JSON.parse(invite.eligible_manifest_json) as EligibleManifest
   const sessionId = deps.newId()
+  const rotation = await sessionCount(db, invite.run_id)
   try {
     await runGuarded(
       db,
@@ -141,7 +143,7 @@ export async function redeemInvite(deps: Deps, userId: string, token: string, re
       ),
       [
         db.prepare(`UPDATE invites SET redeemed_by = ?, redeemed_at = ? WHERE id = ?`).bind(userId, now, invite.id),
-        insertSessionStatement(db, { id: sessionId, runId: invite.run_id, userId, contextType: 'invited', assignment: buildAssignment(manifest, deps.newId), now }),
+        insertSessionStatement(db, { id: sessionId, runId: invite.run_id, userId, contextType: 'invited', assignment: buildAssignment(manifest, deps.newId, rotation), now }),
         auditStatement(db, { eventType: 'invite.redeem', requestId, outcome: 'ok', actorUserId: userId, runId: invite.run_id, evaluationId: invite.evaluation_id }, now),
       ],
     )
@@ -207,7 +209,7 @@ export interface AnonymousReview {
      * `extraction` only on extraction hearings: the parsed answer as field rows (and `text` is then the
      * server's canonical JSON, never the provider's bytes), or `unparsed` with the raw text.
      */
-    responses: Array<{ responseId: string; label: 'A' | 'B' | 'C'; text: string; extraction?: ExtractionView; /** Spec 06 §5.3 (D-102): tool hearings only; `text` is then the final answer ('' when none). */ trace?: JurorToolTrace }>
+    responses: Array<{ responseId: string; label: BlindLabel; text: string; extraction?: ExtractionView; /** Spec 06 §5.3 (D-102): tool hearings only; `text` is then the final answer ('' when none). */ trace?: JurorToolTrace }>
   }>
   ratings: DraftRating[]
 }

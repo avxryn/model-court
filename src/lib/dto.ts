@@ -62,5 +62,5 @@ export interface CatalogView {
   providers: Array<{ id: ProviderId; name: string }>
   models: CatalogModel[]
   priceTable: { version: string; readOn: string; sources: Partial<Record<ProviderId, string>> }
-  limits: { maxCases: number; configurations: number; samplesPerAnswer: number; minConfigurations: number; maxOutputTokens: number; reasoningHeadroomTokens: number; maxAttemptsPerGeneration: number; credentialTtlDays: number; dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number; extraction: ExtractionLimits }
+  limits: { maxCases: number; configurations: number; /** Spec 07 §9.1: parties × questions. */ maxTestimoniesPerHearing: number; samplesPerAnswer: number; minConfigurations: number; maxOutputTokens: number; reasoningHeadroomTokens: number; maxAttemptsPerGeneration: number; credentialTtlDays: number; dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number; extraction: ExtractionLimits }
 }

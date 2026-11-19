@@ -198,7 +198,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                 <ExtractionDocumentsProvider value={{ evaluationId: evaluation.id, revision: c.revision, saved: !c.dirty, documents: evaluation.documents, onSaved: () => void reload() }}>
                   {/* Spec 05 (D-95): likewise sources; a save reloads the case. */}
                   <GroundedSourcesProvider value={{ evaluationId: evaluation.id, revision: c.revision, saved: !c.dirty, sources: evaluation.sources, onSaved: () => void reload() }}>
-                    <QuestionsEditor cases={draft.cases} errors={c.errors} newId={newIntentKey} kit={draftKit(draft)} kitSettings={draftKitSettings(draft)} onChange={(cases) => c.change({ ...draft, cases })} />
+                    <QuestionsEditor cases={draft.cases} errors={c.errors} newId={newIntentKey} kit={draftKit(draft)} kitSettings={draftKitSettings(draft)} parties={draft.configurations.length} onChange={(cases) => c.change({ ...draft, cases })} />
                   </GroundedSourcesProvider>
                 </ExtractionDocumentsProvider>
               </TabsContent>

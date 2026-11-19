@@ -17,13 +17,14 @@ import { ApiError, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
 import { kitNameOf } from '../../domain/kits/registry'
 import { importedCheckStatements } from './checks'
-import { configurationCapError, parseStoredDraft, samplesCapError } from './evaluations'
+import { configurationCapError, parseStoredDraft, samplesCapError, testimonyCapError } from './evaluations'
 import { dispatchOutbox, notifyRun, reconcileLeases } from './generation'
 import { guestNames } from './guest-jurors'
 import { admissionDocuments, unavailableDocuments } from './documents'
 import { admissionSources, listDraftSources, sourceRefsOf, verifiedPromptSources } from './sources'
 import { callsPerAnswer } from '../../domain/quota'
 import { isToolHearing, reconcileStepLeases, reserveStepsStatement, stopToolLoopsStatements } from './tool-loop'
+import { BLIND_LABELS, rotate, type BlindLabel } from '../../domain/parties'
 
 export interface GenerationRow {
   id: string
@@ -57,6 +58,12 @@ export interface EligibleManifest {
   excludedCaseKeys: string[]
   /** Generated entries carry a generation and attempt; imported entries (D-38) carry `importedOutputId` and null ids. */
   entries: Array<{ caseKey: string; configurationKey: string; generationId: string | null; acceptedAttemptId: string | null; importedOutputId?: string; /** D-65: the primary sample when it is not 1. */ sampleNo?: number }>
+  /**
+   * Spec 07 §9.2 (D-110): per question, one random order of its parties' configuration keys, drawn
+   * once when review opens and frozen with the manifest. Session k sees it rotated by k. Server-only:
+   * never in any response, export or notice. Absent on hearings opened before; they keep `shuffle`.
+   */
+  positionBase?: Record<string, string[]>
 }
 
 export function parseSnapshot(json: string): RunSnapshot {
@@ -190,7 +197,7 @@ export async function startRun(deps: Deps, userId: string, evaluationId: string,
   const result = await idempotent(deps, { actorUserId: userId, idempotencyKey: key, operation, requestHash: hash }, async (receipt) => {
     if (access.evaluation.revision !== input.draftRevision) throw revisionConflict()
     const draft = parseStoredDraft(access.evaluation)
-    const capError = configurationCapError(deps, draft.configurations.length) ?? samplesCapError(deps, draft.samplesPerAnswer)
+    const capError = configurationCapError(deps, draft.configurations.length) ?? testimonyCapError(draft.configurations.length, draft.cases.length) ?? samplesCapError(deps, draft.samplesPerAnswer)
     if (capError) throw capError
     // Spec 04 §3.1 (D-89): a PDF file goes to the providers only with the judge's explicit acknowledgement.
     if (sendsPdfFile(draft.cases) && !input.acknowledgeSendsDocuments) {
@@ -727,22 +734,49 @@ export function shuffle<T>(items: readonly T[]): T[] {
 
 export interface AssignmentCase {
   caseKey: string
-  responses: Array<{ responseId: string; label: 'A' | 'B' | 'C'; generationId: string | null; acceptedAttemptId: string | null; importedOutputId?: string; configurationKey: string }>
+  responses: Array<{ responseId: string; label: BlindLabel; generationId: string | null; acceptedAttemptId: string | null; importedOutputId?: string; configurationKey: string }>
 }
 
-export function buildAssignment(manifest: EligibleManifest, newId: () => string): AssignmentCase[] {
-  const labels = ['A', 'B', 'C'] as const
+/** Spec 07 §9.2: one random order per question, drawn when review opens. */
+export function drawPositionBase(manifest: Pick<EligibleManifest, 'caseKeys' | 'entries'>): Record<string, string[]> {
+  return Object.fromEntries(manifest.caseKeys.map((caseKey) => [caseKey, shuffle(manifest.entries.filter((entry) => entry.caseKey === caseKey).map((entry) => entry.configurationKey))]))
+}
+
+/** The question's entries in session `rotation`'s order: the frozen base rotated, or a fresh shuffle on older hearings. */
+function orderedEntries(manifest: EligibleManifest, caseKey: string, rotation: number): EligibleManifest['entries'] {
+  const entries = manifest.entries.filter((entry) => entry.caseKey === caseKey)
+  const base = manifest.positionBase?.[caseKey]
+  const fits = base !== undefined && base.length === entries.length && new Set(base).size === base.length && entries.every((entry) => base.includes(entry.configurationKey))
+  if (!fits) return shuffle(entries)
+  return rotate(base, rotation).map((key) => entries.find((entry) => entry.configurationKey === key)!)
+}
+
+/**
+ * A session's blind labels (A–E, spec 07 §9.2). Labels follow position, so with the rotation the
+ * k-th session to join (the judge's own is 0) sees each question's parties in a different order and a
+ * label never follows a party across questions or sessions.
+ */
+export function buildAssignment(manifest: EligibleManifest, newId: () => string, rotation = 0): AssignmentCase[] {
   return manifest.caseKeys.map((caseKey) => ({
     caseKey,
-    responses: shuffle(manifest.entries.filter((entry) => entry.caseKey === caseKey)).map((entry, index) => ({
+    responses: orderedEntries(manifest, caseKey, rotation).map((entry, index) => ({
       responseId: newId(),
-      label: labels[index],
+      label: BLIND_LABELS[index],
       generationId: entry.generationId,
       acceptedAttemptId: entry.acceptedAttemptId,
       ...(entry.importedOutputId ? { importedOutputId: entry.importedOutputId } : {}),
       configurationKey: entry.configurationKey,
     })),
   }))
+}
+
+/**
+ * Spec 07 §9.2: the rotation slot of the next session, the count of sessions the hearing already has
+ * (any status, the judge's included). Two joins racing may share a slot: their labels stay valid and
+ * blind, only less evenly spread.
+ */
+export async function sessionCount(db: D1Database, runId: string): Promise<number> {
+  return Number((await db.prepare('SELECT COUNT(*) AS n FROM review_sessions WHERE run_id = ?').bind(runId).first<{ n: number }>())?.n ?? 0)
 }
 
 export function insertSessionStatement(db: D1Database, session: { id: string; runId: string; userId: string; contextType: 'invited' | 'owner'; assignment: AssignmentCase[]; now: number }) {
@@ -810,7 +844,9 @@ export async function autoOpenReview(deps: Deps, runId: string, requestId: strin
 }
 
 /** ready → reviewing with the frozen manifest and the judge's own session. Throws GuardFailed when the run moved on. */
-async function commitOpenReview(deps: Deps, run: { id: string; ownerUserId: string; evaluationId: string; revision: number }, manifest: EligibleManifest, requestId: string, automatic: boolean): Promise<string> {
+async function commitOpenReview(deps: Deps, run: { id: string; ownerUserId: string; evaluationId: string; revision: number }, eligible: EligibleManifest, requestId: string, automatic: boolean): Promise<string> {
+  // Spec 07 §9.2: the rotation's base order is frozen with the manifest (immutable once set).
+  const manifest: EligibleManifest = { ...eligible, positionBase: drawPositionBase(eligible) }
   const db = deps.db
   const now = deps.now()
   const sessionId = deps.newId()
