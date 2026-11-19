@@ -46,6 +46,9 @@ describe('general-v1 is exactly today', () => {
     // Snapshots from before D-39 recorded no template and used qa-v1.
     expect(buildKitRequest({}, 'S', draft.cases[0])).toEqual(buildConversation('qa-v1', 'S', draft.cases[0]))
     expect(buildKitRequest({ messageTemplateVersion: 'nope-v9' as never }, 'S', draft.cases[0])).toBeNull()
+    // A kit template without the kit's settings is refused, not thrown (D-80).
+    expect(buildKitRequest({ messageTemplateVersion: 'summarize-v1' }, 'S', draft.cases[0])).toBeNull()
+    expect(buildKitRequest({ messageTemplateVersion: 'classify-v1' }, 'S', draft.cases[0])).toBeNull()
     expect(Object.keys(MESSAGE_TEMPLATES)).toEqual(expect.arrayContaining(['chat-v1', 'qa-v1']))
   })
 

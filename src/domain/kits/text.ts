@@ -105,9 +105,25 @@ export function containsNormalizedV1(haystack: string, needle: string): boolean 
     const before = charBefore(haystack, index)
     const after = charAt(haystack, index + needle.length)
     if ((!startsWord || !isWordChar(before)) && (!endsWord || !isWordChar(after))) return true
-    from = index + 1
+    from = startsWord ? endOfWordRun(haystack, index) : index + 1
   }
   return false
+}
+
+/**
+ * The first position after the run of word characters starting at `index`. A phrase that starts
+ * with a word character can only match where no word character precedes it, so every start inside
+ * this run is skipped at once. This keeps the scan linear (D-80: "aaaa…" against "aaa…a" used to
+ * retry at every character). Results are unchanged.
+ */
+function endOfWordRun(text: string, index: number): number {
+  let position = index
+  while (position < text.length) {
+    const char = charAt(text, position)
+    if (!isWordChar(char)) return position
+    position += char!.length
+  }
+  return position
 }
 
 /** A line-initial ordered-list marker such as `1.` or `2)` (digits, then one `.` or `)`). */

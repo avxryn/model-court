@@ -44,6 +44,9 @@ export default function PrivacyPage() {
           Only when a judge starts or retries a hearing (or runs the AI grader after unsealing), Model Court sends requests to OpenAI or Anthropic using <strong>the judge’s own API key</strong>. A hearing request contains the party’s system instructions, the exhibit, the question, and any earlier conversation on that question. A grader request also contains the scoring guide and one answer.
         </p>
         <p>
+          A task kit adds its fixed instructions to each hearing request, with the length limit and format for summaries or the list of allowed labels for classification. Its automatic checks run on Model Court’s server: nothing extra is sent to a provider, and answer keys (required points, phrases to avoid, expected labels) are never sent to a model.
+        </p>
+        <p>
           When you choose <strong>Check key</strong> (or leave it on when saving a key), Model Court asks OpenAI or Anthropic to list its models using your key. This is free and sends no questions, answers, or case content.
         </p>
         <p>

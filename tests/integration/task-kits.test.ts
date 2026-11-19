@@ -304,6 +304,9 @@ describe('automatic checks with a test kit', () => {
       expect(snapshot.tables.testimony_checks).toHaveLength(10)
       await restoreSnapshot(target.deps, snapshot)
       expect(await countRows(target)).toBe(10)
+      // A table missing although its migration is recorded is a damaged store: the export refuses (D-80).
+      await target.db.prepare('DROP TABLE testimony_checks').run()
+      await expect(exportSnapshot(target.deps)).rejects.toThrow(/missing although their migration is recorded: testimony_checks/)
     } finally {
       await target.dispose()
     }

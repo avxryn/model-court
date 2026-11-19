@@ -20,6 +20,7 @@
  */
 
 import { canonicalJson, sha256Hex } from '../../domain/canonical'
+import { MIGRATIONS } from '../db/migrations'
 import { auditStatement } from '../db/sql'
 import type { Deps } from '../deps'
 import { revokeCredentialStatements } from './credentials'
@@ -97,11 +98,18 @@ function redactCredential(row: Row, at: number): Row {
 
 const isCredentialReceipt = (row: Row) => typeof row.operation === 'string' && row.operation.startsWith('credential.')
 
+/** The id of the migration whose statements create `table` (by name, or as `<table>_next` renamed). */
+export function creatingMigration(table: string): string | null {
+  const creates = (sql: string) => new RegExp(`^\\s*CREATE TABLE (IF NOT EXISTS )?${table}(_next)?\\s*\\(`, 'i').test(sql)
+  return MIGRATIONS.find((migration) => migration.statements.some(creates))?.id ?? null
+}
+
 export async function exportSnapshot(deps: Deps): Promise<StoreSnapshot> {
   const db = deps.db
   const exportedAt = deps.now()
-  // A store whose schema predates a table this build knows (e.g. held at an older migration) has
-  // nothing in it: that table exports as empty instead of failing the whole read.
+  // A store whose schema predates a table this build knows (held at an older migration) has nothing
+  // in it: that table exports as empty instead of failing the whole read. A table missing although
+  // the migration that creates it is recorded means a damaged store, and the export refuses (D-80).
   const present = new Set((await db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all<{ name: string }>()).results.map((row) => row.name))
   const exported = BACKUP_TABLES.filter((table) => present.has(table))
   const [schemaResult, ledgerResult, ...readResults] = await db.batch<Record<string, unknown>>([
@@ -109,6 +117,9 @@ export async function exportSnapshot(deps: Deps): Promise<StoreSnapshot> {
     db.prepare('SELECT id FROM mc_schema_migrations ORDER BY id'),
     ...exported.map((table) => db.prepare(`SELECT * FROM ${table} ORDER BY rowid`)),
   ])
+  const applied = new Set((ledgerResult.results as Array<{ id: string }>).map((row) => row.id))
+  const damaged = BACKUP_TABLES.filter((table) => !present.has(table) && applied.has(creatingMigration(table) ?? ''))
+  if (damaged.length > 0) throw new BackupError(`Tables missing although their migration is recorded: ${damaged.join(', ')}. The store looks damaged; nothing was exported.`)
   const tableResults = BACKUP_TABLES.map((table) => (present.has(table) ? readResults[exported.indexOf(table)] : { results: [] }))
   const schema = (schemaResult.results as Array<{ type: string; name: string; sql: string; tbl_name?: string }>)
     .filter((object) => !PLATFORM_TABLE.test(object.name))

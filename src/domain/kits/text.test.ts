@@ -63,11 +63,23 @@ describe('kit text helpers v1', () => {
     expect(normalizeLabelV1('`Bug`')).toBe('bug')
   })
 
+  it('a phrase that only occurs inside longer words is still found later at a word start', () => {
+    expect(containsPhraseV1('aaaa aa', 'aa')).toBe(true)
+    expect(containsPhraseV1('aaaa aaa', 'aa')).toBe(false)
+    expect(containsPhraseV1('xrefund refund', 'refund')).toBe(true)
+    expect(containsPhraseV1('ﬃ ffi', 'ffi')).toBe(true)
+  })
+
   it('stays fast on worst-case input (linear matching)', () => {
-    const text = 'a'.repeat(16_000)
-    const phrase = `${'a'.repeat(59)}b`
     const started = performance.now()
-    for (let i = 0; i < 32; i++) containsPhraseV1(text, phrase)
+    // 32 phrases × 15 answers' worth of the matching-prefix worst case (D-80), ASCII and NFKC-expanding.
+    for (const text of ['a'.repeat(16_000), 'ﬃ'.repeat(5_400)]) {
+      for (let i = 0; i < 32; i++) {
+        containsPhraseV1(text, 'a'.repeat(60))
+        containsPhraseV1(text, 'f'.repeat(60))
+        containsPhraseV1(text, `${'a'.repeat(59)}b`)
+      }
+    }
     extractNumbersV1('1,'.repeat(8_000))
     countWordsV1('a '.repeat(8_000))
     expect(performance.now() - started).toBeLessThan(2_000)

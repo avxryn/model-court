@@ -121,5 +121,7 @@ export function buildKitRequest(snapshot: Partial<Pick<RunSnapshot, 'messageTemp
   const version = snapshot.messageTemplateVersion ?? MESSAGE_TEMPLATE_VERSION
   const template = Object.hasOwn(MESSAGE_TEMPLATES, version) ? MESSAGE_TEMPLATES[version] : undefined
   if (!template) return null
+  // A kit template without the kit's settings cannot be built: a definite, unsent failure, never a throw.
+  if (version !== MESSAGE_TEMPLATE_VERSION && version !== CHAT_TEMPLATE_VERSION && snapshot.kit?.settings === undefined) return null
   return template.build({ systemPrompt, prompt: promptCaseOf(testCase), settings: snapshot.kit?.settings })
 }
