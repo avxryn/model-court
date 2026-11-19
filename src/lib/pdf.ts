@@ -28,6 +28,12 @@ export class PdfReadError extends Error {
   }
 }
 
+/** About 33 million pixels per decoded image, and per drawn page (the pdf.js viewer's own order of magnitude). */
+export const MAX_IMAGE_PIXELS = 2 ** 25
+export const MAX_CANVAS_PIXELS = 2 ** 24
+/** Pages a document may have (spec 04 §10.2); the server cannot count them, so the browser refuses more. */
+export const MAX_PAGES = 20
+
 /** Opens a PDF from bytes with the safe options. The caller destroys it. */
 export async function openPdf(bytes: ArrayBuffer): Promise<PDFDocumentProxy> {
   const pdfjs = await loadPdfjs()
@@ -36,6 +42,9 @@ export async function openPdf(bytes: ArrayBuffer): Promise<PDFDocumentProxy> {
       // pdf.js may transfer the buffer to its worker: give it a copy.
       data: new Uint8Array(bytes.slice(0)),
       enableXfa: false,
+      // D-91: bound what one hostile file can make a juror's tab decode or draw.
+      maxImageSize: MAX_IMAGE_PIXELS,
+      canvasMaxAreaInBytes: MAX_CANVAS_PIXELS * 4,
       disableFontFace: false,
       useSystemFonts: false,
       stopAtErrors: false,
@@ -58,6 +67,8 @@ export interface PdfFacts {
 export async function readPdf(bytes: ArrayBuffer): Promise<PdfFacts> {
   const doc = await openPdf(bytes)
   try {
+    // D-91: count before reading any text, so a file with thousands of pages costs nothing more.
+    if (doc.numPages > MAX_PAGES) return { pageCount: doc.numPages, text: '', hasTextLayer: false }
     const pages: string[] = []
     for (let number = 1; number <= doc.numPages; number += 1) {
       const page = await doc.getPage(number)
@@ -78,19 +89,32 @@ export async function readPdf(bytes: ArrayBuffer): Promise<PdfFacts> {
   }
 }
 
-/** Renders one page on a canvas, annotations off, with a text layer for search and selection. */
-export async function renderPage(doc: PDFDocumentProxy, pageNumber: number, canvas: HTMLCanvasElement, textLayer: HTMLElement, scale: number): Promise<void> {
+/**
+ * Renders one page on a canvas, annotations off, with a text layer for search and selection.
+ * The canvas is held under MAX_CANVAS_PIXELS (resolution drops, the layout size doesn't), and an
+ * absurd page size is refused. `signal` cancels a render that a newer one replaces.
+ */
+export async function renderPage(doc: PDFDocumentProxy, pageNumber: number, canvas: HTMLCanvasElement, textLayer: HTMLElement, scale: number, signal?: AbortSignal): Promise<void> {
   const pdfjs = await loadPdfjs()
   const page = await doc.getPage(pageNumber)
   const viewport = page.getViewport({ scale })
-  const ratio = window.devicePixelRatio || 1
+  if (viewport.width > 20_000 || viewport.height > 20_000) throw new PdfReadError('unreadable', 'This page is too large to show.')
+  const ratio = Math.min(window.devicePixelRatio || 1, Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, viewport.width * viewport.height)))
   canvas.width = Math.floor(viewport.width * ratio)
   canvas.height = Math.floor(viewport.height * ratio)
   canvas.style.width = `${Math.floor(viewport.width)}px`
   canvas.style.height = `${Math.floor(viewport.height)}px`
   const context = canvas.getContext('2d')
   if (!context) return
-  await page.render({ canvas, canvasContext: context, viewport, transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : undefined, annotationMode: pdfjs.AnnotationMode.DISABLE }).promise
+  const task = page.render({ canvas, canvasContext: context, viewport, transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : undefined, annotationMode: pdfjs.AnnotationMode.DISABLE })
+  const cancel = () => task.cancel()
+  signal?.addEventListener('abort', cancel, { once: true })
+  try {
+    await task.promise
+  } finally {
+    signal?.removeEventListener('abort', cancel)
+  }
+  if (signal?.aborted) return
   textLayer.replaceChildren()
   textLayer.style.width = `${Math.floor(viewport.width)}px`
   textLayer.style.height = `${Math.floor(viewport.height)}px`

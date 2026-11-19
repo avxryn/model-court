@@ -65,12 +65,29 @@ function optionalIfMatch(c: ApiContext): number | null {
 }
 
 /** Spec 04 §5: a raw upload body (a PDF), refused before reading when its declared size is over the cap. */
-async function readRawBody(c: { req: { header: (name: string) => string | undefined; arrayBuffer: () => Promise<ArrayBuffer> } }, maxBytes: number): Promise<Uint8Array<ArrayBuffer>> {
-  const declared = Number(c.req.header('Content-Length') ?? '0')
-  if (declared > maxBytes) throw new ApiError(413, 'PAYLOAD_TOO_LARGE', `A PDF is at most ${maxBytes / 1024 / 1024} MiB.`)
-  const bytes = new Uint8Array(await c.req.arrayBuffer())
-  if (bytes.byteLength > maxBytes) throw new ApiError(413, 'PAYLOAD_TOO_LARGE', `A PDF is at most ${maxBytes / 1024 / 1024} MiB.`)
-  return bytes
+async function readRawBody(c: { req: { header: (name: string) => string | undefined; raw: Request } }, maxBytes: number): Promise<Uint8Array<ArrayBuffer>> {
+  const tooLarge = () => new ApiError(413, 'PAYLOAD_TOO_LARGE', `A PDF is at most ${maxBytes / 1024 / 1024} MiB.`)
+  // D-91: a declared length is required and checked first; the stream is counted and cut at the cap,
+  // so a body without one (or lying about it) is never buffered past 4 MiB.
+  const declared = c.req.header('Content-Length')
+  if (declared === undefined || !/^\d{1,10}$/u.test(declared)) throw new ApiError(411, 'BAD_REQUEST', 'A PDF upload needs a Content-Length header.')
+  if (Number(declared) > maxBytes) throw tooLarge()
+  const body = c.req.raw.body
+  if (!body) return new Uint8Array(0)
+  const reader = body.getReader()
+  const out = new Uint8Array(Math.min(Number(declared), maxBytes))
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (total + value.byteLength > out.length) {
+      await reader.cancel()
+      throw total + value.byteLength > maxBytes ? tooLarge() : new ApiError(400, 'BAD_REQUEST', 'The upload is longer than its Content-Length.')
+    }
+    out.set(value, total)
+    total += value.byteLength
+  }
+  return out.subarray(0, total).slice()
 }
 
 /** Spec 04 §5: every document byte response downloads under a fixed name and never renders in the app's origin. */
@@ -83,6 +100,8 @@ function documentBytes(bytes: Uint8Array<ArrayBuffer>): Response {
       'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy': "sandbox; default-src 'none'",
       'Cache-Control': 'private, no-store',
+      // D-91: not embeddable by any other site.
+      'Cross-Origin-Resource-Policy': 'same-origin',
     },
   })
 }

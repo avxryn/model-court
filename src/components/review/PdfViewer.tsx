@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { Button } from '@/components/ui/button'
 import { apiDownload, describeError } from '@/lib/api-client'
-import { openPdf, renderPage } from '@/lib/pdf'
+import { MAX_PAGES, openPdf, renderPage } from '@/lib/pdf'
 import { cn } from '@/lib/utils'
 
 const ZOOMS = [0.75, 1, 1.25, 1.5, 2] as const
@@ -43,10 +43,17 @@ export function PdfViewer({ runId, caseKey, pageCount }: { runId: string; caseKe
 
   useEffect(() => {
     if (!doc || !canvas.current || !text.current) return
-    renderPage(doc, page, canvas.current, text.current, zoom).catch(() => setError('This page could not be drawn.'))
+    // D-91: a page or zoom change cancels the render still in progress instead of fighting it for the canvas.
+    const controller = new AbortController()
+    renderPage(doc, page, canvas.current, text.current, zoom, controller.signal).catch((caught: unknown) => {
+      if (!controller.signal.aborted && (caught as { name?: string }).name !== 'RenderingCancelledException') setError(caught instanceof Error && 'reason' in caught ? caught.message : 'This page could not be drawn.')
+    })
+    return () => controller.abort()
   }, [doc, page, zoom])
 
-  const pages = doc?.numPages ?? pageCount ?? 1
+  // D-91: never more than the 20-page limit of buttons, whatever the file claims.
+  const pages = Math.min(doc?.numPages ?? pageCount ?? 1, MAX_PAGES)
+  const truncated = (doc?.numPages ?? 0) > MAX_PAGES
   if (error) return <p className="px-4 py-3 text-sm text-destructive">{error}</p>
   return (
     <div className="space-y-2 py-2">
@@ -58,6 +65,7 @@ export function PdfViewer({ runId, caseKey, pageCount }: { runId: string; caseKe
             </Button>
           ))}
         </nav>
+        {truncated && <span className="text-xs text-muted-foreground">Showing the first {MAX_PAGES} pages; the file has {doc?.numPages}.</span>}
         <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
           Zoom
           <select className="rounded-sm border border-border bg-background px-1 py-0.5 text-xs" value={zoom} onChange={(event) => setZoom(Number(event.target.value) as (typeof ZOOMS)[number])}>

@@ -123,8 +123,15 @@ export async function exportSnapshot(deps: Deps): Promise<StoreSnapshot> {
   const [schemaResult, ledgerResult, ...readResults] = await db.batch<Record<string, unknown>>([
     db.prepare(`SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name`),
     db.prepare('SELECT id FROM mc_schema_migrations ORDER BY id'),
-    ...exported.map((table) => db.prepare(`SELECT * FROM ${table} ORDER BY rowid`)),
+    // Spec 04 decision 4 (D-91): PDF chunks are filtered in SQL, so no PDF byte is ever read into the Worker for a backup.
+    ...exported.map((table) =>
+      table === 'document_blob_chunks'
+        ? db.prepare(`SELECT c.* FROM document_blob_chunks c JOIN document_blobs b ON b.id = c.blob_id WHERE b.media_type <> 'application/pdf' ORDER BY c.rowid`)
+        : db.prepare(`SELECT * FROM ${table} ORDER BY rowid`),
+    ),
+    ...(present.has('document_blob_chunks') ? [db.prepare(`SELECT COUNT(*) AS n FROM document_blob_chunks c JOIN document_blobs b ON b.id = c.blob_id WHERE b.media_type = 'application/pdf'`)] : []),
   ])
+  const pdfChunkCount = present.has('document_blob_chunks') ? Number((readResults.pop()?.results[0] as { n?: number } | undefined)?.n ?? 0) : 0
   const applied = new Set((ledgerResult.results as Array<{ id: string }>).map((row) => row.id))
   const damaged = BACKUP_TABLES.filter((table) => !present.has(table) && applied.has(creatingMigration(table) ?? ''))
   if (damaged.length > 0) throw new BackupError(`Tables missing although their migration is recorded: ${damaged.join(', ')}. The store looks damaged; nothing was exported.`)
@@ -137,15 +144,10 @@ export async function exportSnapshot(deps: Deps): Promise<StoreSnapshot> {
 
   const tables: Record<string, Row[]> = {}
   const redactions = { credentialRowsRevoked: 0, credentialReceiptsDropped: 0, pdfChunksOmitted: 0 }
-  const pdfBlobs = new Set((tableResults[BACKUP_TABLES.indexOf('document_blobs')].results as Row[]).filter((row) => row.media_type === 'application/pdf').map((row) => row.id))
+  // Decision 4: text documents travel whole; PDF chunks are left out (their blob rows and hashes stay).
+  redactions.pdfChunksOmitted = pdfChunkCount
   BACKUP_TABLES.forEach((table, index) => {
     let rows = tableResults[index].results as Row[]
-    if (table === 'document_blob_chunks') {
-      // Decision 4: text documents travel whole; PDF chunks are left out (their blob rows and hashes stay).
-      const kept = rows.filter((row) => !pdfBlobs.has(row.blob_id))
-      redactions.pdfChunksOmitted = rows.length - kept.length
-      rows = kept
-    }
     if (table === 'provider_credentials') {
       redactions.credentialRowsRevoked = rows.filter((row) => row.status === 'active').length
       rows = rows.map((row) => redactCredential(row, exportedAt))

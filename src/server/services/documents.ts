@@ -16,13 +16,14 @@ import { base64ToBytes, bytesToBase64, chunkBase64, sniffPdf } from '../../domai
 import type { DocumentRef, ExtractionFields } from '../../domain/kits/extraction'
 import { LIMITS } from '../../domain/limits'
 import type { TemplateDocument } from '../../domain/messages'
-import { auditStatement, classifyConstraint, cond, GuardFailed, hitRateLimitWindow, runGuarded } from '../db/sql'
+import { auditStatement, classifyConstraint, cond, GuardFailed, hitRateLimit, hitRateLimitWindow, runGuarded } from '../db/sql'
 import type { Deps } from '../deps'
 import { ApiError, notFound, revisionConflict } from '../http'
 import { loadEvaluationAccess, loadRunAccess, requireOwner } from '../access'
 import { parseStoredDraft } from './evaluations'
 
 export const UPLOADS_PER_HOUR = 20
+export const DOCUMENT_READS_PER_MINUTE = 30
 const SWEEP_BATCH = 20
 const SWEEP_MIN_AGE_MS = 10 * 60_000
 
@@ -292,7 +293,15 @@ export async function putPdfDocument(deps: Deps, userId: string, evaluationId: s
  */
 export async function getRunDocument(deps: Deps, userId: string, runId: string, caseKey: string): Promise<{ kind: 'text'; text: string } | { kind: 'pdf'; bytes: Uint8Array<ArrayBuffer> }> {
   const access = await loadRunAccess(deps.db, runId, userId)
-  if (access.role !== 'owner' && (!access.session || access.session.status === 'revoked')) throw notFound()
+  if (access.role !== 'owner') {
+    if (!access.session || access.session.status === 'revoked') throw notFound()
+    // D-91: a juror reads only the documents of questions on their own worksheet (the review's allowlist).
+    const assignment = JSON.parse(access.session.assignment_json) as Array<{ caseKey: string }>
+    if (!assignment.some((item) => item.caseKey === caseKey)) throw notFound()
+  }
+  // D-91: documents are big; besides the 120 reads a minute, at most 30 document reads a minute per caller.
+  const reads = await hitRateLimit(deps.db, `document-read:${userId}`, DOCUMENT_READS_PER_MINUTE, deps.now())
+  if (!reads.allowed) throw new ApiError(429, 'RATE_LIMITED', 'Too many document downloads in a minute. Try again shortly.', { retryAfterSeconds: reads.retryAfterSeconds })
   const row = await deps.db
     .prepare('SELECT d.blob_id, b.media_type FROM run_documents d JOIN document_blobs b ON b.id = d.blob_id WHERE d.run_id = ? AND d.case_key = ?')
     .bind(runId, caseKey)
@@ -415,19 +424,24 @@ export async function sweepUnreferencedDocumentBlobs(deps: Pick<Deps, 'db' | 'no
     .all<{ id: string; owner_user_id: string; byte_length: number; media_type: string; page_count: number | null; sha256: string; chunk_count: number; chunks_present: number }>()
   let swept = 0
   for (const blob of candidates.results) {
-    // A blob restored without its chunks never counted against a bucket (spec 04 §4.6).
-    const counted = blob.chunks_present === blob.chunk_count
     try {
       await runGuarded(
         db,
         'document.sweep',
         cond('EXISTS (SELECT 1 FROM document_blobs WHERE id = ?) AND NOT EXISTS (SELECT 1 FROM evaluation_documents WHERE blob_id = ?) AND NOT EXISTS (SELECT 1 FROM run_documents WHERE blob_id = ?)', blob.id, blob.id, blob.id),
         [
+          // D-91: whether the blob counted toward the buckets (all its chunks present) is decided inside this
+          // batch, so a repair upload between the select and the sweep can't leave the counters inflated.
+          ...[`user:${blob.owner_user_id}`, 'global'].map((scope) =>
+            db
+              .prepare(
+                `UPDATE document_storage_buckets SET used_bytes = MAX(0, used_bytes - ?) WHERE scope = ?
+                   AND (SELECT COUNT(*) FROM document_blob_chunks WHERE blob_id = ?) = (SELECT chunk_count FROM document_blobs WHERE id = ?)`,
+              )
+              .bind(blob.byte_length, scope, blob.id, blob.id),
+          ),
           db.prepare('DELETE FROM document_blob_chunks WHERE blob_id = ?').bind(blob.id),
           db.prepare('DELETE FROM document_blobs WHERE id = ?').bind(blob.id),
-          ...(counted
-            ? [`user:${blob.owner_user_id}`, 'global'].map((scope) => db.prepare('UPDATE document_storage_buckets SET used_bytes = MAX(0, used_bytes - ?) WHERE scope = ?').bind(blob.byte_length, scope))
-            : []),
           auditStatement(db, { eventType: 'document.sweep', requestId: 'cron', outcome: 'ok', metadata: { mediaType: blob.media_type, byteLength: blob.byte_length, pageCount: blob.page_count, sha256Prefix: blob.sha256.slice(0, 8) } }, now),
         ],
       )

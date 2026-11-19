@@ -21,6 +21,7 @@ import { attemptStillCurrent, CredentialUnusable, withRunCredential } from './cr
 import { autoOpenReview } from './runs'
 
 class AttemptFenced extends Error {}
+class DocumentUnavailable extends Error {}
 
 export const GENERATION_JOB_TYPE = 'mc.generate'
 
@@ -185,18 +186,18 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
   if (!testCase || !configuration) {
     return finishAttempt(deps, { attemptId, fence, job, context, requestId }, { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }, true)
   }
-  // Spec 04 §8.2 (D-87): a document question's bytes are read from the hearing's own copy only after
-  // the guarded claim; the pre-send fence check below still runs before anything is sent, and no
-  // byte ever travels in the job payload. A missing copy is a definite, unsent failure.
-  const documentRef = (testCase.kitFields as { kind?: string; document?: { sha256: string } } | undefined)?.kind === 'extraction' ? (testCase.kitFields as { document?: { sha256: string } }).document : undefined
-  const document = documentRef ? await loadRunDocument(db, context.runId, testCase.key, documentRef.sha256) : undefined
+  // Spec 04 §8.2 (D-87, D-91): a document question's bytes are read from the hearing's own copy only
+  // after the guarded claim and the pre-send fence check (inside the credential callback below), and
+  // dropped when the call returns; no byte ever travels in the job payload. Its adapter is chosen
+  // first from the recorded delivery. A missing copy is a definite, unsent failure.
+  const documentRef = (testCase.kitFields as { kind?: string; document?: { sha256: string; delivery: string } } | undefined)?.kind === 'extraction' ? (testCase.kitFields as { document?: { sha256: string; delivery: string } }).document : undefined
   // The hearing's recorded template (spec 03, D-75); reviewer-only fields never reach the request.
-  const conversation = documentRef && !document ? null : buildKitRequest(context.snapshot, configuration.systemPrompt, testCase, document ?? undefined)
-  const options = conversation?.requestOptions
-  const features = options ? { structuredOutput: true, ...(options.document ? { pdfInput: true } : {}) } : {}
+  const plain = documentRef ? null : buildKitRequest(context.snapshot, configuration.systemPrompt, testCase)
+  const features = documentRef ? { structuredOutput: true, ...(documentRef.delivery === 'pdf_native' ? { pdfInput: true } : {}) } : plain?.requestOptions ? { structuredOutput: true } : {}
   // Dispatch by the adapter version this hearing recorded (D-39); refuse, unsent, if it cannot carry the messages or a feature.
-  const adapter = conversation ? adapterFor(configuration.adapterVersion, context.provider, conversation.messages.length, features) : null
-  if (!conversation || !adapter) {
+  // An extract-v1 request is always one user message.
+  const adapter = documentRef || plain ? adapterFor(configuration.adapterVersion, context.provider, plain ? plain.messages.length : 1, features) : null
+  if ((!documentRef && !plain) || !adapter) {
     return finishAttempt(deps, { attemptId, fence, job, context, requestId }, { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }, true)
   }
   const timeout = AbortSignal.timeout(deps.config.providerTimeoutMs)
@@ -208,6 +209,10 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
     outcome = await withRunCredential(deps, context.runId, context.provider, requestId, async (apiKey) => {
       // Canceled or deleted since claim: send nothing (the attempt is already fenced out).
       if (!(await attemptStillCurrent(deps.db, attemptId, fence, context.runId))) throw new AttemptFenced()
+      const document = documentRef ? await loadRunDocument(deps.db, context.runId, testCase.key, documentRef.sha256) : undefined
+      const conversation = documentRef ? (document ? buildKitRequest(context.snapshot, configuration.systemPrompt, testCase, document) : null) : plain
+      if (!conversation) throw new DocumentUnavailable()
+      const options = conversation.requestOptions
       return adapter(
         deps.providerFetch,
         {
@@ -239,7 +244,11 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
       }
       return 'stale'
     }
-    if (error instanceof CredentialUnusable) {
+    if (error instanceof DocumentUnavailable) {
+      // Spec 04 §4.6: no call is ever sent without its document.
+      unsent = true
+      outcome = { kind: 'failure', code: 'INVALID_PROVIDER_RESPONSE', definite: true, providerRequestId: null, durationMs: 0 }
+    } else if (error instanceof CredentialUnusable) {
       // Failed before any network send: no fallback key, no platform credit.
       unsent = true
       outcome = { kind: 'failure', code: error.code, definite: true, providerRequestId: null, durationMs: 0 }

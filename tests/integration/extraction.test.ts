@@ -400,7 +400,7 @@ const ENCRYPTED = new Uint8Array(readFileSync(new URL('../fixtures/extraction/en
 async function uploadPdf(evaluationId: string, caseKey: string, revision: number, bytes: Uint8Array = PDF, pages = '1', user = OWNER) {
   const response = await h.app.request(`https://model-court.test/api/v1/evaluations/${evaluationId}/documents/${caseKey}`, {
     method: 'PUT',
-    headers: { Authorization: `Bearer ${await h.token(user)}`, 'Content-Type': 'application/pdf', 'If-Match': `"${revision}"`, 'X-Page-Count': pages },
+    headers: { Authorization: `Bearer ${await h.token(user)}`, 'Content-Type': 'application/pdf', 'If-Match': `"${revision}"`, 'X-Page-Count': pages, 'Content-Length': String(bytes.length) },
     body: bytes,
   })
   const text = await response.text()
@@ -523,7 +523,7 @@ describe('PDF documents', () => {
       // Uploading the identical file restores the hearing's copy too (deduped by sha256 per owner).
       const again = await target.app.request(`https://model-court.test/api/v1/evaluations/${setup.evaluationId}/documents/${caseKey}`, {
         method: 'PUT',
-        headers: { ...owner, 'Content-Type': 'application/pdf', 'If-Match': `"${view.revision}"`, 'X-Page-Count': '1' },
+        headers: { ...owner, 'Content-Type': 'application/pdf', 'If-Match': `"${view.revision}"`, 'X-Page-Count': '1', 'Content-Length': String(PDF.length) },
         body: PDF,
       })
       expect(again.status).toBe(200)
@@ -533,5 +533,95 @@ describe('PDF documents', () => {
     } finally {
       await target.dispose()
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Step B3 (D-91): fixes from the independent security pass
+// ---------------------------------------------------------------------------
+
+describe('security pass fixes', () => {
+  beforeEach(async () => {
+    h = await createHarness()
+  })
+
+  it('a juror reads only documents of questions on their worksheet; a revoked juror and another hearing\'s guest get 404 or 401', async () => {
+    const { setup, caseKey, draft } = await extractionCase()
+    const secondKey = crypto.randomUUID()
+    const two = { ...draft, cases: [...draft.cases, { ...draft.cases[0], key: secondKey, title: 'Second' }] }
+    expect((await h.request('PUT', `/evaluations/${setup.evaluationId}/draft`, { as: OWNER, ifMatch: 2, body: two })).status).toBe(200)
+    await upload(setup.evaluationId, caseKey, 3)
+    await upload(setup.evaluationId, secondKey, 4, 'Second document, never shown to jurors.')
+    // The second question's generations fail, so it is excluded from deliberation.
+    h.setProvider(async (call) => (JSON.stringify(call.body).includes('never shown') ? new Response('{}', { status: 400 }) : jsonStub(call)))
+    const runId = (await start(setup, 5)).json.data.runId as string
+    await h.drainJobs()
+    await openDeliberation(h, runId)
+    expect((await h.request('POST', '/invites/redeem', { as: REVIEWER, body: { token: await invite(runId) } })).status).toBe(200)
+    const get = async (key: string, headers: Record<string, string>) => h.app.request(`https://model-court.test/api/v1/runs/${runId}/documents/${key}`, { headers })
+    const juror = { Authorization: `Bearer ${await h.token(REVIEWER)}` }
+    expect((await get(caseKey, juror)).status).toBe(200)
+    expect((await get(secondKey, juror)).status).toBe(404)
+    expect((await get(secondKey, { Authorization: `Bearer ${await h.token(OWNER)}` })).status).toBe(200)
+    // A guest cookie of another hearing reaches nothing here.
+    const other = await extractionCase()
+    await upload(other.setup.evaluationId, other.caseKey, 2, 'Other hearing.')
+    h.setProvider(jsonStub)
+    const otherRun = (await start(other.setup, 3)).json.data.runId as string
+    await h.drainJobs()
+    await openDeliberation(h, otherRun)
+    const join = await h.request('POST', '/invites/redeem-as-guest', { headers: { Origin: 'https://model-court.test' }, body: { token: await invite(otherRun), displayName: 'Lee' } })
+    const otherCookie = (join.headers.get('Set-Cookie') ?? '').split(';')[0]
+    expect((await get(caseKey, { Cookie: otherCookie })).status).toBe(401)
+    // A revoked juror gets the same 404 as a stranger.
+    const sessionId = (await h.db.prepare('SELECT id FROM review_sessions WHERE run_id = ? AND reviewer_user_id = ?').bind(runId, REVIEWER).first<{ id: string }>())!.id
+    expect((await h.request('DELETE', `/runs/${runId}/reviewers/${sessionId}`, { as: OWNER })).status).toBeLessThan(300)
+    expect((await get(caseKey, juror)).status).toBe(404)
+  })
+
+  it('document reads are limited per caller, and bytes carry a same-origin resource policy', async () => {
+    const { runId, caseKey } = await pdfHearing()
+    const owner = { Authorization: `Bearer ${await h.token(OWNER)}` }
+    const first = await h.app.request(`https://model-court.test/api/v1/runs/${runId}/documents/${caseKey}`, { headers: owner })
+    expect(first.headers.get('Cross-Origin-Resource-Policy')).toBe('same-origin')
+    let last = 200
+    for (let i = 0; i < 30; i += 1) last = (await h.app.request(`https://model-court.test/api/v1/runs/${runId}/documents/${caseKey}`, { headers: owner })).status
+    expect(last).toBe(429)
+  })
+
+  it('a PDF upload needs a Content-Length and is never read past 4 MiB', async () => {
+    const { setup, caseKey } = await extractionCase()
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(PDF)
+        controller.close()
+      },
+    })
+    const noLength = await h.app.request(`https://model-court.test/api/v1/evaluations/${setup.evaluationId}/documents/${caseKey}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${await h.token(OWNER)}`, 'Content-Type': 'application/pdf', 'If-Match': '"2"', 'X-Page-Count': '1' },
+      body: stream,
+      duplex: 'half',
+    } as RequestInit)
+    expect(noLength.status).toBe(411)
+    const lying = await h.app.request(`https://model-court.test/api/v1/evaluations/${setup.evaluationId}/documents/${caseKey}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${await h.token(OWNER)}`, 'Content-Type': 'application/pdf', 'Content-Length': '10', 'If-Match': '"2"', 'X-Page-Count': '1' },
+      body: PDF,
+    })
+    expect([400, 413]).toContain(lying.status)
+  })
+
+  it('the sweep returns bytes only for a blob whose chunks were all there', async () => {
+    const { setup, caseKey } = await extractionCase()
+    await upload(setup.evaluationId, caseKey, 2, 'Swept text.')
+    await h.request('DELETE', `/evaluations/${setup.evaluationId}/documents/${caseKey}`, { as: OWNER, ifMatch: 3 })
+    // Simulate a restored blob without its chunks: it never counted.
+    await h.db.prepare('DELETE FROM document_blob_chunks').run()
+    await h.db.prepare(`UPDATE document_storage_buckets SET used_bytes = 0`).run()
+    h.advance(11 * 60_000)
+    expect(await sweepUnreferencedDocumentBlobs(h.deps)).toBe(1)
+    const buckets = (await h.db.prepare('SELECT used_bytes FROM document_storage_buckets').all<{ used_bytes: number }>()).results
+    expect(buckets.every((row) => row.used_bytes === 0)).toBe(true)
   })
 })
