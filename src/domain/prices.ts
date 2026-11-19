@@ -29,10 +29,10 @@ export interface PriceTable {
   readOn: string
   /** ISO date; hearings created on or after it use this table. */
   effectiveFrom: string
-  /** The pricing pages the numbers were read from. */
-  sources: Record<ProviderId, string>
-  /** How the provider counts cached input: OpenAI includes it in `input_tokens`; Anthropic reports it separately. */
-  cachedInputIncludedInInput: Record<ProviderId, boolean>
+  /** The pricing pages the numbers were read from; a table lists only the providers it prices (older tables predate Google). */
+  sources: Partial<Record<ProviderId, string>>
+  /** How the provider counts cached input: OpenAI and Google include it in the input count; Anthropic reports it separately. */
+  cachedInputIncludedInInput: Partial<Record<ProviderId, boolean>>
   /** By route key (`MODEL_ROUTES[].key`). */
   prices: Record<string, RoutePrice>
   /** Route key → why no price is on file. */
@@ -89,8 +89,59 @@ const TABLE_2026_11_18_1: PriceTable = {
   unpriced: {},
 }
 
+/**
+ * Spec 07 §10.3 (D-108): Gemini, read 2026-11-19 from https://aistudio.google.com/docs/pricing (Standard,
+ * paid tier, text input; output "including thinking tokens"; "Context caching" as the cached-input rate,
+ * which also prices implicit cache hits; no long-context tier is listed for these models). OpenAI and
+ * Anthropic rows are unchanged from 2026-11-18.1. Google has announced two dated rises, so they are their
+ * own tables: Gemini 4 Carbon and Argon from 2026-12-01, Gemini 3.8 and 3.6 Flash from 2027-01-01.
+ */
+const GEMINI_2026_11_19 = {
+  'google-gemini-4-carbon': p(2, 0.1, 10),
+  'google-gemini-4-argon': p(2, 0.1, 10),
+  'google-gemini-4-neon': p(3, 0.15, 15),
+  'google-gemini-4-hydrogen': p(1.5, 0.075, 7.5),
+  'google-gemini-3-8-flash': p(0.75, 0.075, 3.75),
+  'google-gemini-3-6-flash': p(0.75, 0.075, 3.75),
+  'google-gemini-3-5-flash-lite': p(0.3, 0.03, 2.5),
+  'google-gemini-3-1-flash-lite': p(0.25, 0.025, 1.5),
+  'google-gemini-2-5-flash-lite': p(0.1, 0.01, 0.4),
+}
+
+const WITH_GOOGLE = {
+  sources: { ...TABLE_2026_11_18_1.sources, google: 'https://aistudio.google.com/docs/pricing' },
+  cachedInputIncludedInInput: { ...TABLE_2026_11_18_1.cachedInputIncludedInInput, google: true },
+}
+
+const TABLE_2026_11_19_1: PriceTable = {
+  version: '2026-11-19.1',
+  readOn: '2026-11-19',
+  effectiveFrom: '2026-11-19',
+  ...WITH_GOOGLE,
+  prices: { ...TABLE_2026_11_18_1.prices, ...GEMINI_2026_11_19 },
+  unpriced: {},
+}
+
+const TABLE_2026_11_19_2: PriceTable = {
+  version: '2026-11-19.2',
+  readOn: '2026-11-19',
+  effectiveFrom: '2026-12-01',
+  ...WITH_GOOGLE,
+  prices: { ...TABLE_2026_11_19_1.prices, 'google-gemini-4-carbon': p(4, 0.2, 20), 'google-gemini-4-argon': p(4, 0.2, 20) },
+  unpriced: {},
+}
+
+const TABLE_2026_11_19_3: PriceTable = {
+  version: '2026-11-19.3',
+  readOn: '2026-11-19',
+  effectiveFrom: '2027-01-01',
+  ...WITH_GOOGLE,
+  prices: { ...TABLE_2026_11_19_2.prices, 'google-gemini-3-8-flash': p(1.5, 0.15, 7.5), 'google-gemini-3-6-flash': p(1.5, 0.15, 7.5) },
+  unpriced: {},
+}
+
 /** Oldest first. Append a new table for a price change; never edit a published one. */
-export const PRICE_TABLES: readonly PriceTable[] = [TABLE_2026_11_18_1]
+export const PRICE_TABLES: readonly PriceTable[] = [TABLE_2026_11_18_1, TABLE_2026_11_19_1, TABLE_2026_11_19_2, TABLE_2026_11_19_3]
 
 export const PRICE_TABLE_VERSION = PRICE_TABLES[PRICE_TABLES.length - 1].version
 
@@ -123,7 +174,7 @@ export interface CallUsage {
 /**
  * Estimated cost of one call in integer µUSD (tokens × USD per 1M tokens = µUSD), rounded once.
  *
- *   openai:    (input − cached) × input + cached × cached rate + output × output
+ *   openai, google: (input − cached) × input + cached × cached rate + output × output
  *   anthropic: input × input + cached × cached rate + output × output   (cached reported separately)
  *
  * Unknown input or output usage → null (unknown, never 0). Unknown cached tokens, or no
@@ -132,7 +183,7 @@ export interface CallUsage {
 export function callCostMicroUsd(provider: ProviderId, usage: CallUsage, price: RoutePrice, table: Pick<PriceTable, 'cachedInputIncludedInInput'>): { microUsd: number; cachedAssumedFull: boolean } | null {
   if (usage.inputTokens === null || usage.outputTokens === null) return null
   const cachedRate = price.cachedInputUsdPerMTok ?? price.inputUsdPerMTok
-  const included = table.cachedInputIncludedInInput[provider]
+  const included = table.cachedInputIncludedInInput[provider] ?? false
   const cached = usage.cachedInputTokens
   let input: number
   if (cached === null) {

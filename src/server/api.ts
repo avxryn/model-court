@@ -24,7 +24,7 @@ import {
   verdictSchema,
 } from '../domain/contracts'
 import { LIMITS } from '../domain/limits'
-import { isRouteEnabled, PROVIDER_NAMES, PROVIDER_REGISTRY_VERSION } from '../domain/registry'
+import { isRouteEnabled, priceTableFor, PROVIDER_NAMES, PROVIDER_REGISTRY_VERSION } from '../domain/registry'
 import { extractionLimits } from '../domain/extraction/limits'
 import { hitRateLimit } from './db/sql'
 import type { Deps, VerifiedCaller } from './deps'
@@ -218,8 +218,8 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
   api.get('/catalog', (c) =>
     ok(c, {
       providerRegistryVersion: PROVIDER_REGISTRY_VERSION,
-      // The newest list-price table (D-62); records use the table for their own creation day.
-      priceTable: (({ version, readOn, sources }) => ({ version, readOn, sources }))(deps(c).priceTables[deps(c).priceTables.length - 1]),
+      // Spec 07 (D-108): the table in effect today; later-dated tables (announced price changes) wait for their day.
+      priceTable: (({ version, readOn, sources }) => ({ version, readOn, sources }))(priceTableFor(deps(c).now(), deps(c).priceTables).table),
       generationEnabled: deps(c).config.generationEnabled,
       credentialWritesEnabled: deps(c).config.credentialWritesEnabled,
       providers: Object.entries(PROVIDER_NAMES).map(([id, name]) => ({ id, name })),

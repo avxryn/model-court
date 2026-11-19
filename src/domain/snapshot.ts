@@ -82,6 +82,11 @@ export type ReadinessIssue =
   | { kind: 'tools_unverified'; configurationKey: string; modelKey: string }
   /** Spec 06 (D-99): imported answers have no tool calls, so a tool-use hearing takes generated parties only. */
   | { kind: 'tools_imported_unsupported'; configurationKey: string }
+  /**
+   * Spec 07 (D-108): the route's adapter versions cannot carry what the kit needs at all (Gemini routes
+   * send no structured output, PDF or tools), whatever live checks are recorded.
+   */
+  | { kind: 'feature_unsupported'; configurationKey: string; modelKey: string; feature: 'json' | 'tools' }
   | KitReadinessIssue
 
 /** A kit whose parties answer in JSON (extraction) sends a structured-output schema. */
@@ -113,6 +118,8 @@ export function readinessIssues(draft: Pick<Draft, 'comparisonMode' | 'configura
   for (const configuration of models) {
     const route = findRoute(configuration.modelKey, routes)
     if (!route) issues.push({ kind: 'unknown_model', configurationKey: configuration.key })
+    else if (structured && !adapterVersionFor(route.adapterVersion, FEATURES)) issues.push({ kind: 'feature_unsupported', configurationKey: configuration.key, modelKey: route.key, feature: 'json' })
+    else if (tools && !adapterVersionFor(route.adapterVersion, { toolUse: true })) issues.push({ kind: 'feature_unsupported', configurationKey: configuration.key, modelKey: route.key, feature: 'tools' })
     else if (!isRouteEnabled(route)) issues.push({ kind: 'model_unavailable', configurationKey: configuration.key, modelKey: route.key })
     else if (hasHistory && !route.multiTurnVerifiedAt) issues.push({ kind: 'history_unverified', configurationKey: configuration.key })
     else if (structured && (!route.structuredVerifiedAt || !adapterVersionFor(route.adapterVersion, FEATURES))) issues.push({ kind: 'structured_unverified', configurationKey: configuration.key, modelKey: route.key })
@@ -185,6 +192,13 @@ export function describeIssue(issue: ReadinessIssue, cases?: ReadonlyArray<Pick<
     case 'tools_unverified': {
       const route = findRoute(issue.modelKey)
       return `A question uses tools, but ${route ? `${PROVIDER_NAMES[route.provider]} ${route.label}` : 'a selected model'} hasn't passed a live tool check yet (one real tool call and its result, recorded). Choose a checked model or record that check first.`
+    }
+    case 'feature_unsupported': {
+      const route = findRoute(issue.modelKey)
+      const name = route ? `${PROVIDER_NAMES[route.provider]} ${route.label}` : 'A selected model'
+      return issue.feature === 'json'
+        ? `${name} can't return answers as fields in Model Court, so it can't be a party when fields are pulled from documents. Choose an OpenAI or Anthropic model for this party.`
+        : `${name} can't call mock tools in Model Court, so it can't be a party in a tool-use hearing. Choose an OpenAI or Anthropic model for this party.`
     }
     case 'tools_imported_unsupported':
       return "Imported answers have no tool calls, so a tool-use hearing can't include an imported party. Remove it or switch the task kit."

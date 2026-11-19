@@ -13,6 +13,7 @@ flowchart LR
     J --> K[decrypt owner key → fixed adapter]
     K --> O[api.openai.com/v1/responses]
     K --> N[api.anthropic.com/v1/messages]
+    K --> G[generativelanguage.googleapis.com/v1beta/models/…:generateContent]
     C[CronRoom mc-maintenance, 1 min] --> D
     C --> Q
 ```

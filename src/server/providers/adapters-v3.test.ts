@@ -82,7 +82,8 @@ describe('feature adapter versions', () => {
   })
 
   it('every route has a successor that carries both features', () => {
-    for (const route of MODEL_ROUTES) expect(adapterVersionFor(route.adapterVersion, { structuredOutput: true, pdfInput: true }), route.key).toBe(FEATURE_SUCCESSOR[route.adapterVersion as AdapterVersion])
+    // Spec 07 (D-108): Gemini routes have none, so extraction hearings refuse them.
+    for (const route of MODEL_ROUTES) expect(adapterVersionFor(route.adapterVersion, { structuredOutput: true, pdfInput: true }), route.key).toBe(route.provider === 'google' ? null : FEATURE_SUCCESSOR[route.adapterVersion as AdapterVersion])
     expect(adapterVersionFor('openai-responses-v1', { structuredOutput: true })).toBeNull()
     expect(adapterVersionFor('openai-responses-v2', {})).toBe('openai-responses-v2')
     expect(adapterVersionFor('nope', {})).toBeNull()

@@ -10,6 +10,7 @@ import type { ProviderId } from '../../domain/registry'
 export const PROVIDER_ORIGINS: Readonly<Record<ProviderId, string>> = {
   openai: 'https://api.openai.com',
   anthropic: 'https://api.anthropic.com',
+  google: 'https://generativelanguage.googleapis.com',
 }
 
 const ALLOWED = new Set<string>(Object.values(PROVIDER_ORIGINS))

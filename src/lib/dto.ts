@@ -7,6 +7,7 @@
 
 import type { ExtractionLimits } from '@/domain/extraction/limits'
 import type { QuotaStanding } from '@/domain/quota'
+import type { ProviderId } from '@/domain/registry'
 import type { CredentialMetadata, KeyCheckView } from '@/server/services/credentials'
 import type { EvaluationSummary, getEvaluation } from '@/server/services/evaluations'
 import type { getComparison } from '@/server/services/comparison'
@@ -34,7 +35,7 @@ export type ComparisonView = Resolved<typeof getComparison>
 /** One route as the catalog shows it (D-48): registry metadata, never the adapter version. */
 export interface CatalogModel {
   key: string
-  provider: 'openai' | 'anthropic'
+  provider: ProviderId
   modelId: string
   label: string
   line: string
@@ -58,8 +59,8 @@ export interface CatalogView {
   providerRegistryVersion: string
   generationEnabled: boolean
   credentialWritesEnabled: boolean
-  providers: Array<{ id: 'openai' | 'anthropic'; name: string }>
+  providers: Array<{ id: ProviderId; name: string }>
   models: CatalogModel[]
-  priceTable: { version: string; readOn: string; sources: Record<'openai' | 'anthropic', string> }
+  priceTable: { version: string; readOn: string; sources: Partial<Record<ProviderId, string>> }
   limits: { maxCases: number; configurations: number; samplesPerAnswer: number; minConfigurations: number; maxOutputTokens: number; reasoningHeadroomTokens: number; maxAttemptsPerGeneration: number; credentialTtlDays: number; dailyPerUser: number; dailyGlobal: number; lifetimeGlobal: number; extraction: ExtractionLimits }
 }

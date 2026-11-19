@@ -119,6 +119,106 @@ Not recorded, because hearings never use them: batch and flex/priority tiers, lo
 
 How cached input is counted (from the prompt-caching guides, read the same day): OpenAI's `usage.input_tokens` **includes** `input_tokens_details.cached_tokens` (<https://developers.openai.com/api/docs/guides/prompt-caching>); Anthropic's `usage.input_tokens` **excludes** `cache_read_input_tokens` and `cache_creation_input_tokens` (<https://platform.claude.com/docs/en/build-with-claude/prompt-caching>). The estimate subtracts or adds accordingly (`callCostMicroUsd`).
 
+Gemini prices (D-108; read 2026-11-19 from https://aistudio.google.com/docs/pricing, Standard paid tier, text input, output including thinking, "Context caching" as the cached rate; Google counts cached tokens inside `promptTokenCount`, like OpenAI). Tables `2026-11-19.1` (from 2026-11-19), `2026-11-19.2` (from 2026-12-01) and `2026-11-19.3` (from 2027-01-01) carry every OpenAI and Anthropic row of `2026-11-18.1` unchanged:
+
+| Route | Input | Cached input | Output | Notes |
+|---|---|---|---|---|
+| `google-gemini-4-carbon`, `-argon` | 2.00 | 0.10 | 10.00 | 4.00 / 0.20 / 20.00 from 2026-12-01 (Google: "through November 30, 2026") |
+| `google-gemini-4-neon` | 3.00 | 0.15 | 15.00 | |
+| `google-gemini-4-hydrogen` | 1.50 | 0.075 | 7.50 | |
+| `google-gemini-3-8-flash`, `-3-6-flash` | 0.75 | 0.075 | 3.75 | 1.50 / 0.15 / 7.50 from 2027-01-01 ("through December 31, 2026") |
+| `google-gemini-3-5-flash-lite` | 0.30 | 0.03 | 2.50 | |
+| `google-gemini-3-1-flash-lite` | 0.25 | 0.025 | 1.50 | |
+| `google-gemini-2-5-flash-lite` | 0.10 | 0.01 | 0.40 | |
+
+Storage charges for explicit caches do not apply (no `cachedContent` is sent). A hearing created before 2026-11-19 uses `2026-11-18.1`, which has no Gemini rows (cost unknown, never 0).
+
+## Google Gemini (spec 07, D-108, registry `2026-11-17.3`, unchanged): documented, live checks pending
+
+Read from aistudio.google.com (generate-content reference, models, each model's page, thinking, api-key, api-errors,
+pricing) on 2026-11-18 and 2026-11-19; no paid call was made. Every Gemini route has `verifiedAt: null`, so a
+draft may choose it ("awaiting its live check") and run admission refuses it until its smoke row is recorded below.
+None of the three versions sends structured output, a PDF or tools, and none has a successor, so extraction and
+tool-use hearings refuse Gemini parties with a plain readiness message (`feature_unsupported`); a later spec would
+add `google-*` versions with `responseMimeType`/`responseJsonSchema` and `functionDeclarations`.
+
+| | |
+|---|---|
+| Endpoint | `POST https://generativelanguage.googleapis.com/v1beta/models/{modelId}:generateContent` (stateless; not the Interactions API, which stores requests by default) |
+| Auth | `x-goog-api-key: <judge's AI Studio key>`; **never** `?key=` in the URL (unit-tested) |
+| Body | `systemInstruction.parts[0].text`, `contents[]` (`assistant` → `model`), `generationConfig.maxOutputTokens`, `generationConfig.thinkingConfig` (one of `thinkingLevel` / `thinkingBudget`, never both), `store: false` (top level; overrides the project's request logging). No `temperature`, `safetySettings`, `tools`, `toolConfig`, `cachedContent` or `includeThoughts`. |
+| Model IDs | registry only, `/^[a-z0-9][a-z0-9.-]*$/` (unit-tested), checked again in the adapter and `encodeURIComponent`-ed |
+| Request ID | no header is documented; `responseId` from the body |
+| Redirects | refused (`redirect: 'manual'`); matters for `x-goog-api-key`, which fetch does not strip cross-origin |
+
+| Version | Thinking | Output cap sent |
+|---|---|---|
+| `google-generate-low-v1` | `thinkingLevel: "low"` | 512 + 8,192 |
+| `google-generate-minimal-v1` | `thinkingLevel: "minimal"` (thinking unlikely, not impossible; recorded as reasoning `low`) | 512 + 8,192 |
+| `google-generate-budget-off-v1` | `thinkingBudget: 0` (off) | 512 |
+
+| Key | Model | Context / max output | Version | Notes |
+|---|---|---|---|---|
+| `google-gemini-4-carbon` | `gemini-4-carbon` | 1,048,576 / 65,536 | low | thinking levels low/medium/high |
+| `google-gemini-4-argon` | `gemini-4-argon` | 1,048,576 / 65,536 | low | low/medium/high |
+| `google-gemini-4-neon` | `gemini-4-neon` | 1,048,576 / 65,536 | low | low/medium/high/xhigh; confirm `low` live |
+| `google-gemini-4-hydrogen` | `gemini-4-hydrogen` | 1,048,576 / 65,536 | low | low/medium/high/xhigh; confirm `low` live |
+| `google-gemini-3-8-flash` | `gemini-3.8-flash` | 1,048,576 / 65,536 | low | "`minimal` is not supported and returns an error" |
+| `google-gemini-3-6-flash` | `gemini-3.6-flash` | 1,048,576 / 65,536 | minimal | |
+| `google-gemini-3-5-flash-lite` | `gemini-3.5-flash-lite` | 1,048,576 / 65,536 | minimal | |
+| `google-gemini-3-1-flash-lite` | `gemini-3.1-flash-lite` | 1,048,576 / 65,536 | minimal | |
+| `google-gemini-2-5-flash-lite` | `gemini-2.5-flash-lite` | 1,048,576 / 65,536 | budget-off | optional (spec 07 Q1); "served until further notice" |
+
+Left out: previews (`gemini-3.1-pro-preview`, `gemini-3-flash-preview`; previews get shut down), the deprecated
+`gemini-2.5-flash` and `gemini-2.5-pro` (silently routed to other models from 2026-12-01, so a record would name a
+model that did not answer), and Live, TTS, image, robotics and `-image` models. Gemini 4's page prints an output
+limit of "64K / 1M" (65,536 synchronous, up to 1,048,576 with long decode); hearings send far less.
+
+Response mapping: text = `candidates[0].content.parts[].text` where `thought !== true` (thought signatures ignored);
+`finishReason` verbatim, `MAX_TOKENS` → truncated; no candidates with `promptFeedback.blockReason` →
+`PROVIDER_BLOCKED`; `SAFETY`, `RECITATION`, `BLOCKLIST`, `PROHIBITED_CONTENT`, `SPII`, `LANGUAGE` with no text →
+`PROVIDER_BLOCKED`, with text → kept and marked truncated; `MALFORMED_RESPONSE`, `OTHER`, unspecified with no text →
+`EMPTY_OUTPUT`. Usage: `promptTokenCount` → input; `candidatesTokenCount + thoughtsTokenCount` → output (billed
+output, like the other providers' `output_tokens`; null when `candidatesTokenCount` is missing);
+`cachedContentTokenCount` → cached input (included in the prompt count; implicit caching only, this app never sends
+`cachedContent`); `thoughtsTokenCount` → reasoning; `modelVersion` → observed model.
+
+Errors (only `error.code`, `error.status` and `error.details[].reason` are read, against fixed lists; `message` is
+never read, stored or logged): 401, `authentication`, or a 400 with reason `API_KEY_INVALID`/`API_KEY_EXPIRED` →
+`PROVIDER_AUTH_FAILED`; 402 / `payment_required` and 429 `quota_exceeded` → `PROVIDER_QUOTA_EXHAUSTED`; 403 and 400
+`FAILED_PRECONDITION` → `PROVIDER_ACCESS_DENIED`; 404 / `model_not_found` → `PROVIDER_MODEL_UNAVAILABLE`; other 429 →
+`PROVIDER_RATE_LIMITED`; 500 and 503 → `PROVIDER_UNAVAILABLE`; 504 `DEADLINE_EXCEEDED` and 499 →
+`PROVIDER_UNAVAILABLE` with `definite: false` (Google may already have spent thinking tokens); other 4xx →
+`PROVIDER_REJECTED_REQUEST`.
+
+Check key: `GET https://generativelanguage.googleapis.com/v1beta/models?pageSize=1` with `x-goog-api-key` (free,
+generates nothing). 200 → valid, 401 → invalid, 403 → restricted ("make sure the key's project has the Gemini API
+turned on and billing set up"). For a Google 400 only, at most 4 KiB of the body is read and searched for the reason
+tokens `API_KEY_INVALID`/`API_KEY_EXPIRED` → invalid; anything else → unreachable. The live check must try one
+deliberately broken key (typed in the Settings form) to settle 400 vs 401.
+
+Key format: Google publishes none, so the Google card requires no prefix; it refuses keys starting `sk-` (OpenAI,
+Anthropic, OpenRouter), and the other cards refuse `AIza` (D-107).
+
+Where content goes: `store: false` asks Google not to keep requests in the project's AI Studio request logs (from
+2026-10-26, new projects log `generateContent` for 55 days by default). Google's abuse-monitoring copy cannot be
+turned off. On free-tier ("Unpaid Services") projects Google may use content to improve its products, with human
+review; Model Court cannot see a key's tier, so the key card, the Start dialog and the privacy page say so.
+
+### Live check (Avery, own terminal, paid; spec 07 §11.4)
+
+Not run. `npm run smoke:providers`, choose `google-gemini-3-6-flash` and `google-gemini-4-carbon`, mode `single`
+then `multi`; the script asks for a "Google AI Studio key" at a hidden prompt and prints `storeSent: false` and the
+observed model. Record for each route: outcome, `finishReason`, tokens in/out and reasoning, observed model,
+`responseId`, duration, truncated. Then open the project's AI Studio **Logs** page: the smoke requests must not
+appear (if they do, stop; the adapter must not be enabled). Then save the key in Settings with Check key on
+("Valid") and a deliberately broken copy, and record 400 or 401. Only after rows exist here: set `verifiedAt` and
+`multiTurnVerifiedAt` on those routes, then the deployed check (V12) with one Gemini party.
+
+| Date | Route | Mode | Outcome | Finish | Tokens in / out (reasoning) | Observed model | Logs page empty | Notes |
+|---|---|---|---|---|---|---|---|---|
+| | | | | | | | | |
+
 ## Live smoke record (fill from `npm run smoke:providers`; paid; run by you)
 
 | Date | Provider | Model | Outcome kind | finishReason | tokens in/out | Observed model | Recorded by |

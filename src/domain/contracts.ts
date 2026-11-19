@@ -365,7 +365,7 @@ export const createCredentialSchema = z.strictObject({
 export const ADMIN_KEY_PREFIXES = ['sk-admin-', 'sk-ant-admin'] as const
 
 /** Whose key a prefix shows it to be: a provider here, or OpenRouter, which Model Court does not accept. */
-export type KeyOwner = ProviderId | 'google' | 'openrouter'
+export type KeyOwner = ProviderId | 'openrouter'
 
 /**
  * Spec 07 §8.2: prefixes that show a key belongs to someone else, per card. Best-effort: a key with none
@@ -375,6 +375,8 @@ export type KeyOwner = ProviderId | 'google' | 'openrouter'
 export const FOREIGN_KEY_PREFIXES: Readonly<Record<ProviderId, ReadonlyArray<readonly [prefix: string, owner: KeyOwner]>>> = {
   openai: [['sk-ant-', 'anthropic'], ['AIza', 'google'], ['sk-or-', 'openrouter']],
   anthropic: [['AIza', 'google'], ['sk-or-', 'openrouter'], ['sk-proj-', 'openai'], ['sk-svcacct-', 'openai']],
+  // Every OpenAI, Anthropic and OpenRouter key starts with `sk-`; the more specific prefixes name the company.
+  google: [['sk-ant-', 'anthropic'], ['sk-or-', 'openrouter'], ['sk-', 'openai']],
 }
 
 /** The company a key on `provider`'s card clearly belongs to instead, or null. */

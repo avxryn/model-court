@@ -139,7 +139,7 @@ async function main() {
     const confirm = await ask(`Send 1 paid request to ${route.provider} model ${route.modelId}? [y/N] `)
     if (confirm.toLowerCase() !== 'y') continue
     // Asked per route, so a key is held only for its one request.
-    let apiKey = await ask(`${route.provider} API key (input hidden): `, true)
+    let apiKey = await ask(keyPrompt(route.provider), true)
     const timeout = AbortSignal.timeout(LIMITS.providerTimeoutMs)
     const options = conversation.requestOptions
     const outcome = await adapter(
@@ -161,8 +161,15 @@ async function main() {
     const parsed = extraction && outcome.kind === 'success' ? parseOutput(outcome.text) : null
     const schemaIssues = parsed?.status === 'parsed' ? validateAgainstSchema(SMOKE_SCHEMA, parsed.value) : null
     const structured = parsed ? { parsed: parsed.status === 'parsed', fitsSchema: schemaIssues !== null && schemaIssues.length === 0, issues: schemaIssues ?? [] } : undefined
-    console.log(JSON.stringify({ date, routeKey: route.key, provider: route.provider, mode, messageCount: conversation.messages.length, modelId: route.modelId, adapterVersion, structured, outcome: { ...outcome, text: outcome.kind === 'success' ? outcome.text.slice(0, 400) : undefined } }, null, 2))
+    // Spec 07 §6.7: for Google, say that `store: false` went with the request; `observedModel` is in the outcome.
+    const google = route.provider === 'google' ? { storeSent: false, observedModel: outcome.kind === 'success' ? outcome.observedModel : null } : {}
+    console.log(JSON.stringify({ date, routeKey: route.key, provider: route.provider, mode, messageCount: conversation.messages.length, modelId: route.modelId, adapterVersion, ...google, structured, outcome: { ...outcome, text: outcome.kind === 'success' ? outcome.text.slice(0, 400) : undefined } }, null, 2))
   }
+}
+
+/** The hidden key prompt names the provider's own key (spec 07 §6.7). Never argv or env. */
+function keyPrompt(provider: (typeof MODEL_ROUTES)[number]['provider']): string {
+  return provider === 'google' ? 'Google AI Studio key (input hidden): ' : `${provider === 'openai' ? 'OpenAI' : 'Anthropic'} API key (input hidden): `
 }
 
 /** Mode `tools`: up to 3 paid steps on one route, answered by the Worker's own mock answerer. */
@@ -175,7 +182,7 @@ async function toolLoop(route: (typeof MODEL_ROUTES)[number]) {
   }
   const confirm = await ask(`Send UP TO 3 paid requests to ${route.provider} model ${route.modelId}? [y/N] `)
   if (confirm.toLowerCase() !== 'y') return
-  let apiKey = await ask(`${route.provider} API key (input hidden): `, true)
+  let apiKey = await ask(keyPrompt(route.provider), true)
   const prompt = buildToolsV1({ systemPrompt: 'You are a support agent. Use the tools to check facts before you answer.', prompt: { reference: '', input: 'Where is my order A-1042? If it is late, refund the shipping.' }, settings: {} })
   const history: Array<{ replay: StepReplay; results: Array<{ output: string; isError: boolean }> }> = []
   const steps: unknown[] = []

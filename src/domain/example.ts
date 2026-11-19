@@ -62,7 +62,8 @@ export function makeExampleDraft(newId: () => string, modelKeys: readonly [strin
 }
 
 /** A new case starts on the low-cost pair when it can run; registry order would put the priciest model first (D-48). */
-const PREFERRED_DEFAULTS: Record<ModelRoute['provider'], string> = { openai: 'openai-gpt-6-luna', anthropic: 'anthropic-claude-haiku-5-5' }
+// The default new draft stays OpenAI against Anthropic; Google's entry only satisfies the type (spec 07 §6.2).
+const PREFERRED_DEFAULTS: Record<ModelRoute['provider'], string> = { openai: 'openai-gpt-6-luna', anthropic: 'anthropic-claude-haiku-5-5', google: 'google-gemini-3-6-flash' }
 
 export function defaultModelKeys(routes: readonly ModelRoute[]): [string, string] {
   const pick = (provider: ModelRoute['provider']) => {

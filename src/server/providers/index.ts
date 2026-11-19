@@ -2,6 +2,7 @@ import { ADAPTER_PROFILES, adapterProfile, type AdapterFeatures, type AdapterVer
 import { makeAnthropicAdapter } from './anthropic'
 import type { Adapter } from './common'
 import { allowlistedFetch } from './endpoints'
+import { makeGoogleAdapter } from './google'
 import { makeOpenAiAdapter } from './openai'
 
 export interface AdapterEntry {
@@ -40,6 +41,9 @@ const transports: Record<AdapterVersion, Adapter> = {
   'anthropic-messages-tool-loop-v1': noSingleCall,
   'anthropic-messages-between-tools-tool-loop-v1': noSingleCall,
   'anthropic-messages-adaptive-low-tool-loop-v1': noSingleCall,
+  'google-generate-low-v1': makeGoogleAdapter('low'),
+  'google-generate-minimal-v1': makeGoogleAdapter('minimal'),
+  'google-generate-budget-off-v1': makeGoogleAdapter('budget-off'),
 }
 
 /**

@@ -53,7 +53,8 @@ describe('tool-loop adapter versions (spec 06 §6.1)', () => {
     for (const [old, next] of Object.entries(TOOL_SUCCESSOR) as Array<[AdapterVersion, AdapterVersion]>) {
       expect(ADAPTER_PROFILES[next]).toEqual({ ...ADAPTER_PROFILES[old], toolUse: true })
     }
-    for (const route of MODEL_ROUTES) expect(adapterVersionFor(route.adapterVersion, { toolUse: true }), route.key).toBe(TOOL_SUCCESSOR[route.adapterVersion as AdapterVersion])
+    // Spec 07 (D-108): Gemini routes have no tool loop.
+    for (const route of MODEL_ROUTES) expect(adapterVersionFor(route.adapterVersion, { toolUse: true }), route.key).toBe(route.provider === 'google' ? null : TOOL_SUCCESSOR[route.adapterVersion as AdapterVersion])
     expect(adapterVersionFor('openai-responses-tool-loop-v1', {})).toBeNull()
     expect(adapterVersionFor('openai-responses-v1', { toolUse: true })).toBeNull()
   })

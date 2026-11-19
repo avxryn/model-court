@@ -41,13 +41,13 @@ describe('ADAPTERS keyed by adapter version (D-48)', () => {
 
   it('never hands one provider’s key to another provider’s transport', () => {
     for (const version of ADAPTER_VERSIONS) {
-      const other = PROVIDERS.find((provider) => provider !== ADAPTER_PROFILES[version].provider)!
-      expect(adapterFor(version, other, 1), version).toBeNull()
+      for (const other of PROVIDERS.filter((provider) => provider !== ADAPTER_PROFILES[version].provider)) expect(adapterFor(version, other, 1), `${version} ${other}`).toBeNull()
     }
   })
 
   it('sends each route to its provider’s fixed endpoint with that route’s request profile', async () => {
-    for (const route of MODEL_ROUTES) {
+    // Gemini routes have their own golden bodies in adapters-google.test.ts.
+    for (const route of MODEL_ROUTES.filter((r) => r.provider !== 'google')) {
       const reply = route.provider === 'openai' ? openAiReply : anthropicReply
       const { sent, fetchFn } = capture(reply)
       const outcome = await adapterFor(route.adapterVersion, route.provider, 1)!(fetchFn, request(route.modelId), never)

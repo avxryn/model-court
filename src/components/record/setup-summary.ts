@@ -172,6 +172,9 @@ export function setupSentence(tally: Pick<Tally, 'outcome' | 'leader' | 'parties
   return parts.length ? parts.join(' ') : 'Not enough recorded usage to compare cost or speed.'
 }
 
-export function priceSources(sources: Record<ProviderId, string>): Array<{ name: string; url: string }> {
-  return (Object.keys(sources) as ProviderId[]).map((provider) => ({ name: PROVIDER_NAMES[provider], url: sources[provider] }))
+export function priceSources(sources: Partial<Record<ProviderId, string>>): Array<{ name: string; url: string }> {
+  return (Object.keys(sources) as ProviderId[]).flatMap((provider) => {
+    const url = sources[provider]
+    return url ? [{ name: PROVIDER_NAMES[provider], url }] : []
+  })
 }

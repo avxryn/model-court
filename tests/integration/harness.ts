@@ -60,7 +60,19 @@ export const anthropicOk = (text = 'Yes — the policy allows returns within 30 
     { status: 200, headers: { 'content-type': 'application/json', 'request-id': 'req_anthropic_test' } },
   )
 
-export const okStub: ProviderStub = async (call) => (call.url.includes('openai') ? openAiOk() : anthropicOk())
+/** Spec 07: a Gemini `generateContent` answer (no request-ID header; the body carries `responseId`). */
+export const googleOk = (text = 'Returns are accepted within 30 days if you have the receipt.') =>
+  new Response(
+    JSON.stringify({
+      candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 125, candidatesTokenCount: 18, thoughtsTokenCount: 30 },
+      modelVersion: 'gemini-3.6-flash-001',
+      responseId: 'resp_google_test',
+    }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  )
+
+export const okStub: ProviderStub = async (call) => (call.url.includes('openai') ? openAiOk() : call.url.includes('googleapis') ? googleOk() : anthropicOk())
 
 /**
  * Storage under test. Default: local D1 (wrangler getPlatformProxy).
