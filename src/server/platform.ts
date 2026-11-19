@@ -12,6 +12,7 @@ import { parseConfig } from './config'
 import type { Deps } from './deps'
 import { GENERATION_JOB_TYPE } from './services/generation'
 import { GRADING_JOB_TYPE } from './services/special-master'
+import { TOOL_STEP_JOB_TYPE } from './services/tool-loop'
 import { SqlBatchDatabase } from './db/sql-batch-database'
 import { storeStub, type ModelCourtStore } from './db/store-object'
 
@@ -57,6 +58,8 @@ export function platformDeps(env: Env): Deps {
     // IDs only; maxAttempts 1 — an explicit user retry creates a new application attempt.
     enqueueGeneration: (job) => enqueueJob(env.JOB_ROOMS, `app:${env.DEEPSPACE_APP_ID}`, GENERATION_JOB_TYPE, job, { maxAttempts: 1 }),
     enqueueGrading: (job) => enqueueJob(env.JOB_ROOMS, `app:${env.DEEPSPACE_APP_ID}`, GRADING_JOB_TYPE, job, { maxAttempts: 1 }),
+    // Spec 06 §7.3: one job per tool step, IDs only, never retried by the queue.
+    enqueueToolStep: (job) => enqueueJob(env.JOB_ROOMS, `app:${env.DEEPSPACE_APP_ID}`, TOOL_STEP_JOB_TYPE, job, { maxAttempts: 1 }),
     publishNotices: async (notices) => {
       const now = Date.now()
       await Promise.all(

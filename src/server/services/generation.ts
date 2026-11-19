@@ -22,6 +22,7 @@ import type { PromptSource } from '../../domain/grounded/sources'
 import { attemptStillCurrent, CredentialUnusable, withRunCredential } from './credentials'
 // Function-only cycle (runs.ts imports this module too); nothing runs at import time.
 import { autoOpenReview } from './runs'
+import { handleToolAttemptJob, isToolHearing } from './tool-loop'
 
 class AttemptFenced extends Error {}
 class DocumentUnavailable extends Error {}
@@ -107,7 +108,7 @@ export async function dispatchOutbox(deps: Deps, runId?: string): Promise<number
 // Job handler
 // ---------------------------------------------------------------------------
 
-interface ClaimContext {
+export interface ClaimContext {
   runId: string
   provider: ProviderId
   caseKey: string
@@ -136,12 +137,15 @@ async function loadClaimContext(db: D1Database, job: GenerationJob): Promise<Cla
   }
 }
 
-export type JobOutcome = 'not_claimed' | 'succeeded' | 'failed' | 'uncertain' | 'stale'
+/** `continued`: a tool step committed and created the next step (spec 06 §7.5). */
+export type JobOutcome = 'not_claimed' | 'succeeded' | 'failed' | 'uncertain' | 'stale' | 'continued'
 
 export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSignal: AbortSignal, requestId: string): Promise<JobOutcome> {
   const db = deps.db
   const context = await loadClaimContext(db, job)
   if (!context) return 'not_claimed'
+  // Spec 06 §7 (D-101): a tool hearing's attempt is a loop of steps with their own claims and fences.
+  if (isToolHearing(context.snapshot)) return handleToolAttemptJob(deps, job, context, jobSignal, requestId)
 
   const claimedAt = deps.now()
   const attemptId = deps.newId()
@@ -380,7 +384,7 @@ export async function reconcileLeases(deps: Deps, runId?: string): Promise<numbe
   const expired = await db
     .prepare(
       `SELECT a.id, a.fence_token, a.generation_id, a.attempt_no, g.run_id FROM generation_attempts a JOIN generations g ON g.id = a.generation_id
-       WHERE a.status = 'running' AND a.deadline_at <= ? AND (? IS NULL OR g.run_id = ?) LIMIT 50`,
+       WHERE a.status = 'running' AND a.kind = 'single' AND a.deadline_at <= ? AND (? IS NULL OR g.run_id = ?) LIMIT 50`,
     )
     .bind(now, runId ?? null, runId ?? null)
     .all<{ id: string; fence_token: string; generation_id: string; attempt_no: number; run_id: string }>()
@@ -390,7 +394,8 @@ export async function reconcileLeases(deps: Deps, runId?: string): Promise<numbe
       await runGuarded(
         db,
         'attempt.lease_expired',
-        cond(`EXISTS (SELECT 1 FROM generation_attempts WHERE id = ? AND fence_token = ? AND status = 'running' AND deadline_at <= ?)`, attempt.id, attempt.fence_token, now),
+        // A tool attempt waits between steps with nothing in flight; its steps have their own leases (spec 06 §7.6).
+        cond(`EXISTS (SELECT 1 FROM generation_attempts WHERE id = ? AND fence_token = ? AND status = 'running' AND kind = 'single' AND deadline_at <= ?)`, attempt.id, attempt.fence_token, now),
         [
           // Send cannot be proven absent: the reservation stays consumed.
           db.prepare(`UPDATE generation_attempts SET status = 'uncertain', error_code = 'PROVIDER_LEASE_EXPIRED', finished_at = ? WHERE id = ?`).bind(now, attempt.id),

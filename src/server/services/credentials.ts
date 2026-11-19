@@ -17,6 +17,8 @@ import type { Deps } from '../deps'
 import { ApiError, notFound, revisionConflict } from '../http'
 import { checkProviderKey, type KeyCheckOutcome, type KeyCheckResult } from '../providers/key-check'
 import { idempotent } from '../receipts'
+// Function-only cycle (tool-loop.ts imports this module); nothing runs at import time.
+import { revokeIdleToolLoopsStatements, stopToolLoopsStatements } from './tool-loop'
 
 export interface CredentialMetadata {
   id: string
@@ -99,6 +101,10 @@ export function revokeCredentialStatements(deps: Deps, credentialId: string, now
     db
       .prepare(`UPDATE generations SET status = 'failed', last_error_code = 'CREDENTIAL_REVOKED', updated_at = ? WHERE status = 'pending' AND id IN (${pinned})`)
       .bind(now, credentialId),
+    // Spec 06 §7.7 (D-101): a tool loop waiting between steps had nothing in flight, so it fails; then
+    // its unclaimed steps are released and closed, and a step in flight becomes uncertain below.
+    ...revokeIdleToolLoopsStatements(db, pinned, [credentialId], now),
+    ...stopToolLoopsStatements(db, pinned, [credentialId], 'CREDENTIAL_REVOKED', 'uncertain', now),
     // In-flight requests may still complete and be charged; their output will be rejected.
     db
       .prepare(`UPDATE generation_attempts SET status = 'uncertain', error_code = 'CREDENTIAL_REVOKED', finished_at = ? WHERE status = 'running' AND generation_id IN (${pinned})`)

@@ -52,10 +52,28 @@ export function quotaStanding(caps: CallCaps, usage: CallUsage, now: number): Qu
   }
 }
 
-/** Paid calls a draft plans: questions × generated parties × samples (D-65). Imported parties make none. */
+/**
+ * Paid calls one answer of a question may make: 1, or a tool question's step cap (spec 06 §7.1,
+ * D-99), read from its kit fields so the browser and admission count alike.
+ */
+export function callsPerAnswer(testCase: unknown): number {
+  const fields = (testCase as { kitFields?: { kind?: string; maxSteps?: unknown } } | null)?.kitFields
+  return fields?.kind === 'tools' && typeof fields.maxSteps === 'number' ? fields.maxSteps : 1
+}
+
+/**
+ * Paid calls a draft plans: per question, generated parties × samples (D-65) × calls per answer.
+ * Imported parties make none. For a tool hearing this is the upper bound (`plannedCallsAreUpperBound`).
+ */
 export function plannedCalls(draft: { cases: readonly unknown[]; configurations: ReadonlyArray<{ kind?: string }>; samplesPerAnswer?: number }): number {
   const generated = draft.configurations.filter((configuration) => configuration.kind !== 'imported').length
-  return draft.cases.length * generated * (generated > 0 ? (draft.samplesPerAnswer ?? 1) : 1)
+  const perAnswer = draft.cases.reduce<number>((sum, testCase) => sum + callsPerAnswer(testCase), 0)
+  return perAnswer * generated * (generated > 0 ? (draft.samplesPerAnswer ?? 1) : 1)
+}
+
+/** Spec 06 §5.2: a tool question's calls are a cap, not an exact count. */
+export function plannedCallsAreUpperBound(draft: { cases: readonly unknown[] }): boolean {
+  return draft.cases.some((testCase) => callsPerAnswer(testCase) > 1)
 }
 
 /**

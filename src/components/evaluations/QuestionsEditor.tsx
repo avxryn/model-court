@@ -19,6 +19,7 @@ import type { CaseInput } from '@/domain/contracts'
 import { EXTRACTION_DEFAULT_INPUT } from '@/domain/kits/extraction'
 import { GROUNDED_DEFAULT_FIELDS } from '@/domain/kits/grounded'
 import { GENERAL_V1 } from '@/domain/kits/general'
+import { blankToolTask } from '@/domain/tools/task'
 import type { TaskKit } from '@/domain/kits/types'
 import { LIMITS } from '@/domain/limits'
 import { plural } from '@/lib/format'
@@ -62,7 +63,7 @@ export function QuestionsEditor({ cases, onChange, errors, newId, disabled, kit 
       <Button
         variant="outline"
         disabled={cases.length >= LIMITS.maxCases}
-        onClick={() => onChange([...cases, { key: newId(), title: `Question ${cases.length + 1}`, input: kit.family === 'extraction' ? EXTRACTION_DEFAULT_INPUT : '', reference: '', expectedBehavior: kit.defaultJuryInstructions ?? '', ...(kit.family === 'extraction' ? { kitFields: { kind: 'extraction' as const } } : kit.family === 'grounded' ? { kitFields: { ...GROUNDED_DEFAULT_FIELDS } } : {}) }])}
+        onClick={() => onChange([...cases, { key: newId(), title: `Question ${cases.length + 1}`, input: kit.family === 'extraction' ? EXTRACTION_DEFAULT_INPUT : '', reference: '', expectedBehavior: kit.defaultJuryInstructions ?? '', ...(kit.family === 'extraction' ? { kitFields: { kind: 'extraction' as const } } : kit.family === 'grounded' ? { kitFields: { ...GROUNDED_DEFAULT_FIELDS } } : kit.family === 'tools' ? { kitFields: blankToolTask() } : {}) }])}
       >
         <Plus aria-hidden /> Add a question ({cases.length}/{LIMITS.maxCases})
       </Button>
@@ -99,12 +100,12 @@ function QuestionFields({ testCase, index, errors, onChange, kit, kitSettings }:
       />
       {!documentKit && !sourcesKit && <CountedField
         id={id('reference')}
-        label={kit.family === 'summarization' ? 'Document (exhibit, sent to the models)' : kit.family === 'classification' ? 'Context (exhibit, sent to the models)' : 'Exhibit: reference evidence (sent to the models)'}
+        label={kit.family === 'summarization' ? 'Document (exhibit, sent to the models)' : kit.family === 'classification' || kit.family === 'tools' ? 'Context (exhibit, sent to the models)' : 'Exhibit: reference evidence (sent to the models)'}
         multiline
         rows={4}
         value={testCase.reference}
         max={LIMITS.caseReference.max}
-        hint={kit.family === 'summarization' ? 'The text to summarize. Required to start a hearing.' : kit.family === 'classification' ? 'Optional, for example a routing policy.' : 'May be empty to test abstention.'}
+        hint={kit.family === 'summarization' ? 'The text to summarize. Required to start a hearing.' : kit.family === 'classification' ? 'Optional, for example a routing policy.' : kit.family === 'tools' ? 'Optional, for example a refund policy the assistant follows.' : 'May be empty to test abstention.'}
         error={error('reference')}
         onChange={(reference) => onChange({ reference })}
       />}

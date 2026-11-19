@@ -12,6 +12,7 @@ import type { CaseInput } from '../contracts'
 import type { PromptSource } from '../grounded/sources'
 import type { MessageTemplateVersion } from '../messages'
 import type { RubricVersion } from '../rubric'
+import type { JurorToolTrace } from '../tools/trace'
 
 export type KitFamily = 'general' | 'summarization' | 'classification' | 'extraction' | 'grounded' | 'tools'
 
@@ -32,7 +33,13 @@ export type OutputContract =
  * The finished testimony a check sees: its content and nothing else. Items 4 and 6 add variants
  * ({ kind: 'json'; text; parsed } and { kind: 'toolTrace'; trace }). Never provider metadata.
  */
-export type Testimony = { kind: 'text'; text: string }
+export type Testimony =
+  | { kind: 'text'; text: string }
+  /**
+   * Spec 06 (D-99): a tool hearing's testimony. `text` is the final answer ('' when none); `trace`
+   * is the juror projection (`jurorTrace`), so checks see exactly what jurors see.
+   */
+  | { kind: 'toolTrace'; text: string; trace: JurorToolTrace }
 
 /** The question as a check sees it: the snapshot case, including reviewer-only answer keys. */
 export type CheckCase = Pick<CaseInput, 'key' | 'input' | 'reference' | 'expectedBehavior' | 'kitFields'>
@@ -117,6 +124,8 @@ export type KitJurorCaseView =
   | { kind: 'extraction'; fields: Array<{ label: string; mustFill: boolean }> }
   /** Spec 05 §3 (D-92): the judge's grounding key, the same for every party. */
   | { kind: 'grounded'; answerable: 'yes' | 'partly' | 'no'; requiredSources: number[] }
+  /** Spec 06 §3 (D-99): the tools every party could call and the step cap. Never canned responses or expectations. */
+  | { kind: 'tools'; tools: Array<{ name: string; description: string; parameters: Record<string, unknown> }>; maxSteps: number }
 
 export type KitReadinessIssue =
   | { kind: 'kit_input_unsupported'; caseKey: string; inputKind: InputKind; kitVersion: string }
@@ -126,6 +135,8 @@ export type KitReadinessIssue =
   | { kind: 'kit_sources_missing'; caseKey: string; kitVersion: string }
   /** Spec 05 §4.4: a required source number the question no longer has. */
   | { kind: 'kit_required_source_unknown'; caseKey: string; kitVersion: string; number: number }
+  /** Spec 06 (D-99): a tool-use question without tools. */
+  | { kind: 'kit_tools_missing'; caseKey: string; kitVersion: string }
 
 export interface KitMetricInput<S> {
   settings: S

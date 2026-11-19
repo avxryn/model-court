@@ -5,6 +5,7 @@
 
 import type { CaseInput, DraftInput } from '@/domain/contracts'
 import { GROUNDED_DEFAULT_FIELDS } from '@/domain/kits/grounded'
+import { blankToolTask } from '@/domain/tools/task'
 import { DEFAULT_KIT_VERSION, inputKindOf, kitFor } from '@/domain/kits/registry'
 import type { TaskKit } from '@/domain/kits/types'
 import { plural } from '@/lib/format'
@@ -16,7 +17,7 @@ export interface KitSwitch {
 }
 
 function fieldsName(kind: string): string {
-  return kind === 'summarization' ? 'required points and phrases to avoid' : kind === 'classification' ? 'answer keys' : kind === 'grounded' ? 'grounding keys' : 'task-kit fields'
+  return kind === 'summarization' ? 'required points and phrases to avoid' : kind === 'classification' ? 'answer keys' : kind === 'grounded' ? 'grounding keys' : kind === 'tools' ? 'tools and expectations' : 'task-kit fields'
 }
 
 /** The draft after choosing `version`, and what that removes. Choosing General answers removes `kit` and every `kitFields`. */
@@ -29,7 +30,8 @@ export function switchKit(draft: DraftInput, version: string): KitSwitch {
   const otherFields = draft.cases.filter((testCase) => testCase.kitFields && (testCase.kitFields as { kind: string }).kind !== kit.family)
   // A document or sources kit's question is plain text plus material stored beside it (specs 04, 05).
   const beside = kit.inputKinds.includes('document') || kit.inputKinds.includes('sources')
-  const takes = (testCase: CaseInput) => kit.inputKinds.includes(inputKindOf(testCase)) || (inputKindOf(testCase) === 'text' && beside)
+  // Spec 06: a tools kit's question is plain text (its exhibit kept as context) plus its tool task.
+  const takes = (testCase: CaseInput) => kit.inputKinds.includes(inputKindOf(testCase)) || (inputKindOf(testCase) === 'text' && (beside || kit.inputKinds.includes('tools')))
   const conversations = draft.cases.filter((testCase) => !takes(testCase))
   const removals: string[] = []
   const kinds = [...new Set(otherFields.map((testCase) => (testCase.kitFields as { kind: string }).kind))]
@@ -57,6 +59,8 @@ export function switchKit(draft: DraftInput, version: string): KitSwitch {
     if (beside && next.reference !== '') next = { ...next, reference: '' }
     // Spec 05: every grounded question starts with the default key (the sources answer it, none required).
     if (kit.family === 'grounded' && !next.kitFields) next = { ...next, kitFields: { ...GROUNDED_DEFAULT_FIELDS } }
+    // Spec 06: every tool-use question starts with one blank tool the judge fills in.
+    if (kit.family === 'tools' && !next.kitFields) next = { ...next, kitFields: blankToolTask() }
     return next
   })
   // A rubric the judge never chose (absent, or the previous kit's default) follows the kit.

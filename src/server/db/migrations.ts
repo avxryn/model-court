@@ -684,6 +684,86 @@ export const MIGRATIONS: Migration[] = [
        BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_RUN_SOURCES'); END`,
     ],
   },
+  {
+    // Spec 06 §4.3 (D-101): the tool loop. One attempt either makes one call ('single', every hearing
+    // so far) or runs a loop of up to six provider calls, each a `generation_steps` row with its own
+    // fence, lease and commit; one reserved budget unit per planned call (`step_reservations`); and a
+    // step outbox for steps 2..N (step 1 keeps the attempt's `outbox` row and `mc.generate` job).
+    // Additive only: `generation_attempts` gains columns (no rebuild, which would cascade into its
+    // children); existing rows read kind 'single'.
+    id: '0014_tool_steps',
+    statements: [
+      `ALTER TABLE generation_attempts ADD COLUMN kind TEXT NOT NULL DEFAULT 'single' CHECK (kind IN ('single','tool_loop'))`,
+      // The normalized trace (tool-trace-v1), written once in the attempt's final commit.
+      `ALTER TABLE generation_attempts ADD COLUMN trace_json TEXT CHECK (trace_json IS NULL OR json_valid(trace_json))`,
+      `ALTER TABLE generation_attempts ADD COLUMN steps_used INTEGER CHECK (steps_used IS NULL OR steps_used BETWEEN 0 AND 6)`,
+      immutable('generation_attempts', 'trace_json, steps_used', "OLD.status <> 'running'"),
+      immutable('generation_attempts', 'kind'),
+      `CREATE TABLE generation_steps (
+        id TEXT PRIMARY KEY,
+        attempt_id TEXT NOT NULL REFERENCES generation_attempts(id) ON DELETE CASCADE,
+        generation_id TEXT NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        step_no INTEGER NOT NULL CHECK (step_no BETWEEN 1 AND 6),
+        status TEXT NOT NULL CHECK (status IN ('pending','running','succeeded','failed','uncertain','canceled')),
+        fence_token TEXT UNIQUE,
+        claimed_at INTEGER,
+        deadline_at INTEGER,
+        finished_at INTEGER,
+        queue_wait_ms INTEGER CHECK (queue_wait_ms IS NULL OR queue_wait_ms >= 0),
+        stop_kind TEXT CHECK (stop_kind IS NULL OR stop_kind IN ('tool_calls','answer')),
+        text TEXT,
+        calls_json TEXT CHECK (calls_json IS NULL OR json_valid(calls_json)),
+        replay_json TEXT CHECK (replay_json IS NULL OR json_valid(replay_json)),
+        finish_reason TEXT,
+        input_tokens INTEGER CHECK (input_tokens IS NULL OR input_tokens >= 0),
+        output_tokens INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0),
+        cached_input_tokens INTEGER CHECK (cached_input_tokens IS NULL OR cached_input_tokens >= 0),
+        reasoning_tokens INTEGER CHECK (reasoning_tokens IS NULL OR reasoning_tokens >= 0),
+        duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0),
+        error_code TEXT,
+        provider_request_id TEXT,
+        observed_model TEXT,
+        truncated INTEGER NOT NULL DEFAULT 0 CHECK (truncated IN (0,1)),
+        created_at INTEGER NOT NULL,
+        UNIQUE (attempt_id, step_no)
+      )`,
+      `CREATE INDEX generation_steps_by_status_deadline ON generation_steps(status, deadline_at)`,
+      `CREATE INDEX generation_steps_by_generation ON generation_steps(generation_id, attempt_no, step_no)`,
+      immutable('generation_steps', 'text, calls_json, status, finish_reason, stop_kind', "OLD.status NOT IN ('pending','running')"),
+      immutable('generation_steps', 'attempt_id, generation_id, attempt_no, step_no', 'NEW.attempt_id IS NOT OLD.attempt_id OR NEW.generation_id IS NOT OLD.generation_id OR NEW.attempt_no IS NOT OLD.attempt_no OR NEW.step_no IS NOT OLD.step_no'),
+      // Provider-native replay data may only be dropped once the step is finished, never rewritten.
+      `CREATE TRIGGER generation_steps_replay_immutable BEFORE UPDATE OF replay_json ON generation_steps
+       FOR EACH ROW WHEN OLD.status NOT IN ('pending','running') AND NEW.replay_json IS NOT NULL
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_GENERATION_STEPS'); END`,
+      // One row per reserved provider call; keyed by generation because it exists before the attempt.
+      `CREATE TABLE step_reservations (
+        generation_id TEXT NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        step_no INTEGER NOT NULL CHECK (step_no BETWEEN 1 AND 6),
+        actor_subject TEXT NOT NULL,
+        global_subject TEXT NOT NULL,
+        lifetime_subject TEXT NOT NULL,
+        window_start INTEGER NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('reserved','consumed','released')),
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (generation_id, attempt_no, step_no)
+      )`,
+      `CREATE TABLE step_outbox (
+        id TEXT PRIMARY KEY,
+        step_id TEXT NOT NULL UNIQUE REFERENCES generation_steps(id) ON DELETE CASCADE,
+        generation_id TEXT NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
+        status TEXT NOT NULL CHECK (status IN ('pending','dispatched','claimed','terminal')),
+        job_id TEXT,
+        dispatch_count INTEGER NOT NULL DEFAULT 0 CHECK (dispatch_count >= 0),
+        next_dispatch_at INTEGER NOT NULL,
+        last_error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX step_outbox_by_status ON step_outbox(status, next_dispatch_at)`,
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`

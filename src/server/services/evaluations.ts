@@ -12,6 +12,7 @@ import { LIMITS } from '../../domain/limits'
 import type { RunStatus } from '../../domain/transitions'
 import { loadEvaluationAccess, requireOwner, type EvaluationRow } from '../access'
 import { auditStatement, cond, GuardFailed, releaseReservations, runGuarded } from '../db/sql'
+import { stopToolLoopsStatements } from './tool-loop'
 import type { Deps } from '../deps'
 import { ApiError, revisionConflict } from '../http'
 import { parseOutput } from '../../domain/extraction/render'
@@ -347,6 +348,10 @@ export async function deleteEvaluation(deps: Deps, userId: string, evaluationId:
         ...releaseReservations(db, cond(`r.generation_id IN (${pendingGenerations})`, evaluationId), 'reserved', now),
         db.prepare(`UPDATE outbox SET status = 'terminal', last_error_code = 'DELETED', updated_at = ? WHERE status IN ('pending','dispatched') AND generation_id IN (SELECT id FROM generations WHERE run_id IN (${runIds}))`).bind(now, evaluationId),
         db.prepare(`UPDATE generations SET status = 'canceled', last_error_code = 'DELETED', updated_at = ? WHERE status = 'pending' AND run_id IN (${runIds})`).bind(now, evaluationId),
+        // Spec 06 §7.7 (D-101): tool loops stop; unclaimed steps were never sent, so their units are released.
+        ...stopToolLoopsStatements(db, `SELECT id FROM generations WHERE run_id IN (${runIds})`, [evaluationId], 'DELETED', 'canceled', now),
+        db.prepare(`UPDATE generations SET status = 'canceled', last_error_code = 'DELETED', updated_at = ? WHERE status = 'running' AND run_id IN (${runIds}) AND EXISTS (SELECT 1 FROM generation_attempts a WHERE a.generation_id = generations.id AND a.kind = 'tool_loop' AND a.status = 'running')`).bind(now, evaluationId),
+        db.prepare(`UPDATE generation_attempts SET status = 'canceled', error_code = 'DELETED', finished_at = ? WHERE kind = 'tool_loop' AND status = 'running' AND generation_id IN (SELECT id FROM generations WHERE run_id IN (${runIds}))`).bind(now, evaluationId),
         db.prepare(`UPDATE runs SET status = 'canceled', canceled_at = ?, updated_at = ?, revision = revision + 1 WHERE evaluation_id = ? AND status IN ('generating','ready')`).bind(now, now, evaluationId),
         // Special master (D-40): queued grader calls were never sent, so their units are released; in-flight ones are fenced out.
         ...releaseReservations(db, cond(`r.grader_item_id IN (SELECT i.id FROM grader_items i JOIN grader_runs g ON g.id = i.grader_run_id WHERE i.status = 'pending' AND g.run_id IN (${runIds}))`, evaluationId), 'reserved', now, 'grader_reservations'),

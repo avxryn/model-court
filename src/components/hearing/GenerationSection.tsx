@@ -141,6 +141,8 @@ function GenerationTable({ run, selected, onToggle }: { run: OwnerRunView; selec
                   <div className="mt-1 text-xs text-muted-foreground tabular-nums">
                     Attempt {g.attemptCount}/2 · {formatDuration(g.durationMs)}
                   </div>
+                  {/* Spec 06 §3 (D-103): a tool loop's progress; the cap and the real count, never tokens before unsealing. */}
+                  {g.steps && <div className="mt-1 text-xs text-muted-foreground tabular-nums">{stepLine(g.status, g.steps)}</div>}
                   {g.errorCode && <div className="mt-1 max-w-56 text-xs text-destructive">{ERROR_TEXT[g.errorCode] ?? g.errorCode}</div>}
                 </TableCell>
               )
@@ -214,6 +216,13 @@ function StaleKeyNotice({ stale }: { stale: StaleKey[] }) {
   )
 }
 
+/** "Step 2 of up to 4" while running; "Answered in 3 of up to 4 calls" when done. */
+export function stepLine(status: string, steps: { used: number; max: number }): string {
+  if (status === 'pending') return `Up to ${steps.max} ${steps.max === 1 ? 'call' : 'calls'}`
+  if (status === 'running') return `Step ${Math.max(1, steps.used)} of up to ${steps.max}`
+  return `${steps.used} of up to ${steps.max} ${steps.max === 1 ? 'call' : 'calls'} used`
+}
+
 function RetryButton({ run, selected, stale, keysLoading, busy, act, onDone }: { run: OwnerRunView; selected: Set<string>; stale: StaleKey[]; keysLoading: boolean; busy: boolean; act: Act; onDone: () => void }) {
   const uncertain = run.generations.filter((g) => selected.has(g.id) && g.status === 'uncertain').length
   const providers = new Set(run.generations.filter((g) => selected.has(g.id)).map((g) => providerOf(run, g.configurationKey)))
@@ -229,7 +238,9 @@ function RetryButton({ run, selected, stale, keysLoading, busy, act, onDone }: {
         <AlertDialogHeader>
           <AlertDialogTitle>Retry {plural(selected.size, 'generation')}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Each retry is a new paid request to your provider account and the last allowed attempt.
+            {run.generations.some((g) => selected.has(g.id) && g.steps)
+              ? `A tool-use retry starts again from step 1 and may make up to ${run.generations.filter((g) => selected.has(g.id)).reduce((sum, g) => sum + (g.steps?.max ?? 1), 0)} paid calls; the failed attempt’s earlier calls were billed. It is the last allowed attempt.`
+              : 'Each retry is a new paid request to your provider account and the last allowed attempt.'}
             {uncertain > 0 && ` ${uncertain} selected generation${uncertain === 1 ? ' has' : 's have'} an uncertain outcome: the provider may already have charged for the earlier attempt.`}
             {affected.map((key) => ` This hearing will use your current ${PROVIDER_NAMES[key.provider]} key (${key.current?.label ?? ''}) from now on, in place of the removed one.`).join('')}
           </AlertDialogDescription>

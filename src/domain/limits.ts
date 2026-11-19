@@ -117,4 +117,35 @@ export const LIMITS = {
     /** Juror reading-time hint (spec 05 §10). */
     readingWordsPerMinute: 250,
   },
+  /** Tool calling with mock tools (spec 06 §9, D-99). */
+  tools: {
+    perQuestion: 8,
+    name: 64,
+    description: { min: 1, max: 1_000 },
+    parametersBytes: 4 * 1024,
+    parametersDepth: 4,
+    parametersProperties: 24,
+    enumValues: 50,
+    responsesPerTool: 10,
+    output: { min: 1, max: 4_000 },
+    whenBytes: 1024,
+    taskBytes: 12 * 1024,
+    maxSteps: 6,
+    defaultMaxSteps: 4,
+    callsPerStep: 8,
+    callsPerTrace: 24,
+    requiredCalls: 8,
+    forbiddenTools: 8,
+    expectedAnswer: { min: 1, max: 500 },
+    /** Arguments stored per call; larger ones are invalid and keep a preview. */
+    argumentsBytes: 4 * 1024,
+    argumentsPreviewBytes: 1024,
+    /** Provider-native replay data kept per step until the attempt finishes. */
+    replayBytes: 64 * 1024,
+    traceBytes: 64 * 1024,
+    /** A step's request body, checked before it is sent. */
+    requestBodyBytes: 512 * 1024,
+    /** Validator issues reported per value. */
+    issues: 5,
+  },
 } as const

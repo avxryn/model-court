@@ -18,6 +18,7 @@ import { Page } from '@/components/layout/Page'
 import { CaseMaterial, ResponseCard } from '@/components/review/CaseEvidence'
 import { CitedTestimony } from '@/components/review/CitedTestimony'
 import { ExtractionTestimony } from '@/components/review/ExtractionTestimony'
+import { ToolTraceView } from '@/components/review/ToolTrace'
 import { PdfViewer } from '@/components/review/PdfViewer'
 import { emptyRating, RubricForm } from '@/components/review/RubricForm'
 import { isComplete, useWorksheet } from '@/components/review/use-worksheet'
@@ -187,7 +188,12 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
                 const rating = w.ratings[response.responseId] ?? emptyRating(response.responseId)
                 const form = <RubricForm label={response.label} rating={rating} onChange={w.update} disabled={!w.editable} rubricVersion={review.rubricVersion} />
                 // Spec 04 (D-88): an extraction answer shows as fields with per-field flags.
-                return response.extraction ? (
+                // Spec 06 (D-103): a tool-use answer shows as its trace; the same shape for every party.
+                return response.trace ? (
+                  <ToolTraceView key={response.responseId} label={response.label} trace={response.trace} maxSteps={current.kitView?.kind === 'tools' ? current.kitView.maxSteps : undefined}>
+                    {form}
+                  </ToolTraceView>
+                ) : response.extraction ? (
                   <ExtractionTestimony key={response.responseId} label={response.label} text={response.text} extraction={response.extraction} flags={rating.fieldFlags ?? []} disabled={!w.editable} onFlagsChange={(fieldFlags) => w.update({ ...rating, fieldFlags })}>
                     {form}
                   </ExtractionTestimony>

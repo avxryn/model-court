@@ -19,6 +19,13 @@
  * schema is the evidence for `structuredVerifiedAt` / `pdfVerifiedAt`; record it with its input
  * tokens in docs/provider-contracts.md ("Structured and PDF checks").
  *
+ * Mode `tools` (spec 06 §6.4, D-100) runs one short tool loop through the route's tool-loop
+ * version: the two tools of EXAMPLE_TOOL_TASK, mock answers from the same pure answerer the Worker
+ * uses, and a 3-step cap, so it sends UP TO 3 paid requests to the route. A trace with at least one
+ * call, its result sent back (step 2 accepted the replay) and a final answer is the evidence for
+ * `toolsVerifiedAt`; record the printed steps (finish reasons, tokens) in docs/provider-contracts.md
+ * ("Tool checks").
+ *
  * This verifies direct API access from your machine. It does not replace the
  * deployed check (V12): a real run in the deployed app with keys saved in
  * Settings.
@@ -34,7 +41,10 @@ import type { ExtractionSchema } from '../src/domain/extraction/schema'
 import { validateAgainstSchema } from '../src/domain/extraction/validate'
 import { LIMITS } from '../src/domain/limits'
 import { adapterVersionFor, MODEL_ROUTES } from '../src/domain/registry'
-import { adapterFor } from '../src/server/providers'
+import { adapterFor, toolAdapterFor, type StepReplay } from '../src/server/providers'
+import { answerCalls } from '../src/domain/tools/mock'
+import { EXAMPLE_TOOL_TASK, promptToolsOf } from '../src/domain/tools/task'
+import { buildToolsV1 } from '../src/domain/messages'
 
 /** The fixed six-field schema of the `json` and `pdf` modes (spec 04 §6.5). */
 const SMOKE_SCHEMA: ExtractionSchema = {
@@ -82,7 +92,17 @@ async function main() {
     .filter((key) => key !== '')
     .map((key) => ({ key, route: MODEL_ROUTES.find((r) => r.key === key) }))
   // "multi" sends a short conversation (D-39): its success is the evidence for a route's multiTurnVerifiedAt.
-  const answer = await ask('Mode? [single/multi/json/pdf] (blank = single): ')
+  const answer = await ask('Mode? [single/multi/json/pdf/tools] (blank = single): ')
+  if (answer === 'tools') {
+    for (const { key, route } of routes) {
+      if (!route) {
+        console.log(`Skipping unknown route ${key}`)
+        continue
+      }
+      await toolLoop(route)
+    }
+    return
+  }
   const mode = answer === 'multi' || answer === 'json' || answer === 'pdf' ? answer : 'single'
   const extraction = mode === 'json' || mode === 'pdf'
   const conversation: KitRequest | null = extraction
@@ -143,6 +163,39 @@ async function main() {
     const structured = parsed ? { parsed: parsed.status === 'parsed', fitsSchema: schemaIssues !== null && schemaIssues.length === 0, issues: schemaIssues ?? [] } : undefined
     console.log(JSON.stringify({ date, routeKey: route.key, provider: route.provider, mode, messageCount: conversation.messages.length, modelId: route.modelId, adapterVersion, structured, outcome: { ...outcome, text: outcome.kind === 'success' ? outcome.text.slice(0, 400) : undefined } }, null, 2))
   }
+}
+
+/** Mode `tools`: up to 3 paid steps on one route, answered by the Worker's own mock answerer. */
+async function toolLoop(route: (typeof MODEL_ROUTES)[number]) {
+  const adapterVersion = adapterVersionFor(route.adapterVersion, { toolUse: true })
+  const adapter = adapterVersion ? toolAdapterFor(adapterVersion, route.provider) : null
+  if (!adapter) {
+    console.log(`Skipping ${route.key}: adapter ${route.adapterVersion} has no tool-loop version`)
+    return
+  }
+  const confirm = await ask(`Send UP TO 3 paid requests to ${route.provider} model ${route.modelId}? [y/N] `)
+  if (confirm.toLowerCase() !== 'y') return
+  let apiKey = await ask(`${route.provider} API key (input hidden): `, true)
+  const prompt = buildToolsV1({ systemPrompt: 'You are a support agent. Use the tools to check facts before you answer.', prompt: { reference: '', input: 'Where is my order A-1042? If it is late, refund the shipping.' }, settings: {} })
+  const history: Array<{ replay: StepReplay; results: Array<{ output: string; isError: boolean }> }> = []
+  const steps: unknown[] = []
+  let answered = 0
+  for (let stepNo = 1; stepNo <= 3; stepNo++) {
+    const timeout = AbortSignal.timeout(LIMITS.providerTimeoutMs)
+    const outcome = await adapter(fetch, { modelId: route.modelId, system: prompt.system, user: prompt.messages[0].content, tools: promptToolsOf(EXAMPLE_TOOL_TASK), history, maxOutputTokens: LIMITS.maxOutputTokens, apiKey, signal: timeout }, timeout)
+    if (outcome.kind !== 'success') {
+      steps.push({ stepNo, outcome })
+      break
+    }
+    const results = answerCalls(EXAMPLE_TOOL_TASK, outcome.calls, answered)
+    answered += results.length
+    steps.push({ stepNo, stop: outcome.stop, finishReason: outcome.finishReason, truncated: outcome.truncated, inputTokens: outcome.inputTokens, outputTokens: outcome.outputTokens, reasoningTokens: outcome.reasoningTokens, observedModel: outcome.observedModel, text: outcome.text.slice(0, 300), calls: outcome.calls.map((call, index) => ({ name: call.name, arguments: call.argumentsRaw.slice(0, 200), answeredFrom: results[index].source })) })
+    if (outcome.stop === 'answer' || outcome.truncated) break
+    history.push({ replay: outcome.replay, results: results.map((result) => ({ output: result.output, isError: result.isError })) })
+  }
+  apiKey = ''
+  const date = new Date().toISOString().slice(0, 10)
+  console.log(JSON.stringify({ date, routeKey: route.key, provider: route.provider, mode: 'tools', modelId: route.modelId, adapterVersion, steps }, null, 2))
 }
 
 void main()

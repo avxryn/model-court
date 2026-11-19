@@ -16,6 +16,8 @@ import type { Deps } from '../deps'
 import { ApiError, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
 import { loadKitResults, withKitResults } from './checks'
+import { isToolHearing } from './tool-loop'
+import type { ToolTrace } from '../../domain/tools/trace'
 import { listRunDocuments, loadRunTextDocuments } from './documents'
 import { extractionSection, isExtractionHearing } from './extraction'
 import { listRunSources } from './sources'
@@ -38,6 +40,17 @@ interface AttemptRow {
   error_code: string | null
   truncated: number
   observed_model: string | null
+  trace_json: string | null
+}
+
+/** Spec 06 §5.4 (D-102): per-step usage of a tool attempt, after unsealing only. No provider ids. */
+export interface StepUsage {
+  stepNo: number
+  inputTokens: number | null
+  outputTokens: number | null
+  durationMs: number | null
+  finishReason: string | null
+  truncated: boolean
 }
 
 /**
@@ -56,12 +69,26 @@ export async function loadScoredRun(deps: Deps, run: RunRow) {
   const attempts = (
     await db
       .prepare(
-        `SELECT a.id, a.generation_id, a.attempt_no, a.status, a.output_text, a.finish_reason, a.input_tokens, a.output_tokens, a.cached_input_tokens, a.reasoning_tokens, a.duration_ms, a.error_code, a.truncated, a.observed_model
+        `SELECT a.id, a.generation_id, a.attempt_no, a.status, a.output_text, a.finish_reason, a.input_tokens, a.output_tokens, a.cached_input_tokens, a.reasoning_tokens, a.duration_ms, a.error_code, a.truncated, a.observed_model, a.trace_json
          FROM generation_attempts a JOIN generations g ON g.id = a.generation_id WHERE g.run_id = ? ORDER BY a.attempt_no`,
       )
       .bind(runId)
       .all<AttemptRow>()
   ).results
+  // Spec 06 (D-102): each finished step's usage, for tool hearings only.
+  const stepRows = isToolHearing(snapshot)
+    ? (
+        await db
+          .prepare(
+            `SELECT s.attempt_id, s.step_no, s.input_tokens, s.output_tokens, s.duration_ms, s.finish_reason, s.truncated
+             FROM generation_steps s JOIN generations g ON g.id = s.generation_id WHERE g.run_id = ? AND s.status = 'succeeded' ORDER BY s.step_no`,
+          )
+          .bind(runId)
+          .all<{ attempt_id: string; step_no: number; input_tokens: number | null; output_tokens: number | null; duration_ms: number | null; finish_reason: string | null; truncated: number }>()
+      ).results
+    : []
+  const stepsOf = (attemptId: string): StepUsage[] =>
+    stepRows.filter((row) => row.attempt_id === attemptId).map((row) => ({ stepNo: row.step_no, inputTokens: row.input_tokens, outputTokens: row.output_tokens, durationMs: row.duration_ms, finishReason: row.finish_reason, truncated: row.truncated === 1 }))
   const importedOutputs = (
     await db
       .prepare('SELECT configuration_key, case_key, text, text_sha256, byte_length FROM run_imported_outputs WHERE run_id = ?')
@@ -90,7 +117,7 @@ export async function loadScoredRun(deps: Deps, run: RunRow) {
     }
   })
   const configurationKeys = snapshot.configurations.map((configuration) => configuration.key)
-  return { snapshot, manifest, cohortIds, samples, generations, attempts, importedOutputs, labelled, scored, configurationKeys }
+  return { snapshot, manifest, cohortIds, samples, generations, attempts, importedOutputs, labelled, scored, configurationKeys, stepsOf }
 }
 
 type ScoredRun = Awaited<ReturnType<typeof loadScoredRun>>
@@ -180,7 +207,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
   const { run } = access
   if (run.status !== 'revealed' && run.status !== 'decided') throw stateConflict('Results are available after the judge reveals the models.')
   const loaded = await loadScoredRun(deps, run)
-  const { snapshot, manifest, samples, generations, attempts, importedOutputs, labelled, scored, configurationKeys } = loaded
+  const { snapshot, manifest, samples, generations, attempts, importedOutputs, labelled, scored, configurationKeys, stepsOf } = loaded
   const db = deps.db
 
   const coverage = Object.fromEntries(
@@ -265,6 +292,8 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
           reasoningTokens: accepted?.reasoning_tokens ?? null,
           durationMs: accepted?.duration_ms ?? null,
           observedModel: accepted?.observed_model ?? null,
+          // Spec 06 §5.4 (D-102): the full trace (which response answered each call) and per-step usage.
+          ...(accepted?.trace_json ? { trace: JSON.parse(accepted.trace_json) as ToolTrace, steps: stepsOf(accepted.id) } : {}),
           // Every sample side by side, only when the judge asked for repeats (D-65). After reveal only, like everything here.
           ...(samples > 1
             ? {

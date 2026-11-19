@@ -21,6 +21,8 @@ import { ApiError, notFound, revisionConflict, stateConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
 import { loadRunTextDocuments } from './documents'
 import { listRunSources } from './sources'
+import { isToolHearing } from './tool-loop'
+import { jurorTrace, type JurorToolTrace, type ToolTrace } from '../../domain/tools/trace'
 import { extractionSettingsOf, fieldFlagIssues, jurorAnswer, type ExtractionView } from './extraction'
 import { notifyRun } from './generation'
 import { revokeGuestStatements } from './guest-jurors'
@@ -205,7 +207,7 @@ export interface AnonymousReview {
      * `extraction` only on extraction hearings: the parsed answer as field rows (and `text` is then the
      * server's canonical JSON, never the provider's bytes), or `unparsed` with the raw text.
      */
-    responses: Array<{ responseId: string; label: 'A' | 'B' | 'C'; text: string; extraction?: ExtractionView }>
+    responses: Array<{ responseId: string; label: 'A' | 'B' | 'C'; text: string; extraction?: ExtractionView; /** Spec 06 §5.3 (D-102): tool hearings only; `text` is then the final answer ('' when none). */ trace?: JurorToolTrace }>
   }>
   ratings: DraftRating[]
 }
@@ -244,12 +246,18 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
       .all<{ id: string; text: string }>()
     for (const row of rows.results) outputs.set(`import:${row.id}`, row.text)
   }
+  // Spec 06 (D-102): a tool hearing's testimony is its trace, projected through the juror allowlist.
+  const tools = isToolHearing(snapshot)
+  const traces = new Map<string, JurorToolTrace>()
   if (attemptIds.length > 0) {
     const rows = await deps.db
-      .prepare(`SELECT id, output_text FROM generation_attempts WHERE status = 'succeeded' AND id IN (${attemptIds.map(() => '?').join(',')})`)
+      .prepare(`SELECT id, output_text, trace_json FROM generation_attempts WHERE status = 'succeeded' AND id IN (${attemptIds.map(() => '?').join(',')})`)
       .bind(...attemptIds)
-      .all<{ id: string; output_text: string }>()
-    for (const row of rows.results) outputs.set(row.id, row.output_text)
+      .all<{ id: string; output_text: string; trace_json: string | null }>()
+    for (const row of rows.results) {
+      outputs.set(row.id, row.output_text)
+      if (tools && row.trace_json) traces.set(row.id, jurorTrace(JSON.parse(row.trace_json) as ToolTrace))
+    }
   }
   const revealed = access.run.status === 'revealed' || access.run.status === 'decided'
   const extraction = extractionSettingsOf(snapshot)
@@ -283,7 +291,8 @@ export async function getReview(deps: Deps, userId: string, runId: string): Prom
         ...(sources ? { sources: (sources.get(item.caseKey) ?? []).map((source) => ({ number: source.number, title: source.title, text: source.text })) } : {}),
         responses: item.responses.map((response) => {
           const text = (response.importedOutputId ? outputs.get(`import:${response.importedOutputId}`) : response.acceptedAttemptId ? outputs.get(response.acceptedAttemptId) : undefined) ?? ''
-          return { responseId: response.responseId, label: response.label, ...(extraction ? jurorAnswer(extraction.schema, text) : { text }) }
+          const trace = tools && response.acceptedAttemptId ? traces.get(response.acceptedAttemptId) : undefined
+          return { responseId: response.responseId, label: response.label, ...(extraction ? jurorAnswer(extraction.schema, text) : { text }), ...(trace ? { trace } : {}) }
         }),
       }
     }),

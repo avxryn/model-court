@@ -156,6 +156,21 @@ Extraction hearings record each route's feature successor (`openai-responses-v3`
 | | openai | gpt-6-luna | pdf | | | | |
 | | anthropic | claude-haiku-5-5 | pdf | | | | |
 
+## Tool checks (spec 06 §6.4, D-100): pending
+
+Tool-use hearings record each route's tool-loop version (`openai-responses-tool-loop-v1`, `openai-responses-reasoning-low-tool-loop-v1`, `anthropic-messages-tool-loop-v1`, `anthropic-messages-between-tools-tool-loop-v1`, `anthropic-messages-adaptive-low-tool-loop-v1`), each its plain predecessor's reasoning profile plus `tool-protocol-v1`. One step is one non-streaming POST to the same fixed endpoint; no single-call hearing ever uses these versions, and every recorded body is unchanged.
+
+- OpenAI Responses: the plain fields (`instructions`, `max_output_tokens`, `reasoning`, `store: false`) plus `tools: [{type: "function", name, description, parameters, strict: false}]`, `tool_choice: "auto"`, `parallel_tool_calls: true`; reasoning-low routes add `include: ["reasoning.encrypted_content"]`. `input` is the `tools-v1` user message, then every earlier step's output items exactly as returned (reasoning, message, function_call; an `incomplete` call is dropped), each call followed by `{type: "function_call_output", call_id, output}` with the mock result (no error flag exists there).
+- Anthropic Messages: the plain fields plus `tools: [{name, description, input_schema}]` and `tool_choice: {type: "auto"}`; each earlier step's content blocks go back unmodified as the assistant turn (thinking and redacted-thinking blocks included), then one user turn with `{type: "tool_result", tool_use_id, content, is_error}` per call, in order. `between_tools` gets the 8,192-token headroom on tool steps (it may write progress text between calls).
+- Parsing: no text and no calls is `EMPTY_OUTPUT`; a call without an id, `pause_turn`, `server_tool_use` or any unexpected item or block is `TOOL_PROTOCOL_ERROR`; replay data over 64 KiB or a request body over 512 KiB is `TOOL_TRACE_TOO_LARGE` (the latter refused before sending); OpenAI's `max_output_tokens` incompleteness and Anthropic's `max_tokens` end the loop as "cut off" (a trailing Anthropic call without an object input is dropped).
+
+`toolsVerifiedAt` stays null until `npm run smoke:providers` succeeds in mode `tools` on that route: up to 3 paid steps with the two example tools (`lookup_order`, `refund_shipping`), answered by the Worker's own mock answerer. Evidence: at least one call, step 2 accepted the replayed step and its result, and a final answer. Record the finish reason and tokens per step, and whether `include: ["reasoning.encrypted_content"]` was accepted on a reasoning-low route. Until then a tool-use hearing is refused at Start (`tools_unverified`).
+
+| Date | Provider | Model | Steps | Stops (per step) | Replay accepted | Tokens in/out (per step) | Recorded by |
+|---|---|---|---|---|---|---|---|
+| | openai | gpt-6-luna | | | | | |
+| | anthropic | claude-haiku-5-5 | | | | | |
+
 ## Deployed check (V12): pending
 
 A real run in the deployed app, using keys saved through Settings, with the browser closed during generation.

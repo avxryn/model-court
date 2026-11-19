@@ -21,7 +21,8 @@ describe('case templates', () => {
         ? // Spec 05: the sources template's sources are saved after the draft; the server writes their references.
           { ...draft, cases: draft.cases.map((c, i) => ({ ...c, kitFields: { ...(c.kitFields as object), sources: template.sources![i].map((_, n) => ({ number: n + 1, sha256: 'a'.repeat(64), byteLength: 1 })) } })) }
         : draft
-    const routes = template.documents ? MODEL_ROUTES.map((route) => ({ ...route, structuredVerifiedAt: '2026-11-19' })) : MODEL_ROUTES
+    // Spec 06: the tool-use template's routes need a recorded live tool check (none is recorded yet).
+    const routes = template.documents ? MODEL_ROUTES.map((route) => ({ ...route, structuredVerifiedAt: '2026-11-19' })) : template.id === 'tool-use' ? MODEL_ROUTES.map((route) => ({ ...route, toolsVerifiedAt: '2026-11-19' })) : MODEL_ROUTES
     expect(readinessIssues(withDocuments as typeof draft, routes)).toEqual([])
     expect(template.documents?.length ?? draft.cases.length).toBe(draft.cases.length)
     expect(template.sources?.length ?? draft.cases.length).toBe(draft.cases.length)

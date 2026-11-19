@@ -10,12 +10,12 @@ import type { QuotaStanding } from '@/domain/quota'
 import type { CredentialMetadata, KeyCheckView } from '@/server/services/credentials'
 import type { EvaluationSummary, getEvaluation } from '@/server/services/evaluations'
 import type { getComparison } from '@/server/services/comparison'
-import type { getResults } from '@/server/services/results'
+import type { getResults, StepUsage } from '@/server/services/results'
 import type { AnonymousReview } from '@/server/services/reviews'
 import type { getRun } from '@/server/services/runs'
 import type { getSpecialMaster } from '@/server/services/special-master'
 
-export type { AnonymousReview, CredentialMetadata, EvaluationSummary, KeyCheckView }
+export type { AnonymousReview, CredentialMetadata, EvaluationSummary, KeyCheckView, StepUsage }
 
 /** GET /quota (D-57): remaining provider calls for the caller and the deployment. */
 export type QuotaView = QuotaStanding
@@ -50,6 +50,8 @@ export interface CatalogModel {
   structuredVerifiedAt: string | null
   /** A recorded live PDF call; native-PDF questions need it. */
   pdfVerifiedAt: string | null
+  /** Spec 06 (D-99): a recorded live tool-loop call; tool-use hearings need it. */
+  toolsVerifiedAt: string | null
 }
 
 export interface CatalogView {

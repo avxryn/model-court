@@ -56,6 +56,8 @@ export const BACKUP_TABLES = [
   'grader_reservations',
   'generations',
   'generation_attempts',
+  // Spec 06 (D-101): tool steps, exported without their provider-native replay data.
+  'generation_steps',
   // D-76: automatic check results (no secrets); after their parents.
   'testimony_checks',
   'review_sessions',
@@ -63,8 +65,10 @@ export const BACKUP_TABLES = [
   'verdict_revisions',
   'command_receipts',
   'outbox',
+  'step_outbox',
   'budget_buckets',
   'attempt_reservations',
+  'step_reservations',
   'rate_buckets',
   'provider_credentials',
   'run_credentials',
@@ -160,6 +164,9 @@ export async function exportSnapshot(deps: Deps): Promise<StoreSnapshot> {
       redactions.credentialReceiptsDropped = rows.length - kept.length
       rows = kept
     }
+    // Spec 06 §6.3: provider-native replay data is never exported (finished attempts hold none; a
+    // restore fences every unfinished loop anyway).
+    if (table === 'generation_steps') rows = rows.map((row) => ({ ...row, replay_json: null }))
     tables[table] = rows
   })
 

@@ -9,7 +9,9 @@ import { z } from 'zod'
 import type { CaseInput } from '../contracts'
 import { KIT_VERSIONS, KITS } from './registry'
 import { runChecks } from './runner'
-import type { CheckMaterials, TaskKit } from './types'
+import { EXAMPLE_TOOL_TASK } from '../tools/task'
+import type { JurorToolTrace } from '../tools/trace'
+import type { CheckMaterials, TaskKit, Testimony } from './types'
 
 function metadata(kit: TaskKit<unknown, unknown>) {
   return {
@@ -513,6 +515,243 @@ const PINNED: Record<string, unknown> = {
       "additionalProperties": false
     }
   },
+  'tools-v1': {
+    "version": "tools-v1",
+    "family": "tools",
+    "name": "Tool use (mock tools)",
+    "listed": true,
+    "inputKinds": [
+      "tools"
+    ],
+    "outputContract": {
+      "kind": "toolTrace"
+    },
+    "template": "tools-v1",
+    "defaultRubricVersion": "tools-trajectory-v1",
+    "defaultJuryInstructions": "Judge the whole path: did it call the right tools with sensible arguments, use what the tools returned, handle errors, stop when it was done, and give a correct final answer?",
+    "checks": [
+      {
+        "id": "required-calls",
+        "label": "Required calls made"
+      },
+      {
+        "id": "forbidden-not-called",
+        "label": "Forbidden tools not called"
+      },
+      {
+        "id": "arguments-valid",
+        "label": "Arguments valid"
+      },
+      {
+        "id": "steps-used",
+        "label": "Within the target number of calls"
+      },
+      {
+        "id": "finished",
+        "label": "Finished the task"
+      },
+      {
+        "id": "final-answer",
+        "label": "Final answer as expected"
+      }
+    ],
+    "settingsSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "caseFieldsSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "tools"
+        },
+        "tools": {
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+              },
+              "description": {
+                "type": "string"
+              },
+              "parameters": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              },
+              "responses": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "when": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "textMatch": {
+                      "type": "string",
+                      "enum": [
+                        "loose",
+                        "exact"
+                      ]
+                    },
+                    "output": {
+                      "type": "string"
+                    },
+                    "isError": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "when",
+                    "textMatch",
+                    "output",
+                    "isError"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "defaultResponse": {
+                "type": "object",
+                "properties": {
+                  "output": {
+                    "type": "string"
+                  },
+                  "isError": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "output",
+                  "isError"
+                ],
+                "additionalProperties": false
+              },
+              "errorResponse": {
+                "type": "object",
+                "properties": {
+                  "output": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "output"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "name",
+              "description",
+              "parameters",
+              "responses",
+              "defaultResponse",
+              "errorResponse"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "maxSteps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "expect": {
+          "type": "object",
+          "properties": {
+            "requiredCalls": {
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tool": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+                  },
+                  "withArguments": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "tool"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "requireOrder": {
+              "type": "boolean"
+            },
+            "forbiddenTools": {
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+              }
+            },
+            "targetSteps": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6
+            },
+            "finalAnswer": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "exact",
+                    "contains"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mode",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "requiredCalls",
+            "requireOrder",
+            "forbiddenTools"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "tools",
+        "maxSteps",
+        "expect"
+      ],
+      "additionalProperties": false
+    }
+  },
 }
 
 const extractionSettings = {"schema":{"type":"object","properties":{"vendor":{"type":"string","title":"Vendor"},"total":{"type":"number"},"po":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}}},"required":["vendor","total","tags"]},"compare":{"/total":{"tolerance":0.01}}}
@@ -540,8 +779,19 @@ const summaryCase: CaseInput = {
 const groundedCase: CaseInput = {"key":"00000000-0000-4000-8000-000000000005","title":"Refunds","input":"How long do I have?","reference":"","expectedBehavior":"Check each claim.","kitFields":{"kind":"grounded","answerable":"yes","requiredSources":[1,2],"sources":[{"number":1,"sha256":"1111111111111111111111111111111111111111111111111111111111111111","byteLength":60},{"number":2,"sha256":"2222222222222222222222222222222222222222222222222222222222222222","byteLength":40}]}} as CaseInput
 const groundedMaterials: CheckMaterials = {"sources":[{"number":1,"title":"Refunds","text":"Customers can request a refund within 30 days of purchase."},{"number":2,"title":null,"text":"Refunds go back to the original card."}]}
 
+const toolsCase: CaseInput = { key: '00000000-0000-4000-8000-000000000006', title: 'Late order', input: 'Where is order A-1042?', reference: '', expectedBehavior: 'Look it up first.', kitFields: { kind: 'tools', ...EXAMPLE_TOOL_TASK } }
+const strictToolsCase: CaseInput = { ...toolsCase, kitFields: { kind: 'tools', ...EXAMPLE_TOOL_TASK, expect: { requiredCalls: [{ tool: 'lookup_order' }], requireOrder: false, forbiddenTools: ['refund_shipping'], targetSteps: 1 } } }
+const lookupCall = { callNo: 1, tool: 'lookup_order', knownTool: true, arguments: '{\n  "order_id": "A-1042"\n}', result: { text: '{"status": "delayed"}', isError: false } }
+const refundCall = { callNo: 2, tool: 'refund_shipping', knownTool: true, arguments: '{\n  "order_id": "a-1042"\n}', result: { text: '{"refunded": 6.5}', isError: false } }
+const toolTraces: JurorToolTrace[] = [
+  { steps: [{ stepNo: 1, text: 'Checking.', calls: [lookupCall] }, { stepNo: 2, text: null, calls: [refundCall] }, { stepNo: 3, text: null, calls: [] }], finalAnswer: 'Refunded $6.50. It arrives in 3 to 5 business days.', ended: 'answered' },
+  { steps: [{ stepNo: 1, text: null, calls: [lookupCall] }, { stepNo: 2, text: 'Refunding.', calls: [{ ...refundCall, result: { notSent: true } }] }], finalAnswer: null, ended: 'step_cap' },
+  { steps: [{ stepNo: 1, text: null, calls: [{ callNo: 1, tool: 'lookup_order', knownTool: true, arguments: '(unreadable)', result: { text: '{"error": "order_id is required."}', isError: true } }, { callNo: 2, tool: 'cancel_order', knownTool: false, arguments: '{}', result: { text: 'Unknown tool "cancel_order".', isError: true } }] }, { stepNo: 2, text: null, calls: [] }], finalAnswer: 'Your order is', ended: 'truncated' },
+]
+const toolTestimony = (trace: JurorToolTrace): Testimony => ({ kind: 'toolTrace', text: trace.finalAnswer ?? '', trace })
+
 /** Fixed inputs → expected check results, per kit version. */
-const OUTPUTS: Record<string, Array<{ case: CaseInput; settings: unknown; text: string; expected: unknown; materials?: CheckMaterials }>> = {
+const OUTPUTS: Record<string, Array<{ case: CaseInput; settings: unknown; text: string; expected: unknown; materials?: CheckMaterials; testimony?: Testimony }>> = {
   'general-v1': [
     {
       case: { key: '00000000-0000-4000-8000-000000000001', title: 'T', input: 'Q', reference: '', expectedBehavior: 'E' },
@@ -572,6 +822,11 @@ const OUTPUTS: Record<string, Array<{ case: CaseInput; settings: unknown; text: 
     { case: groundedCase, settings: {}, materials: groundedMaterials, text: "The sources do not contain the answer.", expected: [{"checkId":"cites-something","status":"fail","reason":"No citation in the [S1] format.","detail":{"citations":0,"toRealSources":0}},{"checkId":"citations-exist","status":"na","reason":"No citations.","detail":{}},{"checkId":"quotes-match","status":"na","reason":"No quotes.","detail":{}},{"checkId":"required-cited","status":"fail","reason":"S1 and S2 are required and not cited.","detail":{"required":[1,2],"missing":[1,2]}},{"checkId":"refusal","status":"fail","reason":"Says the sources do not contain the answer, but the judge marked them as answering it.","detail":{"refused":true}}] },
     { case: { ...groundedCase, kitFields: {"kind":"grounded","answerable":"no","requiredSources":[],"sources":[{"number":1,"sha256":"1111111111111111111111111111111111111111111111111111111111111111","byteLength":60},{"number":2,"sha256":"2222222222222222222222222222222222222222222222222222222222222222","byteLength":40}]} } as CaseInput, settings: {}, materials: groundedMaterials, text: "The sources do not contain the answer.", expected: [{"checkId":"cites-something","status":"na","reason":"The judge marked this question as not answerable from the sources.","detail":{}},{"checkId":"citations-exist","status":"na","reason":"No citations.","detail":{}},{"checkId":"quotes-match","status":"na","reason":"No quotes.","detail":{}},{"checkId":"required-cited","status":"na","reason":"The judge marked this question as not answerable from the sources.","detail":{}},{"checkId":"refusal","status":"pass","reason":"Says the sources do not contain the answer.","detail":{"refused":true}}] },
   ],
+  'tools-v1': [
+    { case: toolsCase, settings: {}, text: '', testimony: toolTestimony(toolTraces[0]), expected: [{"checkId":"required-calls","status":"pass","reason":"All 2 required calls were made in order.","detail":{"required":2,"missing":0}},{"checkId":"forbidden-not-called","status":"na","reason":"No forbidden tools for this question.","detail":{}},{"checkId":"arguments-valid","status":"pass","reason":"All 2 calls are valid.","detail":{"calls":2,"invalid":0}},{"checkId":"steps-used","status":"pass","reason":"Used 3 of up to 4 calls (target 3).","detail":{"used":3,"max":4,"target":3}},{"checkId":"finished","status":"pass","reason":"Gave a final answer.","detail":{}},{"checkId":"final-answer","status":"pass","reason":"The final answer contains “3 to 5 business days”.","detail":{}}] },
+    { case: strictToolsCase, settings: {}, text: '', testimony: toolTestimony(toolTraces[1]), expected: [{"checkId":"required-calls","status":"pass","reason":"The required call was made.","detail":{"required":1,"missing":0}},{"checkId":"forbidden-not-called","status":"fail","reason":"Called `refund_shipping` at step 2.","detail":{"stepNo":2}},{"checkId":"arguments-valid","status":"pass","reason":"All 2 calls are valid.","detail":{"calls":2,"invalid":0}},{"checkId":"steps-used","status":"fail","reason":"Used 2 of up to 4 calls (target 1).","detail":{"used":2,"max":4,"target":1}},{"checkId":"finished","status":"fail","reason":"Stopped at the step cap.","detail":{}},{"checkId":"final-answer","status":"na","reason":"No expected answer for this question.","detail":{}}] },
+    { case: toolsCase, settings: {}, text: '', testimony: toolTestimony(toolTraces[2]), expected: [{"checkId":"required-calls","status":"fail","reason":"Missing or out of order: `lookup_order` with `order_id` A-1042 (and 1 other).","detail":{"required":2,"missing":2}},{"checkId":"forbidden-not-called","status":"na","reason":"No forbidden tools for this question.","detail":{}},{"checkId":"arguments-valid","status":"fail","reason":"2 of 2 calls invalid: `lookup_order` arguments aren’t a readable JSON object.","detail":{"calls":2,"invalid":2}},{"checkId":"steps-used","status":"pass","reason":"Used 2 of up to 4 calls (target 3).","detail":{"used":2,"max":4,"target":3}},{"checkId":"finished","status":"fail","reason":"Stopped: the reply was cut off at the output limit.","detail":{}},{"checkId":"final-answer","status":"fail","reason":"The final answer does not contain “3 to 5 business days”.","detail":{}}] },
+  ],
 }
 
 describe('published kit versions', () => {
@@ -586,7 +841,7 @@ describe('published kit versions', () => {
 
     it(`${version}: check outputs on fixed inputs are unchanged`, () => {
       for (const row of OUTPUTS[version] ?? []) {
-        expect(runChecks(KITS[version] as TaskKit<unknown, unknown>, row.settings, row.case, { kind: 'text', text: row.text }, row.materials).results).toEqual(row.expected)
+        expect(runChecks(KITS[version] as TaskKit<unknown, unknown>, row.settings, row.case, row.testimony ?? { kind: 'text', text: row.text }, row.materials).results).toEqual(row.expected)
       }
     })
   }
