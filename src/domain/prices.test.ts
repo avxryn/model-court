@@ -6,14 +6,18 @@ import { MODEL_ROUTES } from './registry'
 /** Published tables are immutable (D-62). A new price is a new table; never update a hash here. */
 const PUBLISHED_HASHES: Record<string, string> = {
   '2026-11-18.1': '81f0dbd9dc6c125753e760a935151e6970a62724346868e2afe09bc1c386f16c',
+  '2026-11-19.1': '980e46a17f4487fab4df716d0b8d7ce684047a38b1d17584c2509f08bdd0ddf2',
+  '2026-11-19.2': '183109d350e6693429f056bcc391e2e5fed5d622fe22fc0491d6134bb98ebf32',
+  '2026-11-19.3': '89b03c8cfdac2d96ff63b8a7529cfaa3ee3ade1075c378d171c4665cf893d1c8',
 }
 
 const T = (version: string, effectiveFrom: string): PriceTable => ({ ...PRICE_TABLES[0], version, effectiveFrom })
 
 describe('price tables', () => {
-  it('prices or lists as unpriced every route, never both', () => {
+  it('prices or lists as unpriced every route of the providers it covers, never both', () => {
     for (const table of PRICE_TABLES) {
-      for (const route of MODEL_ROUTES) {
+      // A table covers the providers it cites; 2026-11-18.1 predates Google (spec 07).
+      for (const route of MODEL_ROUTES.filter((r) => Object.hasOwn(table.sources, r.provider))) {
         const priced = Object.hasOwn(table.prices, route.key)
         const unpriced = Object.hasOwn(table.unpriced, route.key)
         expect(priced !== unpriced, `${table.version}: ${route.key}`).toBe(true)
@@ -79,6 +83,26 @@ describe('callCostMicroUsd', () => {
   it('is unknown, never 0, without input or output usage', () => {
     expect(callCostMicroUsd('openai', { inputTokens: null, outputTokens: 10, cachedInputTokens: null }, price, table)).toBeNull()
     expect(callCostMicroUsd('openai', { inputTokens: 10, outputTokens: null, cachedInputTokens: null }, price, table)).toBeNull()
+  })
+
+  it('prices Gemini with cached input inside the prompt count, and dates its announced rises (spec 07 §10.3)', () => {
+    const now = priceTableFor(Date.parse('2026-11-19T12:00:00Z')).table
+    expect(now.version).toBe('2026-11-19.1')
+    expect(now.cachedInputIncludedInInput.google).toBe(true)
+    expect(now.sources.google).toBe('https://aistudio.google.com/docs/pricing')
+    const flash = priceFor('google-gemini-3-6-flash', now)!
+    expect(callCostMicroUsd('google', { inputTokens: 1000, outputTokens: 100, cachedInputTokens: 400 }, flash, now)).toEqual({ microUsd: 600 * 0.75 + 400 * 0.075 + 100 * 3.75, cachedAssumedFull: false })
+    // OpenAI and Anthropic rows carry over unchanged.
+    for (const [key, price] of Object.entries(PRICE_TABLES[0].prices)) expect(now.prices[key], key).toEqual(price)
+    const december = priceTableFor(Date.parse('2026-12-01T00:00:00Z')).table
+    expect(december.version).toBe('2026-11-19.2')
+    expect(priceFor('google-gemini-4-carbon', december)).toEqual({ inputUsdPerMTok: 4, cachedInputUsdPerMTok: 0.2, outputUsdPerMTok: 20 })
+    expect(priceFor('google-gemini-3-6-flash', december)).toEqual(flash)
+    const january = priceTableFor(Date.parse('2027-01-01T00:00:00Z')).table
+    expect(january.version).toBe('2026-11-19.3')
+    expect(priceFor('google-gemini-3-8-flash', january)).toEqual({ inputUsdPerMTok: 1.5, cachedInputUsdPerMTok: 0.15, outputUsdPerMTok: 7.5 })
+    // A hearing from before Google was priced has no Gemini price (unknown, never 0).
+    expect(priceFor('google-gemini-3-6-flash', PRICE_TABLES[0])).toBeNull()
   })
 
   it('looks prices up by route key', () => {

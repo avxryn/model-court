@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createCredentialSchema, draftInputSchema, retrySchema, saveRatingsSchema, verdictSchema } from './contracts'
+import { createCredentialSchema, draftInputSchema, foreignKeyOwner, retrySchema, saveRatingsSchema, verdictSchema } from './contracts'
 import { canonicalJson, sha256Hex } from './canonical'
 import { makeExampleDraft } from './example'
 import { buildMessages } from './messages'
@@ -71,10 +71,10 @@ describe('draftInputSchema (T03)', () => {
   })
 })
 
-describe('T24 per-run bounds scale to three configurations', () => {
-  it('accepts up to cases × 3 × samples retries and cases × 3 ratings, and no more', () => {
+describe('T24, spec 07: per-run bounds follow the 15-testimony limit, not the party count', () => {
+  it('accepts up to 15 × samples retries and 15 ratings, and no more', () => {
     const ids = (n: number) => Array.from({ length: n }, newId)
-    const max = LIMITS.maxCases * LIMITS.maxConfigurationsPerRun
+    const max = LIMITS.maxTestimoniesPerHearing
     expect(max).toBe(15)
     // D-65: every sample of a repeated hearing can be retried at once; jurors still rate one answer per party.
     const retries = max * LIMITS.maxSamplesPerAnswer
@@ -84,6 +84,37 @@ describe('T24 per-run bounds scale to three configurations', () => {
     const rating = (responseId: string) => ({ responseId, correctness: 2, completeness: 2, grounding: 2, note: '', suspectedIdentityClue: false })
     expect(saveRatingsSchema.safeParse({ ratings: ids(max).map(rating) }).success).toBe(true)
     expect(saveRatingsSchema.safeParse({ ratings: ids(max + 1).map(rating) }).success).toBe(false)
+  })
+})
+
+describe('up to five parties within 15 testimonies (spec 07 §9.1)', () => {
+  const withParties = (parties: number, questions: number) => {
+    const base = draft()
+    const configurations = Array.from({ length: parties }, (_, i) => ({ ...base.configurations[i % 2], key: newId(), label: `Setup ${i + 1}` }))
+    const cases = Array.from({ length: questions }, (_, i) => ({ ...base.cases[i % base.cases.length], key: newId() }))
+    return { ...base, comparisonMode: 'configuration' as const, configurations, cases }
+  }
+  const message = (value: unknown) => {
+    const parsed = draftInputSchema.safeParse(value)
+    return parsed.success ? null : parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(' | ')
+  }
+
+  it('allows 5 × 3, 4 × 3 and 3 × 5', () => {
+    expect(message(withParties(5, 3))).toBeNull()
+    expect(message(withParties(4, 3))).toBeNull()
+    expect(message(withParties(3, 5))).toBeNull()
+  })
+
+  it('refuses 5 × 4 and 4 × 4 with the plain message on configurations, and six parties outright', () => {
+    expect(message(withParties(5, 4))).toBe('configurations: 5 parties × 4 questions is 20 answers for each juror to score. The limit is 15: remove a question or a party. To compare more setups, re-hear this case with an anchor party.')
+    expect(message(withParties(4, 4))).toContain('4 parties × 4 questions is 16 answers')
+    expect(message(withParties(6, 2))).toContain('At most 5 configurations')
+  })
+
+  it('counts imported parties: they cost no calls, but jurors score them', () => {
+    const value = withParties(4, 4)
+    value.configurations[3] = { kind: 'imported', key: newId(), label: 'Baseline', provenance: { sourceType: 'human_baseline', description: 'Support lead', redacted: false } } as never
+    expect(message(value)).toContain('4 parties × 4 questions')
   })
 })
 
@@ -107,6 +138,22 @@ describe('createCredentialSchema', () => {
     expect(createCredentialSchema.safeParse({ ...base, apiKey: 'sk test' }).success).toBe(false)
     expect(createCredentialSchema.safeParse({ ...base, apiKey: 'sk-\u0007x' }).success).toBe(false)
     expect(createCredentialSchema.safeParse({ ...base, apiKey: '   ' }).success).toBe(false)
+  })
+  it('refuses keys that clearly belong to another company on each card (spec 07 §8.2)', () => {
+    const refused = (provider: string, apiKey: string) => {
+      const parsed = createCredentialSchema.safeParse({ ...base, provider, apiKey })
+      return parsed.success ? null : parsed.error.issues.find((issue) => (issue as { params?: { apiCode?: string } }).params?.apiCode === 'KEY_PROVIDER_MISMATCH')?.message ?? null
+    }
+    expect(refused('openai', 'sk-ant-api03-x')).toMatch(/Anthropic key/)
+    expect(refused('openai', 'AIzaSyx')).toMatch(/Google key/)
+    expect(refused('openai', 'sk-or-v1-x')).toMatch(/OpenRouter key/)
+    expect(refused('anthropic', 'sk-proj-x')).toMatch(/OpenAI key/)
+    expect(refused('anthropic', 'sk-svcacct-x')).toMatch(/OpenAI key/)
+    expect(refused('anthropic', 'AIzaSyx')).toMatch(/Google key/)
+    expect(refused('openai', 'sk-proj-x')).toBeNull()
+    expect(refused('openai', 'sk-x')).toBeNull()
+    expect(refused('anthropic', 'sk-ant-api03-x')).toBeNull()
+    expect(foreignKeyOwner('openai', 'sk-test')).toBeNull()
   })
   it('requires explicit storage consent and a known provider', () => {
     expect(createCredentialSchema.safeParse({ ...base, consentToStorage: false, apiKey: 'k' }).success).toBe(false)

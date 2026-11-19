@@ -60,7 +60,19 @@ export const anthropicOk = (text = 'Yes — the policy allows returns within 30 
     { status: 200, headers: { 'content-type': 'application/json', 'request-id': 'req_anthropic_test' } },
   )
 
-export const okStub: ProviderStub = async (call) => (call.url.includes('openai') ? openAiOk() : anthropicOk())
+/** Spec 07: a Gemini `generateContent` answer (no request-ID header; the body carries `responseId`). */
+export const googleOk = (text = 'Returns are accepted within 30 days if you have the receipt.') =>
+  new Response(
+    JSON.stringify({
+      candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 125, candidatesTokenCount: 18, thoughtsTokenCount: 30 },
+      modelVersion: 'gemini-3.6-flash-001',
+      responseId: 'resp_google_test',
+    }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  )
+
+export const okStub: ProviderStub = async (call) => (call.url.includes('openai') ? openAiOk() : call.url.includes('googleapis') ? googleOk() : anthropicOk())
 
 /**
  * Storage under test. Default: local D1 (wrangler getPlatformProxy).
@@ -91,12 +103,16 @@ async function openDatabase(): Promise<{ db: D1Database; dispose: () => Promise<
   return { db: proxy.env.DB, dispose: () => proxy.dispose() }
 }
 
+/** Test-only stores held at an older schema, by the first migration they have not applied (store-test-worker.ts). */
+const HELD_STORES = { '0009_generation_samples': 'pre-samples', '0015_provider_google': 'pre-providers' } as const
+export type HeldBefore = keyof typeof HELD_STORES
+
 /**
- * D-65: a store held at the schema before `0009_generation_samples`, on whichever store is under
- * test, for seeding legacy rows with SQL and then applying the remaining migrations.
+ * D-65, D-106: a store held at the schema before `migrationId`, on whichever store is under test, for
+ * seeding legacy rows with SQL and then applying the remaining migrations.
  */
-export async function openPreSamplesDatabase(): Promise<{ db: D1Database; migrateRest: () => Promise<string[]>; dispose: () => Promise<void> }> {
-  const before = MIGRATIONS.slice(0, MIGRATIONS.findIndex((m) => m.id === '0009_generation_samples'))
+export async function openDatabaseBefore(migrationId: HeldBefore): Promise<{ db: D1Database; migrateRest: () => Promise<string[]>; dispose: () => Promise<void> }> {
+  const before = MIGRATIONS.slice(0, MIGRATIONS.findIndex((m) => m.id === migrationId))
   if (process.env.MC_STORE === 'do') {
     storeWorker ??= unstable_dev(fileURLToPath(new URL('./store-test-worker.ts', import.meta.url)), {
       config: fileURLToPath(new URL('./wrangler.store-test.toml', import.meta.url)),
@@ -105,19 +121,20 @@ export async function openPreSamplesDatabase(): Promise<{ db: D1Database; migrat
     })
     const worker = await storeWorker
     const name = crypto.randomUUID()
+    const store = HELD_STORES[migrationId]
     const db = new SqlBatchDatabase(async (statements) => {
-      const response = await worker.fetch(`http://store/?store=pre-samples&db=${name}`, { method: 'POST', body: JSON.stringify(statements) })
+      const response = await worker.fetch(`http://store/?store=${store}&db=${name}`, { method: 'POST', body: JSON.stringify(statements) })
       const body = (await response.json()) as { error?: string }
       if (!response.ok) throw new Error(body.error ?? 'store error')
       return body as never
     }).asD1()
     const migrateRest = async () => {
-      const response = await worker.fetch(`http://store/?store=pre-samples&db=${name}&migrate=rest`, { method: 'POST', body: '[]' })
+      const response = await worker.fetch(`http://store/?store=${store}&db=${name}&migrate=rest`, { method: 'POST', body: '[]' })
       const body = (await response.json()) as string[] | { error: string }
       if (!response.ok) throw new Error((body as { error: string }).error)
       return body as string[]
     }
-    // Force the object to start (and migrate up to 0008) before the caller seeds it.
+    // Force the object to start (and migrate up to the held migration) before the caller seeds it.
     await db.prepare('SELECT 1').first()
     return { db, migrateRest, dispose: async () => {} }
   }
@@ -125,6 +142,9 @@ export async function openPreSamplesDatabase(): Promise<{ db: D1Database; migrat
   await migrate(proxy.env.DB, before)
   return { db: proxy.env.DB, migrateRest: () => migrate(proxy.env.DB), dispose: () => proxy.dispose() }
 }
+
+/** D-65: a store held at the schema before `0009_generation_samples`. */
+export const openPreSamplesDatabase = () => openDatabaseBefore('0009_generation_samples')
 
 export interface HarnessOptions {
   env?: Partial<ConfigEnv>

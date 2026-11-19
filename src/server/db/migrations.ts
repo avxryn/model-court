@@ -18,6 +18,12 @@ BEFORE UPDATE OF ${columns} ON ${table}
 FOR EACH ROW WHEN ${when}
 BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_${table.toUpperCase()}'); END`
 
+/**
+ * Spec 07 §4.2 (D-106): the provider values the rebuilt tables accept from 0015 on. `'openrouter'` is
+ * listed but unusable (Q7 option (a)): the server checks every provider against `PROVIDERS` first.
+ */
+export const PROVIDER_CHECK = "provider IN ('openai','anthropic','google','openrouter')"
+
 export const MIGRATIONS: Migration[] = [
   {
     id: '0001_initial',
@@ -762,6 +768,292 @@ export const MIGRATIONS: Migration[] = [
         updated_at INTEGER NOT NULL
       )`,
       `CREATE INDEX step_outbox_by_status ON step_outbox(status, next_dispatch_at)`,
+    ],
+  },
+  {
+    // Spec 07 §4.2 (D-106): a third BYOK provider. Four tables pin the provider with a column CHECK
+    // that SQLite cannot alter, so each is rebuilt with PROVIDER_CHECK, which also lists 'openrouter'
+    // (spec 07 Q7, option (a)) so a later fixed-host provider needs no second rebuild; 'openrouter'
+    // stays unusable because the server validates every provider against `PROVIDERS` first.
+    // Neither store lets a migration turn foreign keys off, and DROP TABLE of a parent fires ON DELETE
+    // CASCADE into its children. So, as in 0009, every table that references a rebuilt table (directly
+    // or through another) is rebuilt with it, the copies reference only the scratch `_next` tables,
+    // the old tables are dropped leaves first (nothing references a table when it is dropped), and the
+    // renames rewrite the copies' REFERENCES (legacy_alter_table is off on both stores). Since 0014 the
+    // generation subtree is eight tables: generations, generation_attempts, outbox, attempt_reservations,
+    // testimony_checks (via attempts), generation_steps, step_reservations, step_outbox. Columns (in the
+    // order 0001 + every ADD COLUMN gave them), checks, keys, indexes and triggers are identical to
+    // 0001–0014 except the provider CHECK (integration-tested on both stores against the 0014 schema).
+    // LIVE TABLE REBUILD: take a V9 backup before deploying (docs/runbook.md); Avery's OK required.
+    id: '0015_provider_google',
+    statements: [
+      // 1. The generation subtree.
+      `CREATE TABLE generations_next (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        case_key TEXT NOT NULL,
+        configuration_key TEXT NOT NULL,
+        provider TEXT NOT NULL CHECK (${PROVIDER_CHECK}),
+        status TEXT NOT NULL CHECK (status IN ('pending','running','succeeded','failed','uncertain','canceled')),
+        attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count BETWEEN 0 AND 2),
+        accepted_attempt_id TEXT,
+        last_error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        sample_no INTEGER NOT NULL DEFAULT 1 CHECK (sample_no BETWEEN 1 AND 3),
+        UNIQUE (run_id, case_key, configuration_key, sample_no)
+      )`,
+      `INSERT INTO generations_next (id, run_id, case_key, configuration_key, provider, status, attempt_count, accepted_attempt_id, last_error_code, created_at, updated_at, sample_no)
+       SELECT id, run_id, case_key, configuration_key, provider, status, attempt_count, accepted_attempt_id, last_error_code, created_at, updated_at, sample_no FROM generations ORDER BY rowid`,
+
+      `CREATE TABLE generation_attempts_next (
+        id TEXT PRIMARY KEY,
+        generation_id TEXT NOT NULL REFERENCES generations_next(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        fence_token TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL CHECK (status IN ('running','succeeded','failed','uncertain','canceled')),
+        started_at INTEGER NOT NULL,
+        deadline_at INTEGER NOT NULL,
+        finished_at INTEGER,
+        queue_wait_ms INTEGER CHECK (queue_wait_ms IS NULL OR queue_wait_ms >= 0),
+        output_text TEXT,
+        finish_reason TEXT,
+        input_tokens INTEGER CHECK (input_tokens IS NULL OR input_tokens >= 0),
+        output_tokens INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0),
+        duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0),
+        error_code TEXT,
+        provider_request_id TEXT,
+        observed_model TEXT,
+        truncated INTEGER NOT NULL DEFAULT 0 CHECK (truncated IN (0,1)),
+        cached_input_tokens INTEGER CHECK (cached_input_tokens IS NULL OR cached_input_tokens >= 0),
+        reasoning_tokens INTEGER CHECK (reasoning_tokens IS NULL OR reasoning_tokens >= 0),
+        kind TEXT NOT NULL DEFAULT 'single' CHECK (kind IN ('single','tool_loop')),
+        trace_json TEXT CHECK (trace_json IS NULL OR json_valid(trace_json)),
+        steps_used INTEGER CHECK (steps_used IS NULL OR steps_used BETWEEN 0 AND 6),
+        UNIQUE (generation_id, attempt_no)
+      )`,
+      `INSERT INTO generation_attempts_next (id, generation_id, attempt_no, fence_token, status, started_at, deadline_at, finished_at, queue_wait_ms, output_text, finish_reason, input_tokens, output_tokens, duration_ms, error_code, provider_request_id, observed_model, truncated, cached_input_tokens, reasoning_tokens, kind, trace_json, steps_used)
+       SELECT id, generation_id, attempt_no, fence_token, status, started_at, deadline_at, finished_at, queue_wait_ms, output_text, finish_reason, input_tokens, output_tokens, duration_ms, error_code, provider_request_id, observed_model, truncated, cached_input_tokens, reasoning_tokens, kind, trace_json, steps_used FROM generation_attempts ORDER BY rowid`,
+
+      `CREATE TABLE outbox_next (
+        id TEXT PRIMARY KEY,
+        generation_id TEXT NOT NULL REFERENCES generations_next(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        status TEXT NOT NULL CHECK (status IN ('pending','dispatched','claimed','terminal')),
+        job_id TEXT,
+        dispatch_count INTEGER NOT NULL DEFAULT 0 CHECK (dispatch_count >= 0),
+        next_dispatch_at INTEGER NOT NULL,
+        last_error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE (generation_id, attempt_no)
+      )`,
+      `INSERT INTO outbox_next (id, generation_id, attempt_no, status, job_id, dispatch_count, next_dispatch_at, last_error_code, created_at, updated_at)
+       SELECT id, generation_id, attempt_no, status, job_id, dispatch_count, next_dispatch_at, last_error_code, created_at, updated_at FROM outbox ORDER BY rowid`,
+
+      `CREATE TABLE attempt_reservations_next (
+        generation_id TEXT NOT NULL REFERENCES generations_next(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        actor_subject TEXT NOT NULL,
+        global_subject TEXT NOT NULL,
+        lifetime_subject TEXT NOT NULL,
+        window_start INTEGER NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('reserved','consumed','released')),
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (generation_id, attempt_no)
+      )`,
+      `INSERT INTO attempt_reservations_next (generation_id, attempt_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at)
+       SELECT generation_id, attempt_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at FROM attempt_reservations ORDER BY rowid`,
+
+      `CREATE TABLE testimony_checks_next (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        case_key TEXT NOT NULL,
+        configuration_key TEXT NOT NULL,
+        attempt_id TEXT REFERENCES generation_attempts_next(id) ON DELETE CASCADE,
+        imported_output_id TEXT REFERENCES run_imported_outputs(id) ON DELETE CASCADE,
+        kit_version TEXT NOT NULL,
+        results_json TEXT NOT NULL CHECK (json_valid(results_json) AND json_type(results_json) = 'array' AND length(results_json) <= 16384),
+        created_at INTEGER NOT NULL,
+        CHECK ((attempt_id IS NULL) <> (imported_output_id IS NULL)),
+        UNIQUE (attempt_id),
+        UNIQUE (imported_output_id)
+      )`,
+      `INSERT INTO testimony_checks_next (id, run_id, case_key, configuration_key, attempt_id, imported_output_id, kit_version, results_json, created_at)
+       SELECT id, run_id, case_key, configuration_key, attempt_id, imported_output_id, kit_version, results_json, created_at FROM testimony_checks ORDER BY rowid`,
+
+      `CREATE TABLE generation_steps_next (
+        id TEXT PRIMARY KEY,
+        attempt_id TEXT NOT NULL REFERENCES generation_attempts_next(id) ON DELETE CASCADE,
+        generation_id TEXT NOT NULL REFERENCES generations_next(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        step_no INTEGER NOT NULL CHECK (step_no BETWEEN 1 AND 6),
+        status TEXT NOT NULL CHECK (status IN ('pending','running','succeeded','failed','uncertain','canceled')),
+        fence_token TEXT UNIQUE,
+        claimed_at INTEGER,
+        deadline_at INTEGER,
+        finished_at INTEGER,
+        queue_wait_ms INTEGER CHECK (queue_wait_ms IS NULL OR queue_wait_ms >= 0),
+        stop_kind TEXT CHECK (stop_kind IS NULL OR stop_kind IN ('tool_calls','answer')),
+        text TEXT,
+        calls_json TEXT CHECK (calls_json IS NULL OR json_valid(calls_json)),
+        replay_json TEXT CHECK (replay_json IS NULL OR json_valid(replay_json)),
+        finish_reason TEXT,
+        input_tokens INTEGER CHECK (input_tokens IS NULL OR input_tokens >= 0),
+        output_tokens INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0),
+        cached_input_tokens INTEGER CHECK (cached_input_tokens IS NULL OR cached_input_tokens >= 0),
+        reasoning_tokens INTEGER CHECK (reasoning_tokens IS NULL OR reasoning_tokens >= 0),
+        duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0),
+        error_code TEXT,
+        provider_request_id TEXT,
+        observed_model TEXT,
+        truncated INTEGER NOT NULL DEFAULT 0 CHECK (truncated IN (0,1)),
+        created_at INTEGER NOT NULL,
+        UNIQUE (attempt_id, step_no)
+      )`,
+      `INSERT INTO generation_steps_next (id, attempt_id, generation_id, attempt_no, step_no, status, fence_token, claimed_at, deadline_at, finished_at, queue_wait_ms, stop_kind, text, calls_json, replay_json, finish_reason, input_tokens, output_tokens, cached_input_tokens, reasoning_tokens, duration_ms, error_code, provider_request_id, observed_model, truncated, created_at)
+       SELECT id, attempt_id, generation_id, attempt_no, step_no, status, fence_token, claimed_at, deadline_at, finished_at, queue_wait_ms, stop_kind, text, calls_json, replay_json, finish_reason, input_tokens, output_tokens, cached_input_tokens, reasoning_tokens, duration_ms, error_code, provider_request_id, observed_model, truncated, created_at FROM generation_steps ORDER BY rowid`,
+
+      `CREATE TABLE step_reservations_next (
+        generation_id TEXT NOT NULL REFERENCES generations_next(id) ON DELETE CASCADE,
+        attempt_no INTEGER NOT NULL CHECK (attempt_no BETWEEN 1 AND 2),
+        step_no INTEGER NOT NULL CHECK (step_no BETWEEN 1 AND 6),
+        actor_subject TEXT NOT NULL,
+        global_subject TEXT NOT NULL,
+        lifetime_subject TEXT NOT NULL,
+        window_start INTEGER NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('reserved','consumed','released')),
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (generation_id, attempt_no, step_no)
+      )`,
+      `INSERT INTO step_reservations_next (generation_id, attempt_no, step_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at)
+       SELECT generation_id, attempt_no, step_no, actor_subject, global_subject, lifetime_subject, window_start, state, created_at FROM step_reservations ORDER BY rowid`,
+
+      `CREATE TABLE step_outbox_next (
+        id TEXT PRIMARY KEY,
+        step_id TEXT NOT NULL UNIQUE REFERENCES generation_steps_next(id) ON DELETE CASCADE,
+        generation_id TEXT NOT NULL REFERENCES generations_next(id) ON DELETE CASCADE,
+        status TEXT NOT NULL CHECK (status IN ('pending','dispatched','claimed','terminal')),
+        job_id TEXT,
+        dispatch_count INTEGER NOT NULL DEFAULT 0 CHECK (dispatch_count >= 0),
+        next_dispatch_at INTEGER NOT NULL,
+        last_error_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+      `INSERT INTO step_outbox_next (id, step_id, generation_id, status, job_id, dispatch_count, next_dispatch_at, last_error_code, created_at, updated_at)
+       SELECT id, step_id, generation_id, status, job_id, dispatch_count, next_dispatch_at, last_error_code, created_at, updated_at FROM step_outbox ORDER BY rowid`,
+
+      // Leaves first: when each old table is dropped, no table references its name, so its implicit
+      // DELETE cascades into nothing. Its indexes and triggers drop with it.
+      `DROP TABLE step_outbox`,
+      `DROP TABLE step_reservations`,
+      `DROP TABLE generation_steps`,
+      `DROP TABLE testimony_checks`,
+      `DROP TABLE attempt_reservations`,
+      `DROP TABLE outbox`,
+      `DROP TABLE generation_attempts`,
+      `DROP TABLE generations`,
+      `ALTER TABLE generations_next RENAME TO generations`,
+      `ALTER TABLE generation_attempts_next RENAME TO generation_attempts`,
+      `ALTER TABLE generation_steps_next RENAME TO generation_steps`,
+      `ALTER TABLE outbox_next RENAME TO outbox`,
+      `ALTER TABLE attempt_reservations_next RENAME TO attempt_reservations`,
+      `ALTER TABLE testimony_checks_next RENAME TO testimony_checks`,
+      `ALTER TABLE step_reservations_next RENAME TO step_reservations`,
+      `ALTER TABLE step_outbox_next RENAME TO step_outbox`,
+
+      // Indexes and triggers, verbatim from 0009, 0011 and 0014.
+      `CREATE INDEX generations_by_run_status ON generations(run_id, status)`,
+      `CREATE INDEX attempts_by_status_deadline ON generation_attempts(status, deadline_at)`,
+      `CREATE INDEX outbox_by_status ON outbox(status, next_dispatch_at)`,
+      `CREATE INDEX testimony_checks_by_run ON testimony_checks(run_id, case_key, configuration_key)`,
+      `CREATE INDEX generation_steps_by_status_deadline ON generation_steps(status, deadline_at)`,
+      `CREATE INDEX generation_steps_by_generation ON generation_steps(generation_id, attempt_no, step_no)`,
+      `CREATE INDEX step_outbox_by_status ON step_outbox(status, next_dispatch_at)`,
+      immutable('generations', 'accepted_attempt_id', 'OLD.accepted_attempt_id IS NOT NULL AND NEW.accepted_attempt_id IS NOT OLD.accepted_attempt_id'),
+      immutable(
+        'generations',
+        'run_id, case_key, configuration_key, sample_no',
+        'NEW.run_id IS NOT OLD.run_id OR NEW.case_key IS NOT OLD.case_key OR NEW.configuration_key IS NOT OLD.configuration_key OR NEW.sample_no IS NOT OLD.sample_no',
+      ),
+      immutable('generation_attempts', 'output_text, status, finish_reason', "OLD.status <> 'running'"),
+      immutable('generation_attempts', 'trace_json, steps_used', "OLD.status <> 'running'"),
+      immutable('generation_attempts', 'kind'),
+      `CREATE TRIGGER testimony_checks_append_only BEFORE UPDATE ON testimony_checks
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_TESTIMONY_CHECKS'); END`,
+      immutable('generation_steps', 'text, calls_json, status, finish_reason, stop_kind', "OLD.status NOT IN ('pending','running')"),
+      immutable('generation_steps', 'attempt_id, generation_id, attempt_no, step_no', 'NEW.attempt_id IS NOT OLD.attempt_id OR NEW.generation_id IS NOT OLD.generation_id OR NEW.attempt_no IS NOT OLD.attempt_no OR NEW.step_no IS NOT OLD.step_no'),
+      `CREATE TRIGGER generation_steps_replay_immutable BEFORE UPDATE OF replay_json ON generation_steps
+       FOR EACH ROW WHEN OLD.status NOT IN ('pending','running') AND NEW.replay_json IS NOT NULL
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_GENERATION_STEPS'); END`,
+
+      // 2. The credential subtree: provider_credentials (0001 + 0002 + 0006 columns) and run_credentials.
+      `CREATE TABLE provider_credentials_next (
+        id TEXT PRIMARY KEY,
+        owner_user_id TEXT NOT NULL,
+        provider TEXT NOT NULL CHECK (${PROVIDER_CHECK}),
+        label TEXT NOT NULL,
+        ciphertext TEXT,
+        nonce TEXT,
+        encryption_key_version TEXT,
+        status TEXT NOT NULL CHECK (status IN ('active','revoked')),
+        revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
+        created_at INTEGER NOT NULL,
+        revoked_at INTEGER,
+        expires_at INTEGER,
+        last_used_at INTEGER,
+        last_used_run_id TEXT,
+        last_checked_at INTEGER,
+        last_check_result TEXT CHECK (last_check_result IS NULL OR last_check_result IN ('valid','invalid','restricted','unreachable')),
+        CHECK (
+          (status = 'active' AND ciphertext IS NOT NULL AND nonce IS NOT NULL AND encryption_key_version IS NOT NULL AND revoked_at IS NULL)
+          OR (status = 'revoked' AND ciphertext IS NULL AND nonce IS NULL AND encryption_key_version IS NULL AND revoked_at IS NOT NULL)
+        )
+      )`,
+      `INSERT INTO provider_credentials_next (id, owner_user_id, provider, label, ciphertext, nonce, encryption_key_version, status, revision, created_at, revoked_at, expires_at, last_used_at, last_used_run_id, last_checked_at, last_check_result)
+       SELECT id, owner_user_id, provider, label, ciphertext, nonce, encryption_key_version, status, revision, created_at, revoked_at, expires_at, last_used_at, last_used_run_id, last_checked_at, last_check_result FROM provider_credentials ORDER BY rowid`,
+      `CREATE TABLE run_credentials_next (
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK (${PROVIDER_CHECK}),
+        credential_id TEXT NOT NULL REFERENCES provider_credentials_next(id) ON DELETE RESTRICT,
+        PRIMARY KEY (run_id, provider)
+      )`,
+      `INSERT INTO run_credentials_next (run_id, provider, credential_id)
+       SELECT run_id, provider, credential_id FROM run_credentials ORDER BY rowid`,
+      // run_credentials first: it is the only table that references provider_credentials (RESTRICT), and
+      // its trigger (the only one that names another table) goes with it.
+      `DROP TABLE run_credentials`,
+      `DROP TABLE provider_credentials`,
+      `ALTER TABLE provider_credentials_next RENAME TO provider_credentials`,
+      `ALTER TABLE run_credentials_next RENAME TO run_credentials`,
+      `CREATE UNIQUE INDEX one_active_credential_per_provider ON provider_credentials(owner_user_id, provider) WHERE status = 'active'`,
+      `CREATE INDEX provider_credentials_by_expiry ON provider_credentials(status, expires_at)`,
+      immutable('provider_credentials', 'status', "OLD.status = 'revoked'"),
+      immutable('provider_credentials', 'owner_user_id, provider', 'NEW.owner_user_id IS NOT OLD.owner_user_id OR NEW.provider IS NOT OLD.provider'),
+      // The 0006 body, verbatim.
+      `CREATE TRIGGER run_credentials_immutable BEFORE UPDATE ON run_credentials
+       FOR EACH ROW WHEN NEW.run_id IS NOT OLD.run_id OR NEW.provider IS NOT OLD.provider
+         OR NOT EXISTS (SELECT 1 FROM runs r WHERE r.id = NEW.run_id AND r.status IN ('generating','ready'))
+         OR NOT EXISTS (
+           SELECT 1 FROM provider_credentials c JOIN runs r ON r.id = NEW.run_id
+           WHERE c.id = NEW.credential_id AND c.owner_user_id = r.owner_user_id AND c.provider = NEW.provider AND c.status = 'active')
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_RUN_CREDENTIALS'); END`,
+
+      // 3. grader_credentials, a leaf (its credential_id has no foreign key). Allowing 'google' here lets
+      // the special master grade on a Gemini route too.
+      `CREATE TABLE grader_credentials_next (
+        grader_run_id TEXT NOT NULL REFERENCES grader_runs(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK (${PROVIDER_CHECK}),
+        credential_id TEXT NOT NULL,
+        PRIMARY KEY (grader_run_id, provider)
+      )`,
+      `INSERT INTO grader_credentials_next (grader_run_id, provider, credential_id)
+       SELECT grader_run_id, provider, credential_id FROM grader_credentials ORDER BY rowid`,
+      `DROP TABLE grader_credentials`,
+      `ALTER TABLE grader_credentials_next RENAME TO grader_credentials`,
+      `CREATE TRIGGER grader_credentials_immutable BEFORE UPDATE ON grader_credentials
+       BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_GRADER_CREDENTIALS'); END`,
     ],
   },
 ]

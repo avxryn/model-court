@@ -181,6 +181,11 @@ export async function parseScenarioFile(
       notices.push(`${party.label} skipped: this deployment allows at most ${options.maxParties} parties.`)
       continue
     }
+    // Spec 07 §9.1: every juror scores parties × questions answers, at most 15.
+    if ((configurations.length + 1) * cases.length > LIMITS.maxTestimoniesPerHearing) {
+      notices.push(`${party.label} skipped: ${configurations.length + 1} parties on ${cases.length} questions would be more than ${LIMITS.maxTestimoniesPerHearing} answers for each juror.`)
+      continue
+    }
     configurations.push({ kind: 'model', key: newId(), label: party.label, modelKey: route.key, systemPrompt: party.systemPrompt, maxOutputTokens: LIMITS.maxOutputTokens })
   }
   let comparisonMode = base.comparisonMode ?? 'configuration'

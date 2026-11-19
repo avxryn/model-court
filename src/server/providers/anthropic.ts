@@ -7,9 +7,10 @@
 
 import type { TranscriptMessage } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
+import { PROVIDER_ORIGINS } from './endpoints'
 import { classifyHttpError, featureRejection, featuresOf, finishText, isFailure, isRecord, nonNegativeInt, postJson, subRecord, type Adapter, type RequestFeatures } from './common'
 
-export const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages'
+export const ANTHROPIC_MESSAGES_URL = `${PROVIDER_ORIGINS.anthropic}/v1/messages`
 export const ANTHROPIC_VERSION = '2026-10-21'
 
 /**

@@ -21,6 +21,8 @@ export type ErrorCode =
   | 'ACTIVE_RUN_EXISTS'
   | 'PAYLOAD_TOO_LARGE'
   | 'VALIDATION_FAILED'
+  /** Spec 07 §8.2: an API key pasted on another provider's card. */
+  | 'KEY_PROVIDER_MISMATCH'
   | 'UNSUPPORTED_CONFIGURATION'
   | 'CREDENTIAL_MISSING'
   | 'REVISION_REQUIRED'
@@ -106,9 +108,11 @@ export async function readBody<S extends z.ZodType>(c: Context, schema: S, maxBy
   }
   const parsed = schema.safeParse(json)
   if (!parsed.success) {
-    throw new ApiError(422, 'VALIDATION_FAILED', 'Some fields are invalid.', {
-      fields: parsed.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
-    })
+    const fields = parsed.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }))
+    // A schema may give an issue its own error code (spec 07 §8.2 `KEY_PROVIDER_MISMATCH`); the message is the issue's own fixed text.
+    const coded = parsed.error.issues.find((issue) => issue.code === 'custom' && (issue as { params?: { apiCode?: unknown } }).params?.apiCode === 'KEY_PROVIDER_MISMATCH')
+    if (coded) throw new ApiError(422, 'KEY_PROVIDER_MISMATCH', coded.message, { fields })
+    throw new ApiError(422, 'VALIDATION_FAILED', 'Some fields are invalid.', { fields })
   }
   return parsed.data
 }

@@ -122,6 +122,19 @@ cannot serve hearings (it writes `sample_no`), so roll the app back (`npx deepsp
 succeeded, rolling the app back is also safe: the older code never names `sample_no`, and its inserts get the
 default of 1. The schema itself is not rolled back; restore the backup for that.
 
+## Deploying migration 0015 (Google provider, spec 07, D-106): needs Avery's OK
+
+`0015_provider_google` rebuilds eleven tables in place, in one transaction, the first time the store starts on
+the new code: `generations`, `generation_attempts`, `outbox`, `attempt_reservations`, `testimony_checks`,
+`generation_steps`, `step_reservations`, `step_outbox`, `provider_credentials`, `run_credentials` and
+`grader_credentials`. Only the provider CHECK changes. Do not deploy it without Avery's explicit go-ahead, and then
+follow the 0009 steps above: a sealed V9 backup kept until a hearing has run end to end on the new version, a
+trial restore into a fresh store first if the store is large (compare the eleven tables' row counts), no hearing
+generating during the deploy, and afterwards an old record, an old hearing's owner view and Settings → API keys
+must read as before. If the migration fails, the transaction rolls back and the old schema stays; roll the app
+back. Once it has succeeded, rolling the app back is safe (older code never writes `'google'`), but a Google key
+saved since then would be unusable by the older code; revoke such keys first.
+
 ## Migration 0010 (case origin, spec 02, D-71)
 
 `0010_case_origin` adds four nullable columns to `evaluations` and one trigger that keeps them unchanged once set.

@@ -31,6 +31,8 @@ import { plural } from '@/lib/format'
 import { useNoticeRefresh } from '@/lib/notices'
 import { isUnsealed } from '@/lib/status'
 import { useApi } from '@/lib/use-api'
+import { TestimonyDeck } from '@/components/review/TestimonyDeck'
+import { ONE_AT_A_TIME_FROM } from '@/domain/parties'
 
 export default function ReviewPage() {
   const { id = '' } = useParams()
@@ -180,11 +182,13 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
             </div>
 
             <WorksheetGrid
-              columns={current.responses.length}
+              columns={current.responses.length >= ONE_AT_A_TIME_FROM ? 1 : current.responses.length}
               wideMaterial={current.document !== undefined}
               material={<CaseMaterial title={current.title} input={current.input} reference={current.reference} expectedBehavior={current.expectedBehavior} number={caseIndex + 1} total={review.cases.length} messages={current.messages} kitView={current.kitView} kitName={review.kit?.name} {...(current.document !== undefined ? { document: current.document } : {})} {...(current.sources !== undefined ? { sources: current.sources, caseKey: current.caseKey } : {})} pdf={current.document?.kind === 'pdf' ? <PdfViewer key={current.caseKey} runId={review.runId} caseKey={current.caseKey} pageCount={current.document.pageCount} /> : undefined} />}
             >
-              {current.responses.map((response) => {
+              {(() => {
+                // Spec 07 §9.2 (D-111): the same card for every party; from four on, one at a time with tabs.
+                const card = (response: (typeof current.responses)[number]) => {
                 const rating = w.ratings[response.responseId] ?? emptyRating(response.responseId)
                 const form = <RubricForm label={response.label} rating={rating} onChange={w.update} disabled={!w.editable} rubricVersion={review.rubricVersion} />
                 // Spec 04 (D-88): an extraction answer shows as fields with per-field flags.
@@ -207,7 +211,13 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
                     {form}
                   </ResponseCard>
                 )
-              })}
+                }
+                return current.responses.length >= ONE_AT_A_TIME_FROM ? (
+                  <TestimonyDeck key={current.caseKey} items={current.responses.map((response) => ({ key: response.responseId, label: response.label, done: isComplete(w.ratings[response.responseId]), node: card(response) }))} />
+                ) : (
+                  current.responses.map(card)
+                )
+              })()}
             </WorksheetGrid>
 
             <QuestionStepper current={caseIndex} count={review.cases.length} onGo={(index) => void goTo(index)}>

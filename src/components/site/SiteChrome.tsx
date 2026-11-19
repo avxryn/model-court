@@ -73,7 +73,7 @@ export function SiteFooter() {
           <BrandMark />
         </Link>
         <div className="space-y-1.5 sm:text-right">
-          <p>A decision aid, not a benchmark or certification. Not affiliated with or endorsed by OpenAI or Anthropic.</p>
+          <p>A decision aid, not a benchmark or certification. Not affiliated with or endorsed by OpenAI, Anthropic or Google.</p>
           <nav aria-label="Legal" className="flex flex-wrap gap-x-4 gap-y-1 sm:justify-end">
             {LEGAL_LINKS.map(({ to, label }) => (
               <NavLink key={to} to={to} className={NAV_LINK}>

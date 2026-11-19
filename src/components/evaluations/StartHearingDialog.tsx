@@ -49,7 +49,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
   const [sendsDocuments, setSendsDocuments] = useState(false)
   // Imported-only hearings send nothing to a provider and charge nothing, so there is nothing to consent to.
   const needsConsent = calls > 0
-  const providerNames = providers.map((p) => PROVIDER_NAMES[p]).join(' and ')
+  const providerNames = new Intl.ListFormat('en-GB', { style: 'long', type: 'conjunction' }).format(providers.map((p) => PROVIDER_NAMES[p]))
   // D-57: show what is left of the call caps, and refuse a hearing that cannot fit. The server enforces them too.
   const quota = useApi<QuotaView>(open && needsConsent ? '/quota' : null)
   const block = quota.data ? quotaBlock(calls, quota.data) : null
@@ -123,6 +123,10 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
               <strong>None</strong>
             )}
           </dd>
+          <dt className="text-muted-foreground">Juror workload</dt>
+          <dd className="tabular-nums" data-testid="juror-workload">
+            Each juror will score {draft.configurations.length * draft.cases.length} answers ({draft.configurations.length} parties on {draft.cases.length} {draft.cases.length === 1 ? 'question' : 'questions'})
+          </dd>
           {needsConsent && scenario?.split && (
             <>
               <dt className="text-muted-foreground">Of these</dt>
@@ -182,6 +186,11 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
                   : `Send each question, its exhibit, and the system instructions to ${providerNames}. Scoring guides, ratings, and identities stay in Model Court.`}
               </FieldLabel>
             </Field>
+            {providers.includes('google') && (
+              <p className="text-xs text-muted-foreground" data-testid="google-consent-note">
+                Google: if your key’s project is on the free tier, Google may use this content to improve its products.
+              </p>
+            )}
             {pdf > 0 && (
               <Field orientation="horizontal" className="items-start">
                 <Checkbox id="consent-documents" checked={sendsDocuments} onCheckedChange={(c) => setSendsDocuments(c === true)} />

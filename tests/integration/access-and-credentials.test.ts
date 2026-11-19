@@ -119,6 +119,24 @@ describe('T31/T32 credential custody', () => {
     expect(h.providerCalls).toHaveLength(0)
   })
 
+  it('refuses a key that belongs to another company with KEY_PROVIDER_MISMATCH, storing and sending nothing (spec 07 §8.2)', async () => {
+    const cases: Array<[string, string, RegExp]> = [
+      ['anthropic', 'sk-proj-SENTINEL-WRONG', /looks like an OpenAI key\. Paste it on the OpenAI card/],
+      ['openai', 'sk-ant-api03-SENTINEL-WRONG', /looks like an Anthropic key\. Paste it on the Anthropic card/],
+      ['openai', 'sk-or-v1-SENTINEL-WRONG', /looks like an OpenRouter key\. Model Court does not take OpenRouter keys/],
+    ]
+    for (const [provider, apiKey, message] of cases) {
+      const res = await h.request('POST', '/credentials', { as: OWNER, body: { provider, label: 'Wrong card', apiKey, consentToStorage: true } })
+      expect(res.status, apiKey).toBe(422)
+      expect(res.json.error.code).toBe('KEY_PROVIDER_MISMATCH')
+      expect(res.json.error.message).toMatch(message)
+      expect(res.text).not.toContain(apiKey)
+    }
+    expect(h.providerCalls).toHaveLength(0)
+    expect((await h.db.prepare('SELECT COUNT(*) AS n FROM provider_credentials').first<{ n: number }>())?.n).toBe(0)
+    expect(JSON.stringify(h.logs)).not.toContain('SENTINEL-WRONG')
+  })
+
   it('allows one active key per provider, atomic replace, and idempotent replay without secrets in receipts', async () => {
     const setup = await setupOwner(h)
     const dup = await h.request('POST', '/credentials', { as: OWNER, body: { provider: 'openai', label: 'Second', apiKey: 'sk-other', consentToStorage: true } })

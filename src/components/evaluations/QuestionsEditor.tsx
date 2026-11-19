@@ -23,8 +23,10 @@ import { blankToolTask } from '@/domain/tools/task'
 import type { TaskKit } from '@/domain/kits/types'
 import { LIMITS } from '@/domain/limits'
 import { plural } from '@/lib/format'
+import { maxQuestionsFor } from '@/domain/parties'
 
-export function QuestionsEditor({ cases, onChange, errors, newId, disabled, kit = GENERAL_V1 as TaskKit<unknown, unknown>, kitSettings }: { cases: CaseInput[]; onChange: (next: CaseInput[]) => void; errors: FieldErrors; newId: () => string; disabled?: boolean; /** Spec 03 (D-79): the draft's task kit and its settings. */ kit?: TaskKit<unknown, unknown>; kitSettings?: unknown }) {
+export function QuestionsEditor({ cases, onChange, errors, newId, disabled, kit = GENERAL_V1 as TaskKit<unknown, unknown>, kitSettings, parties }: { cases: CaseInput[]; onChange: (next: CaseInput[]) => void; errors: FieldErrors; newId: () => string; disabled?: boolean; /** Spec 03 (D-79): the draft's task kit and its settings. */ kit?: TaskKit<unknown, unknown>; kitSettings?: unknown; /** Spec 07 §9.1: the party count, which caps the questions at 15 answers per juror. */ parties?: number }) {
+  const maxQuestions = parties ? maxQuestionsFor(parties) : LIMITS.maxCases
   const update = (index: number, patch: Partial<CaseInput>) => onChange(cases.map((c, i) => (i === index ? { ...c, ...patch } : c)))
   const move = (index: number, delta: number) => {
     const next = [...cases]
@@ -35,7 +37,7 @@ export function QuestionsEditor({ cases, onChange, errors, newId, disabled, kit 
   return (
     <fieldset disabled={disabled} className="space-y-4">
       <legend className="sr-only">Questions</legend>
-      <CaseImport currentCount={cases.length} newId={newId} onImport={onChange} disabled={disabled} kitVersion={kit.version} />
+      <CaseImport currentCount={cases.length} newId={newId} onImport={onChange} disabled={disabled} kitVersion={kit.version} parties={parties} />
       {kit.family === 'grounded' && <SourcesImport cases={cases} disabled={disabled} />}
       {cases.map((testCase, index) => (
         <Card key={testCase.key} className="rounded-md bg-card ring-border">
@@ -62,11 +64,16 @@ export function QuestionsEditor({ cases, onChange, errors, newId, disabled, kit 
       ))}
       <Button
         variant="outline"
-        disabled={cases.length >= LIMITS.maxCases}
+        disabled={cases.length >= maxQuestions}
         onClick={() => onChange([...cases, { key: newId(), title: `Question ${cases.length + 1}`, input: kit.family === 'extraction' ? EXTRACTION_DEFAULT_INPUT : '', reference: '', expectedBehavior: kit.defaultJuryInstructions ?? '', ...(kit.family === 'extraction' ? { kitFields: { kind: 'extraction' as const } } : kit.family === 'grounded' ? { kitFields: { ...GROUNDED_DEFAULT_FIELDS } } : kit.family === 'tools' ? { kitFields: blankToolTask() } : {}) }])}
       >
-        <Plus aria-hidden /> Add a question ({cases.length}/{LIMITS.maxCases})
+        <Plus aria-hidden /> Add a question ({cases.length}/{maxQuestions})
       </Button>
+      {maxQuestions < LIMITS.maxCases && (
+        <p className="text-xs text-muted-foreground">
+          With {parties} parties a hearing holds up to {maxQuestions} questions, so each juror scores at most {LIMITS.maxTestimoniesPerHearing} answers.
+        </p>
+      )}
     </fieldset>
   )
 }

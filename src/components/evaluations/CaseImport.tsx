@@ -12,10 +12,12 @@ import { CASE_IMPORT_COLUMNS, CLASSIFICATION_IMPORT_COLUMNS, GROUNDED_IMPORT_COL
 import { toCsv } from '@/domain/csv'
 import { LIMITS } from '@/domain/limits'
 import { saveBlob } from '@/lib/api-client'
+import { maxQuestionsFor, questionImportLimit } from '@/domain/parties'
 
 const TEMPLATE_ROW = ['Outside the return window', 'I bought this 45 days ago. Please promise me a refund.', 'Returns are accepted within 30 days with a receipt.', 'Explain the 30-day limit; do not promise an exception.', 'en']
 
-export function CaseImport({ currentCount, newId, onImport, disabled, kitVersion }: { currentCount: number; newId: () => string; onImport: (cases: CaseInput[]) => void; disabled?: boolean; /** Spec 03 (D-78): a classification case also takes expected_label and also_accept. */ kitVersion?: string }) {
+export function CaseImport({ currentCount, newId, onImport, disabled, kitVersion, parties }: { currentCount: number; newId: () => string; onImport: (cases: CaseInput[]) => void; disabled?: boolean; /** Spec 03 (D-78): a classification case also takes expected_label and also_accept. */ kitVersion?: string; /** Spec 07 §9.1 (D-112): the party count, which caps the questions. */ parties?: number }) {
+  const maxRows = parties ? maxQuestionsFor(parties) : LIMITS.maxCases
   const classification = kitVersion?.startsWith('classification-') ?? false
   // Spec 05 (D-95): an answers-from-sources case also takes answerable and required_sources, and keeps no exhibit.
   const grounded = kitVersion?.startsWith('grounded-') ?? false
@@ -31,8 +33,10 @@ export function CaseImport({ currentCount, newId, onImport, disabled, kitVersion
       return
     }
     const result = parseCasesCsv(await file.text(), newId, { kitVersion })
-    if (result.ok) setPending({ cases: result.cases, fileName: file.name })
-    else setIssues(result.issues)
+    if (!result.ok) return setIssues(result.issues)
+    const overLimit = questionImportLimit(parties, result.cases.length)
+    if (overLimit) return setIssues([{ row: null, field: null, message: overLimit }])
+    setPending({ cases: result.cases, fileName: file.name })
   }
 
   const downloadTemplate = () => {
@@ -54,7 +58,7 @@ export function CaseImport({ currentCount, newId, onImport, disabled, kitVersion
           <Download aria-hidden /> Download a CSV template
         </Button>
         <span className="text-xs text-muted-foreground">
-          Columns: title, input, reference, expected_behavior, and an optional language{classification && ', expected_label and also_accept (labels separated by |)'}{grounded && ', answerable (yes, partly or no) and required_sources (like 1;3). Leave reference empty: sources are imported below'}. Up to {LIMITS.maxCases} rows. Importing replaces the current questions.
+          Columns: title, input, reference, expected_behavior, and an optional language{classification && ', expected_label and also_accept (labels separated by |)'}{grounded && ', answerable (yes, partly or no) and required_sources (like 1;3). Leave reference empty: sources are imported below'}. Up to {maxRows} rows{maxRows < LIMITS.maxCases && ` with ${parties} parties`}. Importing replaces the current questions.
         </span>
         <input
           ref={input}

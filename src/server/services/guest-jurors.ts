@@ -16,7 +16,7 @@ import type { Deps, VerifiedCaller } from '../deps'
 import { ApiError } from '../http'
 import { notifyRun } from './generation'
 import { hashInviteToken } from './reviews'
-import { buildAssignment, insertSessionStatement, type EligibleManifest } from './runs'
+import { buildAssignment, insertSessionStatement, sessionCount, type EligibleManifest } from './runs'
 
 export const GUEST_PREFIX = 'mcj_'
 export const GUEST_COOKIE_PREFIX = '__Host-mcj-'
@@ -102,6 +102,7 @@ export async function redeemInviteAsGuest(deps: Deps, input: z.output<typeof gue
   }
 
   const manifest = JSON.parse(invite.eligible_manifest_json) as EligibleManifest
+  const rotation = await sessionCount(db, invite.run_id)
   const principalId = deps.newId()
   const deviceId = deps.newId()
   const deviceSecret = newSecret()
@@ -123,7 +124,7 @@ export async function redeemInviteAsGuest(deps: Deps, input: z.output<typeof gue
           .prepare(`INSERT INTO juror_principals (id, run_id, invite_id, display_name, resume_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
           .bind(principalId, invite.run_id, invite.id, input.displayName, await sha256(resumeSecret), now),
         db.prepare(`INSERT INTO juror_devices (id, principal_id, secret_hash, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)`).bind(deviceId, principalId, await sha256(deviceSecret), now, now),
-        insertSessionStatement(db, { id: deps.newId(), runId: invite.run_id, userId: reviewerId, contextType: 'invited', assignment: buildAssignment(manifest, deps.newId), now }),
+        insertSessionStatement(db, { id: deps.newId(), runId: invite.run_id, userId: reviewerId, contextType: 'invited', assignment: buildAssignment(manifest, deps.newId, rotation), now }),
         // IDs only: never the display name, token, or secrets.
         auditStatement(db, { eventType: 'invite.redeem_guest', requestId, outcome: 'ok', actorUserId: reviewerId, runId: invite.run_id, evaluationId: invite.evaluation_id }, now),
       ],

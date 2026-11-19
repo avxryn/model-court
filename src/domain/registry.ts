@@ -7,14 +7,18 @@
  * recorded in docs/provider-contracts.md and `verifiedAt` is set here. Until
  * then the catalog marks it as awaiting its live check and run admission
  * rejects it (F04). Documentation alone never sets `verifiedAt`.
+ *
+ * Spec 07 (D-108): Google's Gemini API is the third provider. Its routes carry no structured output,
+ * PDF input or tool loop (no successor versions), so kits that need those refuse Gemini parties.
  */
 
-export const PROVIDERS = ['openai', 'anthropic'] as const
+export const PROVIDERS = ['openai', 'anthropic', 'google'] as const
 export type ProviderId = (typeof PROVIDERS)[number]
 
 export const PROVIDER_NAMES: Record<ProviderId, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
+  google: 'Google',
 }
 
 /**
@@ -54,6 +58,12 @@ export const ADAPTER_PROFILES = {
   'anthropic-messages-tool-loop-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false, toolUse: true },
   'anthropic-messages-between-tools-tool-loop-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false, toolUse: true },
   'anthropic-messages-adaptive-low-tool-loop-v1': { provider: 'anthropic', multiTurn: true, reasoning: 'low', structuredOutput: false, pdfInput: false, toolUse: true },
+  // Spec 07 §6.2 (D-108): Gemini's stateless `generateContent`, `store: false`. `minimal` is recorded as
+  // `low` because Google says the model may still think, so it keeps the headroom. None of the three
+  // sends structured output, a PDF or tools, and none has a successor, so `adapterVersionFor` refuses them.
+  'google-generate-low-v1': { provider: 'google', multiTurn: true, reasoning: 'low', structuredOutput: false, pdfInput: false, toolUse: false },
+  'google-generate-minimal-v1': { provider: 'google', multiTurn: true, reasoning: 'low', structuredOutput: false, pdfInput: false, toolUse: false },
+  'google-generate-budget-off-v1': { provider: 'google', multiTurn: true, reasoning: 'off', structuredOutput: false, pdfInput: false, toolUse: false },
 } as const satisfies Record<string, { provider: ProviderId; multiTurn: boolean; reasoning: ReasoningMode; structuredOutput: boolean; pdfInput: boolean; toolUse: boolean }>
 
 /**
@@ -148,10 +158,13 @@ export interface ModelRoute {
   adapterVersion: string
 }
 
+// Not bumped for spec 07 (D-108): the Gemini routes are additions and no existing route changed, as with
+// items 4 and 6; a snapshot records only the routes it uses.
 export const PROVIDER_REGISTRY_VERSION = '2026-11-17.3'
 
 const OPENAI_DOCS = 'https://developers.openai.com/api/docs/models/'
 const ANTHROPIC_DOCS = 'https://platform.claude.com/docs/en/about-claude/models/overview'
+const GOOGLE_DOCS = 'https://aistudio.google.com/docs/models/'
 
 /** GPT-6 and GPT-5.6 models share a 1,050,000-token window and a 128,000-token output limit. */
 function openai(modelId: string, label: string, line: string, reasoning: ReasoningMode, extra: Partial<ModelRoute> = {}): ModelRoute {
@@ -189,6 +202,32 @@ function anthropic(modelId: string, label: string, line: string, adapterVersion:
     reasoning: ADAPTER_PROFILES[adapterVersion].reasoning,
     retiresNotBefore: null,
     docsUrl: ANTHROPIC_DOCS,
+    verifiedAt: null,
+    multiTurnVerifiedAt: null,
+    structuredVerifiedAt: null,
+    pdfVerifiedAt: null,
+    toolsVerifiedAt: null,
+    adapterVersion,
+    ...extra,
+  }
+}
+
+/**
+ * Every Gemini route here has a 1,048,576-token window and a 65,536-token default synchronous output
+ * limit (each model's page, read 2026-11-19). Model IDs come only from here (pattern unit-tested).
+ */
+function google(modelId: string, label: string, line: string, adapterVersion: Extract<AdapterVersion, `google-${string}`>, extra: Partial<ModelRoute> = {}): ModelRoute {
+  return {
+    key: `google-${modelId.replaceAll('.', '-')}`,
+    provider: 'google',
+    modelId,
+    label,
+    line,
+    contextTokens: 1_048_576,
+    providerMaxOutputTokens: 65_536,
+    reasoning: ADAPTER_PROFILES[adapterVersion].reasoning,
+    retiresNotBefore: null,
+    docsUrl: GOOGLE_DOCS + modelId,
     verifiedAt: null,
     multiTurnVerifiedAt: null,
     structuredVerifiedAt: null,
@@ -239,6 +278,20 @@ export const MODEL_ROUTES: readonly ModelRoute[] = [
   anthropic('claude-sonnet-4-6', 'Claude Sonnet 4.6', 'Sonnet', 'anthropic-messages-v2'),
   anthropic('claude-haiku-5-5', 'Claude Haiku 5.5', 'Haiku', 'anthropic-messages-v2', { verifiedAt: '2026-11-17' }),
   anthropic('claude-haiku-4-5-20251001', 'Claude Haiku 4.5', 'Haiku', 'anthropic-messages-v2', { contextTokens: 200_000, providerMaxOutputTokens: 64_000, retiresNotBefore: '2026-10-15' }),
+
+  // Google (spec 07 §6.2, D-108): stable text models only. Gemini 4 and 3.8 Flash cannot turn thinking
+  // off (lowest level `low`); 3.6, 3.5 and 3.1 accept `minimal`; 2.5 Flash-Lite turns it off with
+  // `thinkingBudget: 0` (optional, Q1). Left out: previews (they get shut down), the deprecated
+  // gemini-2.5-flash and -pro (silently rerouted from Dec 1, 2026), and non-text models.
+  google('gemini-4-carbon', 'Gemini 4 Carbon', 'Gemini 4', 'google-generate-low-v1'),
+  google('gemini-4-argon', 'Gemini 4 Argon', 'Gemini 4', 'google-generate-low-v1'),
+  google('gemini-4-neon', 'Gemini 4 Neon', 'Gemini 4', 'google-generate-low-v1'),
+  google('gemini-4-hydrogen', 'Gemini 4 Hydrogen', 'Gemini 4', 'google-generate-low-v1'),
+  google('gemini-3.8-flash', 'Gemini 3.8 Flash', 'Gemini 3', 'google-generate-low-v1'),
+  google('gemini-3.6-flash', 'Gemini 3.6 Flash', 'Gemini 3', 'google-generate-minimal-v1'),
+  google('gemini-3.5-flash-lite', 'Gemini 3.5 Flash-Lite', 'Gemini 3', 'google-generate-minimal-v1'),
+  google('gemini-3.1-flash-lite', 'Gemini 3.1 Flash-Lite', 'Gemini 3', 'google-generate-minimal-v1'),
+  google('gemini-2.5-flash-lite', 'Gemini 2.5 Flash-Lite', 'Gemini 2.5', 'google-generate-budget-off-v1'),
 ]
 
 export function findRoute<R extends Pick<ModelRoute, 'key'>>(key: string, routes: readonly R[]): R | undefined

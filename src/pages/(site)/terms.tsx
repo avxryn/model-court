@@ -21,9 +21,10 @@ export default function TermsPage() {
 
       <LegalSection id="keys" title="Your API keys and costs">
         <ul>
-          <li>Hearings and the AI grader use your own OpenAI or Anthropic API key. Those calls are billed to your provider account, and you are responsible for those charges.</li>
+          <li>Hearings and the AI grader use your own OpenAI, Anthropic or Google API key. Those calls are billed to your provider account, and you are responsible for those charges.</li>
           <li>Use a key you can afford to lose: a dedicated key with a spending limit. Remove it when you are done.</li>
           <li>You must follow your provider’s terms and usage policies for everything sent with your key.</li>
+          <li>Judges in the EEA, Switzerland or the UK must use a Gemini key from a paid-tier Google project.</li>
         </ul>
       </LegalSection>
 
@@ -49,7 +50,7 @@ export default function TermsPage() {
       </LegalSection>
 
       <LegalSection id="trademarks" title="Names of models and providers">
-        <p>OpenAI, GPT, Anthropic, and Claude are trademarks of their owners. Model Court names them only to identify which models you can compare. It is not affiliated with or endorsed by OpenAI or Anthropic.</p>
+        <p>OpenAI, GPT, Anthropic, Claude, Google, and Gemini are trademarks of their owners. Model Court names them only to identify which models you can compare. It is not affiliated with or endorsed by OpenAI, Anthropic or Google.</p>
       </LegalSection>
 
       <LegalSection id="warranty" title="No warranty, and limits of liability">

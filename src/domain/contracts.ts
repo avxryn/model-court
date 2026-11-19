@@ -6,7 +6,8 @@
 import { z } from 'zod'
 import { kitChoiceSchema, kitDraftIssues, kitFieldsSchema } from './kits/registry'
 import { LIMITS } from './limits'
-import { PROVIDERS } from './registry'
+import { testimonyLimitMessage } from './parties'
+import { PROVIDERS, type ProviderId } from './registry'
 import { RUBRIC_VERSIONS } from './rubric'
 import { codePointLength, hasDisallowedControlChars, utf8ByteLength } from './text'
 
@@ -147,6 +148,11 @@ export const draftInputSchema = z
   .refine((draft) => utf8ByteLength(JSON.stringify(draft)) <= LIMITS.draftJsonBytes, {
     message: 'Draft exceeds 96 KiB',
   })
+  // Spec 07 §9.1 (D-110): every juror scores every testimony, so parties × questions is capped.
+  .superRefine((draft, ctx) => {
+    const message = testimonyLimitMessage(draft.configurations.length, draft.cases.length)
+    if (message) ctx.addIssue({ code: 'custom', path: ['configurations'], message })
+  })
   .refine((draft) => draft.samplesPerAnswer === undefined || draft.configurations.some((configuration) => !isImported(configuration)), {
     message: 'Imported answers are used once; repeats need at least one generated party',
     path: ['samplesPerAnswer'],
@@ -264,7 +270,8 @@ export const startSpecialMasterSchema = z.strictObject({
 })
 
 export const retrySchema = z.strictObject({
-  generationIds: z.array(uuid).min(1).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun * LIMITS.maxSamplesPerAnswer),
+  // Spec 07 §5: by testimonies, so five parties do not raise the limit (15 testimonies × 3 samples).
+  generationIds: z.array(uuid).min(1).max(LIMITS.maxTestimoniesPerHearing * LIMITS.maxSamplesPerAnswer),
   acknowledgePossiblePriorCharge: z.literal(true),
   /**
    * D-57: the judge's current key for a provider whose pinned key was removed or
@@ -314,7 +321,7 @@ export type DraftRating = z.infer<typeof draftRatingSchema>
 export type FieldFlag = NonNullable<DraftRating['fieldFlags']>[number]
 
 export const saveRatingsSchema = z.strictObject({
-  ratings: z.array(draftRatingSchema).max(LIMITS.maxCases * LIMITS.maxConfigurationsPerRun),
+  ratings: z.array(draftRatingSchema).max(LIMITS.maxTestimoniesPerHearing),
 })
 
 export const revealSchema = z.strictObject({
@@ -355,7 +362,41 @@ export const createCredentialSchema = z.strictObject({
   if (ADMIN_KEY_PREFIXES.some((prefix) => value.apiKey.startsWith(prefix))) {
     ctx.addIssue({ code: 'custom', path: ['apiKey'], message: 'Admin keys are not accepted. Create a project (OpenAI) or workspace (Anthropic) API key with access only to the model you need.' })
   }
+  // Spec 07 §8.2: a key that clearly belongs to another company is refused before it is stored or
+  // checked, because Check key would otherwise send it to the wrong company.
+  const mismatch = foreignKeyOwner(value.provider, value.apiKey)
+  if (mismatch) ctx.addIssue({ code: 'custom', path: ['apiKey'], message: keyMismatchMessage(mismatch), params: { apiCode: 'KEY_PROVIDER_MISMATCH' } })
 })
 
 /** Known prefixes of provider organization-admin keys (best-effort, not a guarantee). */
 export const ADMIN_KEY_PREFIXES = ['sk-admin-', 'sk-ant-admin'] as const
+
+/** Whose key a prefix shows it to be: a provider here, or OpenRouter, which Model Court does not accept. */
+export type KeyOwner = ProviderId | 'openrouter'
+
+/**
+ * Spec 07 §8.2: prefixes that show a key belongs to someone else, per card. Best-effort: a key with none
+ * of these may still be wrong, and the key check then reports it. Google publishes no fixed key format,
+ * so no card requires a prefix.
+ */
+export const FOREIGN_KEY_PREFIXES: Readonly<Record<ProviderId, ReadonlyArray<readonly [prefix: string, owner: KeyOwner]>>> = {
+  openai: [['sk-ant-', 'anthropic'], ['AIza', 'google'], ['sk-or-', 'openrouter']],
+  anthropic: [['AIza', 'google'], ['sk-or-', 'openrouter'], ['sk-proj-', 'openai'], ['sk-svcacct-', 'openai']],
+  // Every OpenAI, Anthropic and OpenRouter key starts with `sk-`; the more specific prefixes name the company.
+  google: [['sk-ant-', 'anthropic'], ['sk-or-', 'openrouter'], ['sk-', 'openai']],
+}
+
+/** The company a key on `provider`'s card clearly belongs to instead, or null. */
+export function foreignKeyOwner(provider: ProviderId, apiKey: string): KeyOwner | null {
+  return FOREIGN_KEY_PREFIXES[provider].find(([prefix]) => apiKey.startsWith(prefix))?.[1] ?? null
+}
+
+const KEY_OWNER_NAMES: Record<KeyOwner, string> = { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', openrouter: 'OpenRouter' }
+
+export function keyMismatchMessage(owner: KeyOwner): string {
+  const name = KEY_OWNER_NAMES[owner]
+  const article = /^[AEIOU]/.test(name) ? 'an' : 'a'
+  return owner === 'openrouter' || !(PROVIDERS as readonly string[]).includes(owner)
+    ? `This looks like ${article} ${name} key. Model Court does not take ${name} keys.`
+    : `This looks like ${article} ${name} key. Paste it on the ${name} card.`
+}

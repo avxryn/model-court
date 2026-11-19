@@ -21,6 +21,7 @@ import type { ExtractionSettings } from '../../domain/kits/extraction'
 import { listDraftDocuments, orphanDocumentStatements, withDocumentRefs } from './documents'
 import { listDraftSources, orphanSourceStatements, ownerSourcesView, withSourceRefs } from './sources'
 import { caseOrigin, caseVersions } from './scenarios'
+import { testimonyLimitMessage } from '../../domain/parties'
 
 export interface EvaluationSummary {
   id: string
@@ -110,7 +111,7 @@ export async function createEvaluation(deps: Deps, userId: string, input: z.outp
   const id = deps.newId()
   // Spec 02 (D-71): an imported scenario starts the case instead of the example, after the same caps as a save.
   if (input.draft) {
-    const capError = configurationCapError(deps, input.draft.configurations.length) ?? samplesCapError(deps, input.draft.samplesPerAnswer)
+    const capError = configurationCapError(deps, input.draft.configurations.length) ?? testimonyCapError(input.draft.configurations.length, input.draft.cases.length) ?? samplesCapError(deps, input.draft.samplesPerAnswer)
     if (capError) throw capError
   }
   // Spec 04 (D-87): a new case has no documents yet, whatever a scenario file says.
@@ -213,13 +214,19 @@ export async function getEvaluation(deps: Deps, userId: string, evaluationId: st
   }
 }
 
-/** F24: the schema allows up to three configurations; the deployment may cap lower. */
+/** F24, spec 07: the schema allows up to five configurations; the deployment may cap lower (default 3). */
 export function configurationCapError(deps: Deps, count: number): ApiError | null {
   const cap = deps.config.maxConfigurationsPerRun
   if (count <= cap) return null
   return new ApiError(422, 'VALIDATION_FAILED', `This deployment allows at most ${cap} configurations per comparison.`, {
     fields: [{ path: 'configurations', message: `At most ${cap} configurations` }],
   })
+}
+
+/** Spec 07 §9.1 (D-110): parties × questions (imported parties included) within `LIMITS.maxTestimoniesPerHearing`. */
+export function testimonyCapError(parties: number, questions: number): ApiError | null {
+  const message = testimonyLimitMessage(parties, questions)
+  return message ? new ApiError(422, 'VALIDATION_FAILED', message, { fields: [{ path: 'configurations', message }] }) : null
 }
 
 /** D-65: a draft may not ask for more samples per answer than this deployment allows. */
@@ -234,7 +241,7 @@ export function samplesCapError(deps: Deps, samples: number | undefined): ApiErr
 export async function saveDraft(deps: Deps, userId: string, evaluationId: string, input: DraftInput, ifMatch: number) {
   const access = await loadEvaluationAccess(deps.db, evaluationId, userId)
   requireOwner(access)
-  const capError = configurationCapError(deps, input.configurations.length) ?? samplesCapError(deps, input.samplesPerAnswer)
+  const capError = configurationCapError(deps, input.configurations.length) ?? testimonyCapError(input.configurations.length, input.cases.length) ?? samplesCapError(deps, input.samplesPerAnswer)
   if (capError) throw capError
   // Spec 04 (D-87): a question's document reference always comes from the server's own table.
   // Spec 05 (D-93): likewise a grounded question's source references.

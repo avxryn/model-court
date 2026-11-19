@@ -16,6 +16,8 @@ import { quoteFindings } from '@/lib/citations-view'
 import type { ResultsView } from '@/lib/dto'
 import { ERROR_TEXT } from '@/lib/error-text'
 import { formatDuration } from '@/lib/format'
+import { TestimonyDeck } from '@/components/review/TestimonyDeck'
+import { ONE_AT_A_TIME_FROM } from '@/domain/parties'
 
 type Question = ResultsView['cases'][number]
 
@@ -82,8 +84,9 @@ function QuestionRecord({ testCase, labels, checkLabels, rubricVersion, sources 
       <p className="text-xs text-muted-foreground">Jury instructions: {testCase.expectedBehavior}</p>
       {sources && key?.kind === 'grounded' && key.answerable && <p className="text-xs text-muted-foreground">{groundingKeyText({ answerable: key.answerable, requiredSources: key.requiredSources ?? [] })}</p>}
       {sources && <SourceList caseKey={`record-${testCase.key}`} sources={sources} highlights={highlights} />}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {testCase.responses.map((response) => (
+      {(() => {
+        // Spec 07 §9.4 (D-111): from four parties on, the same tabs and "Compare two" as the worksheet.
+        const card = (response: Question['responses'][number]) => (
           <div key={response.configurationKey} className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-semibold">{labels[response.configurationKey]}</span>
@@ -125,8 +128,13 @@ function QuestionRecord({ testCase, labels, checkLabels, rubricVersion, sources 
             )}
             {(response as { checks?: CheckResult[] | null }).checks && <TestimonyChecks results={(response as { checks: CheckResult[] }).checks} labels={checkLabels} party={labels[response.configurationKey]} />}
           </div>
-        ))}
-      </div>
+        )
+        return testCase.responses.length >= ONE_AT_A_TIME_FROM ? (
+          <TestimonyDeck key={testCase.key} noun="Party" keys={false} items={testCase.responses.map((response) => ({ key: response.configurationKey, label: labels[response.configurationKey] ?? response.configurationKey, node: card(response) }))} />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">{testCase.responses.map(card)}</div>
+        )
+      })()}
       {testCase.judgments.length > 0 && (
         <Table>
           <TableHeader>

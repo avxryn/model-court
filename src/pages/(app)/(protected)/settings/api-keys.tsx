@@ -23,7 +23,7 @@ export default function ApiKeysPage() {
         crumbs={[{ label: 'Account' }, { label: 'Provider keys' }]}
         eyebrow="Account"
         title="Provider API keys"
-        description="Live comparisons use your own OpenAI and Anthropic keys. Each generation is billed by the provider to your account. Jurors never need a key."
+        description="Live comparisons use your own OpenAI, Anthropic or Google keys. Each generation is billed by the provider to your account. Jurors never need a key."
       />
       <div className="mb-4">
         <DailyAllowance quota={quota.data} />

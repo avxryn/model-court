@@ -254,6 +254,8 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
         timeout,
       )
     })
+    // Spec 07 §6.5: refused by the outbound allowlist before any send.
+    if (outcome.kind === 'failure' && outcome.unsent) unsent = true
   } catch (error) {
     if (error instanceof AttemptFenced) {
       deps.log({ event: 'attempt.fenced_before_send', generationId: job.generationId, attemptNo: job.attemptNo })

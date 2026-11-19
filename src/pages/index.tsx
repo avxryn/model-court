@@ -17,14 +17,14 @@ import { cn } from '@/lib/utils'
 
 const STEPS = [
   { title: 'File the case', plain: 'Set up', text: 'Up to five questions, each with an exhibit (reference evidence) and jury instructions (a scoring guide only the judge and jurors see). Two parties, one fixed rubric.' },
-  { title: 'Hear testimony', plain: 'Generate', text: 'Each party answers using your own OpenAI or Anthropic API key, billed to your provider account. No platform credits.' },
+  { title: 'Hear testimony', plain: 'Generate', text: 'Each party answers using your own OpenAI, Anthropic or Google API key, billed to your provider account. No platform credits.' },
   { title: 'Deliberate', plain: 'Review blind', text: 'You and up to three jurors score shuffled, unlabeled answers. Nobody sees anyone else’s ratings early.' },
   { title: 'Unseal the record', plain: 'Reveal', text: 'See which party gave which testimony, the jury’s findings, failures, and disagreements.' },
   { title: 'Enter judgment', plain: 'Decide', text: 'Record your decision and your reasons. It may disagree with the numbers; say why.' },
 ]
 
 const DATA_HANDLING: Array<{ icon: LucideIcon; title: string; text: string }> = [
-  { icon: KeyRound, title: 'Your key, your provider bill', text: 'Live hearings require your own OpenAI and/or Anthropic API key. The selected providers receive each case’s input, reference, and the system instructions, and bill your account.' },
+  { icon: KeyRound, title: 'Your key, your provider bill', text: 'Live hearings require your own OpenAI, Anthropic or Google API key. The selected providers receive each case’s input, reference, and the system instructions, and bill your account.' },
   { icon: EyeOff, title: 'Kept from models', text: 'Scoring guides, ratings, juror identities, invitations, and verdicts are never sent to models.' },
   { icon: Lock, title: 'Keys at rest', text: 'Keys are encrypted at rest and never shown again; the trusted deployment operator still holds the decryption root. Jurors never need a key.' },
   { icon: Trash2, title: 'Deleting a case', text: 'Deleting a case removes it from Model Court within 24 hours; it cannot delete data a provider already received. Use synthetic or permitted information only.' },
@@ -57,7 +57,7 @@ export default function Landing() {
                 Open your own case
               </Button>
             </div>
-            <p className="mt-4 text-small text-muted-foreground">No account needed for the sample, and it sends nothing to any AI provider. Live hearings use your own OpenAI or Anthropic key.</p>
+            <p className="mt-4 text-small text-muted-foreground">No account needed for the sample, and it sends nothing to any AI provider. Live hearings use your own OpenAI, Anthropic or Google key.</p>
           </div>
           <DocketSpread />
         </section>

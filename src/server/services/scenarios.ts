@@ -17,7 +17,7 @@ import { auditStatement, cond, GuardFailed, runGuarded } from '../db/sql'
 import type { Deps } from '../deps'
 import { ApiError, notFound, revisionConflict } from '../http'
 import { idempotent, requestHash } from '../receipts'
-import { caseQuotaError, configurationCapError, parseStoredDraft, samplesCapError } from './evaluations'
+import { caseQuotaError, configurationCapError, parseStoredDraft, samplesCapError, testimonyCapError } from './evaluations'
 import { parseSnapshot } from './runs'
 import { listDraftDocuments, listRunDocuments, withDocumentRefs } from './documents'
 import { copySourceStatements, listDraftSources, listRunSources, restoreSourceStatements, withSourceRefs, type StoredSource } from './sources'
@@ -158,7 +158,7 @@ export async function restoreDraft(deps: Deps, userId: string, evaluationId: str
   if (!parsed.success) {
     throw new ApiError(422, 'VALIDATION_FAILED', 'This hearing’s setup cannot be restored into a draft as it is.', { fields: parsed.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })) })
   }
-  const capError = configurationCapError(deps, parsed.data.configurations.length) ?? samplesCapError(deps, parsed.data.samplesPerAnswer)
+  const capError = configurationCapError(deps, parsed.data.configurations.length) ?? testimonyCapError(parsed.data.configurations.length, parsed.data.cases.length) ?? samplesCapError(deps, parsed.data.samplesPerAnswer)
   if (capError) throw capError
   const draft: Draft = { schemaVersion: 1, ...parsed.data }
   const db = deps.db
@@ -280,7 +280,7 @@ export async function duplicateEvaluation(deps: Deps, userId: string, evaluation
     }
     const parsed = draftInputSchema.safeParse(next)
     if (!parsed.success) throw new ApiError(422, 'VALIDATION_FAILED', 'This setup cannot be copied into a new case as it is.')
-    const capError = configurationCapError(deps, parsed.data.configurations.length) ?? samplesCapError(deps, parsed.data.samplesPerAnswer)
+    const capError = configurationCapError(deps, parsed.data.configurations.length) ?? testimonyCapError(parsed.data.configurations.length, parsed.data.cases.length) ?? samplesCapError(deps, parsed.data.samplesPerAnswer)
     if (capError) throw capError
     // Spec 04 (D-87): the copy takes the source's documents (the same owner's blobs), under the new question keys.
     const sourceDocuments = input.fromRunId ? await listRunDocuments(db, input.fromRunId) : await listDraftDocuments(db, evaluationId)

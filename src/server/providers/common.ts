@@ -7,6 +7,7 @@
 import type { TranscriptMessage } from '../../domain/contracts'
 import { LIMITS } from '../../domain/limits'
 import { utf8ByteLength } from '../../domain/text'
+import { isOutboundRefused } from './endpoints'
 
 export interface ProviderRequest {
   modelId: string
@@ -97,6 +98,8 @@ export interface ProviderFailure {
   definite: boolean
   providerRequestId: string | null
   durationMs: number
+  /** Refused before any network send (spec 07 §6.5: an outbound refusal), so its budget unit can be released. */
+  unsent?: true
 }
 
 export type ProviderOutcome = ProviderSuccess | ProviderFailure
@@ -110,7 +113,8 @@ export interface RawResponse {
   durationMs: number
 }
 
-async function readCapped(response: Response, maxBytes: number): Promise<string | null> {
+/** The body as text, or null when it passes `maxBytes` (the rest is never read). */
+export async function readCapped(response: Response, maxBytes: number): Promise<string | null> {
   if (!response.body) return ''
   const reader = response.body.getReader()
   const chunks: Uint8Array[] = []
@@ -145,7 +149,8 @@ export async function postJson(
   body: unknown,
   signal: AbortSignal,
   timeoutSignal: AbortSignal,
-  requestIdHeader: string,
+  /** null: the provider documents no request-ID header (Google); the adapter reads one from the body. */
+  requestIdHeader: string | null,
 ): Promise<RawResponse | ProviderFailure> {
   const started = performance.now()
   const elapsed = () => Math.max(0, Math.round(performance.now() - started))
@@ -158,12 +163,14 @@ export async function postJson(
       redirect: 'manual',
       signal,
     })
-  } catch {
+  } catch (error) {
+    // Spec 07 §6.5: the allowlist refused the URL before any network I/O. Definite and unsent.
+    if (isOutboundRefused(error)) return { kind: 'failure', code: 'PROVIDER_REJECTED_REQUEST', definite: true, providerRequestId: null, durationMs: elapsed(), unsent: true }
     // The request may have reached the provider before the connection failed.
     const code = timeoutSignal.aborted ? 'PROVIDER_TIMEOUT' : signal.aborted ? 'PROVIDER_CANCELED' : 'PROVIDER_NETWORK_ERROR'
     return { kind: 'failure', code, definite: false, providerRequestId: null, durationMs: elapsed() }
   }
-  const requestId = response.headers.get(requestIdHeader)
+  const requestId = requestIdHeader === null ? null : response.headers.get(requestIdHeader)
   if (response.status >= 300 && response.status < 400) {
     return { kind: 'failure', code: 'PROVIDER_REDIRECT_REFUSED', definite: true, providerRequestId: requestId, durationMs: elapsed() }
   }
@@ -192,8 +199,9 @@ export function isFailure(value: RawResponse | ProviderFailure): value is Provid
 }
 
 /** Status-based normalization shared by both providers; provider-specific hints refine it. */
-export function classifyHttpError(status: number, hint: { quota?: boolean; modelMissing?: boolean }): ProviderErrorCode {
+export function classifyHttpError(status: number, hint: { quota?: boolean; modelMissing?: boolean; /** Spec 07: Google's 400 FAILED_PRECONDITION (billing off, region). */ accessDenied?: boolean }): ProviderErrorCode {
   if (hint.quota) return 'PROVIDER_QUOTA_EXHAUSTED'
+  if (hint.accessDenied) return 'PROVIDER_ACCESS_DENIED'
   if (status === 401) return 'PROVIDER_AUTH_FAILED'
   if (status === 402) return 'PROVIDER_QUOTA_EXHAUSTED'
   if (status === 403) return 'PROVIDER_ACCESS_DENIED'

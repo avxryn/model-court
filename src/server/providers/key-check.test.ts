@@ -41,6 +41,45 @@ describe('checkProviderKey (mocked provider, no network)', () => {
     expect(JSON.stringify(outcome)).not.toContain('SENTINEL')
   })
 
+  it('Google: one GET to the fixed list-models URL, key in x-goog-api-key, never in the URL (spec 07 §6.6)', async () => {
+    const { fetchFn, calls } = recordingFetch(() => new Response('{"models":[]}', { status: 200 }))
+    expect(await checkProviderKey(fetchFn, 'google', KEY)).toEqual({ result: 'valid', reason: 'OK', httpStatus: 200 })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1')
+    expect(calls[0].url).not.toContain(KEY)
+    expect(calls[0].url).not.toMatch(/key=/)
+    expect(calls[0].init.headers).toEqual({ 'x-goog-api-key': KEY })
+    expect(calls[0].init.redirect).toBe('manual')
+  })
+
+  it('Google: 401 is invalid and 403 restricted', async () => {
+    expect(await checkProviderKey(recordingFetch(() => new Response('{"error":{"code":"authentication"}}', { status: 401 })).fetchFn, 'google', KEY)).toEqual({ result: 'invalid', reason: 'AUTH_FAILED', httpStatus: 401 })
+    expect(await checkProviderKey(recordingFetch(() => new Response('{}', { status: 403 })).fetchFn, 'google', KEY)).toEqual({ result: 'restricted', reason: 'ACCESS_DENIED', httpStatus: 403 })
+  })
+
+  it('Google: a 400 is invalid only with the API_KEY_INVALID/EXPIRED reason token, read from at most 4 KiB', async () => {
+    const legacy = (reason: string, pad = '') => JSON.stringify({ error: { code: 400, message: `API key not valid. ${KEY} SENTINEL-MESSAGE${pad}`, status: 'INVALID_ARGUMENT', details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason }] } })
+    for (const reason of ['API_KEY_INVALID', 'API_KEY_EXPIRED']) {
+      const outcome = await checkProviderKey(recordingFetch(() => new Response(legacy(reason), { status: 400 })).fetchFn, 'google', KEY)
+      expect(outcome).toEqual({ result: 'invalid', reason: 'AUTH_FAILED', httpStatus: 400 })
+      expect(JSON.stringify(outcome)).not.toContain('SENTINEL')
+    }
+    expect(await checkProviderKey(recordingFetch(() => new Response(legacy('SOMETHING_ELSE'), { status: 400 })).fetchFn, 'google', KEY)).toEqual({ result: 'unreachable', reason: 'UNEXPECTED_STATUS', httpStatus: 400 })
+    expect(await checkProviderKey(recordingFetch(() => new Response('not json API_KEY_INVALID', { status: 400 })).fetchFn, 'google', KEY)).toEqual({ result: 'unreachable', reason: 'UNEXPECTED_STATUS', httpStatus: 400 })
+    // The token only in the 4 KiB message tail is never read.
+    const long = legacy('API_KEY_INVALID', 'x'.repeat(5000))
+    expect(await checkProviderKey(recordingFetch(() => new Response(long, { status: 400 })).fetchFn, 'google', KEY)).toEqual({ result: 'unreachable', reason: 'UNEXPECTED_STATUS', httpStatus: 400 })
+    // The message alone never counts.
+    expect(await checkProviderKey(recordingFetch(() => new Response(JSON.stringify({ error: { message: 'API_KEY_INVALID' } }), { status: 400 })).fetchFn, 'google', KEY)).toMatchObject({ result: 'unreachable' })
+  })
+
+  it('OpenAI and Anthropic 400s still never read the body', async () => {
+    let read = false
+    const body = new ReadableStream({ pull() { read = true } }, { highWaterMark: 0 })
+    expect(await checkProviderKey(recordingFetch(() => new Response(body, { status: 400 })).fetchFn, 'openai', KEY)).toMatchObject({ result: 'unreachable', reason: 'UNEXPECTED_STATUS' })
+    expect(read).toBe(false)
+  })
+
   it('reports a network failure as unreachable and drops the error text', async () => {
     const fetchFn = (async () => {
       throw new TypeError(`connect ECONNREFUSED while sending ${KEY}`)
