@@ -145,6 +145,46 @@ pinned work, and `CREDENTIAL_REVOKE_CREATED_BEFORE` revokes every key older than
 migration that adds a table must add it to `BACKUP_TABLES`, and a test fails otherwise. Procedures are in the
 [runbook](runbook.md).
 
+## Repository settings
+
+GitHub repository [avxryn/model-court](https://github.com/avxryn/model-court), set up on Nov 20, 2026.
+
+| Setting | State |
+|---|---|
+| Visibility | Private until Avery says otherwise |
+| Branch ruleset "Protect master and the release branch" | `master` (default) and `claude/roadmap-1-3`: no deletion, no force push. No bypass actors |
+| Tag ruleset "Protect the submission tag" | `submission-candidate-*`: no deletion, no move |
+| Dependabot alerts and security updates | On |
+| Actions | No workflows. Default workflow token is read-only and cannot approve pull requests |
+| Wiki, projects | Off |
+| History scan | Every branch and tag, before each push: no real key, private key, token or secret file. The only key-shaped strings are test fakes |
+
+> [!IMPORTANT]
+> Every commit's author is `Avery Nguyen <averynguyen04@gmail.com>`. Making the repository public
+> publishes that address. Hiding it would mean rewriting every commit, which breaks the DeepSpace deploy
+> history, so it is Avery's call.
+
+### Making it public (in this order)
+
+1. Re-run the history scan: `git rev-list --all` piped into `git grep` for key formats (see
+   [verification.md](verification.md)).
+2. Change visibility to public in GitHub settings (Avery).
+3. Right after, turn on what GitHub offers only for public repositories:
+
+   ```bash
+   gh api -X PATCH repos/avxryn/model-court -f 'security_and_analysis[secret_scanning][status]=enabled' -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled'
+   ```
+
+   ```bash
+   gh api -X PUT repos/avxryn/model-court/private-vulnerability-reporting
+   ```
+
+   ```bash
+   gh api -X PUT repos/avxryn/model-court/actions/permissions/fork-pr-contributor-approval -f approval_policy=all_external_contributors
+   ```
+
+4. Check the Security tab: secret scanning, push protection and private reporting are on, and no alert is open.
+
 ## Review history
 
 | Date | Review | Scope | Findings by severity | Resolution |
