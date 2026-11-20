@@ -51,7 +51,7 @@ PUBLIC_APP_ORIGIN = ""
 # Operator-only: take one backup now (epoch ms); BACKUP_KEEP (default 14) sets how many are kept.
 # BACKUP_REQUESTED_AT = ""
 # Shipped revision recorded in run snapshots; set to the commit you deploy.
-APP_COMMIT = "c9b99e2"
+APP_COMMIT = "274470e"
 
 [[migrations]]
 tag = "v1"
