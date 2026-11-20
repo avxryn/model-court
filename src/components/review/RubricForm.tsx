@@ -73,7 +73,7 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
                         htmlFor={itemId}
                         title={RUBRIC[dimension].anchors[score]}
                         className={cn(
-                          'relative grid h-8 w-9 cursor-pointer place-items-center border-r border-input text-sm font-medium tabular-nums transition-colors last:border-r-0 focus-within:z-[1] focus-within:ring-3 focus-within:ring-ring/50',
+                          'relative grid h-8 w-9 cursor-pointer place-items-center border-r border-input text-sm font-medium tabular-nums transition-colors last:border-r-0 focus-within:z-[1] focus-within:ring-3 focus-within:ring-ring/50 focus-within:ring-inset',
                           checked ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
                           disabled && 'cursor-not-allowed opacity-70',
                         )}
@@ -92,7 +92,7 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
 
       <div className="space-y-1.5">
         <Label htmlFor={`${id}-note`} className="flex-wrap gap-x-2 gap-y-1 text-sm leading-snug font-medium">
-          Evidence note {needsNote ? <span className="text-destructive">(required for any 0)</span> : <span className="font-normal text-muted-foreground">(optional)</span>}
+          Evidence note {needsNote ? <span className={noteInvalid ? 'text-destructive' : 'font-normal text-muted-foreground'}>(required for any 0)</span> : <span className="font-normal text-muted-foreground">(optional)</span>}
         </Label>
         <Textarea
           id={`${id}-note`}

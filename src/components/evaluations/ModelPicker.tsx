@@ -97,7 +97,7 @@ export function ModelSelect({
 }
 
 /** What this choice means for the hearing: identity, limits, reasoning, live checks. */
-export function ModelFacts({ model, needsConversation, className }: { model: CatalogModel | undefined; needsConversation?: boolean; className?: string }) {
+export function ModelFacts({ model, needsConversation, kitVersion, className }: { model: CatalogModel | undefined; needsConversation?: boolean; /** D-119: the case's kit, so the checks it needs are listed too. */ kitVersion?: string; className?: string }) {
   if (!model) return <p className={cn('text-xs text-muted-foreground', className)}>Answers are capped at {LIMITS.maxOutputTokens} tokens. No tools, browsing, or streaming.</p>
   const sentCap = model.reasoning === 'low' ? LIMITS.maxOutputTokens + LIMITS.reasoningHeadroomTokens : LIMITS.maxOutputTokens
   const rows: Array<[string, ReactNode]> = [
@@ -130,6 +130,22 @@ export function ModelFacts({ model, needsConversation, className }: { model: Cat
         `Passed ${formatDate(model.multiTurnVerifiedAt)}.`
       ) : (
         <span className={cn(needsConversation && 'text-warning')}>Not checked yet{needsConversation ? '; a question here has a conversation, so this model can’t run it yet.' : '.'}</span>
+      ),
+    ])
+  }
+  // D-119: "Live check: Passed" alone read as ready although the kit needs a check this model lacks.
+  const kitChecks: Array<[string, string | null, boolean]> = [
+    ['Structured output', model.structuredVerifiedAt, kitVersion?.startsWith('extraction-') ?? false],
+    ['Tool calls', model.toolsVerifiedAt, kitVersion?.startsWith('tools-') ?? false],
+  ]
+  for (const [term, verifiedAt, needed] of kitChecks) {
+    if (!needed && !verifiedAt) continue
+    rows.push([
+      term,
+      verifiedAt ? (
+        `Passed ${formatDate(verifiedAt)}.`
+      ) : (
+        <span className="text-warning">Not run yet. This case needs it, so this model can’t be a party until a live check is recorded.</span>
       ),
     ])
   }

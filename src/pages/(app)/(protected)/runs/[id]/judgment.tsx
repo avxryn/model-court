@@ -34,7 +34,7 @@ function Judgment({ data, reload }: { data: ResultsView; reload: () => Promise<v
   const latest = data.verdicts.at(-1)
   const isOwner = data.role === 'owner'
   return (
-    <Page>
+    <Page width="wide">
       <HearingFolder runId={data.runId} caseId={data.evaluationId} caseTitle={data.evaluationTitle} role={data.role} status={data.status}>
         <div className="relative flex flex-wrap items-center justify-between gap-3 rounded-t-sm border-x border-t border-b border-paper-edge border-b-paper-rule bg-paper px-5 py-3 sm:px-8 print:hidden">
           <p className="text-sm text-muted-foreground">{latest ? 'The judgment as one printable page. Your browser can save it as a PDF.' : isOwner ? 'No judgment yet. Enter it below; this page prints the latest one.' : 'No judgment yet.'}</p>

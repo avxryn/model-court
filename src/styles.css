@@ -109,7 +109,7 @@
     --paper-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
     --overlay-shadow: 0 0 0 1px #000, 0 12px 32px rgb(0 0 0 / 0.55);
     --scrim: rgb(0 0 0 / 0.55);
-    --slip: #20242a;
+    --slip: #272b32;
     --slip-edge: #3a3f48;
     --tab-idle-foreground: #9a9ea6;
     --mark: #6b7079;
@@ -306,6 +306,10 @@
 @layer base {
   * {
     border-color: var(--border);
+  }
+  /* D-119: a fieldset defaults to min-inline-size: min-content and pushed the 390 px editor sideways. */
+  fieldset {
+    min-inline-size: 0;
   }
   html, body, #root {
     min-height: 100vh;

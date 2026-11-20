@@ -31,6 +31,11 @@ test('a field-extraction case carries its field list, documents and answer keys'
   await expect(page.getByText(/Saved · \d+ bytes/).first()).toBeVisible()
   await expect(page.getByLabel(/Answer key \(optional\)/).first()).toHaveValue(/Dana Whitfield/)
 
+  // D-119: at phone width the editor never scrolls sideways (a fieldset used to keep its min-content width).
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0)
+  await page.setViewportSize({ width: 1280, height: 720 })
+
   // An unsupported keyword shows its fix before anything is saved.
   await page.getByText('Edit the field list as JSON Schema').click()
   await page.getByLabel('Field list (JSON Schema)').fill('{"type": "object", "properties": {"total": {"type": "number", "minimum": 0}}}')

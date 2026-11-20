@@ -46,7 +46,7 @@ export function WorksheetGrid({ material, children, columns = 2, wideMaterial = 
         <h2 className="court-label">
           <Term name="testimony" />
         </h2>
-        <div className={cn('grid gap-4', columns > 1 && !wideMaterial && 'md:grid-cols-2')}>{children}</div>
+        <div className={cn('grid gap-4', columns > 1 && !wideMaterial && 'md:grid-cols-2 md:[&>*:last-child:nth-child(odd)]:col-span-2')}>{children}</div>
       </div>
     </div>
   )

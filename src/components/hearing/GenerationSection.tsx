@@ -52,7 +52,7 @@ export function GenerationSection({ run, busy, act, folded }: { run: OwnerRunVie
   const keys = useApi<{ items: CredentialMetadata[] }>(needsRepin ? '/credentials' : null)
   const stale = needsRepin ? staleKeys(run, keys.data?.items ?? [], Date.now()) : []
   const terminal = counts.succeeded + counts.failed + counts.uncertain + counts.canceled
-  const tally = `${terminal}/${counts.planned} finished · ${counts.succeeded} succeeded · ${counts.failed} failed · ${counts.uncertain} uncertain`
+  const tally = counts.planned === 0 ? 'Imported answers only · nothing to generate' : `${terminal}/${counts.planned} finished · ${counts.succeeded} succeeded · ${counts.failed} failed · ${counts.uncertain} uncertain`
   const toggle = (id: string, on: boolean) =>
     setSelected((current) => {
       const next = new Set(current)
@@ -73,7 +73,7 @@ export function GenerationSection({ run, busy, act, folded }: { run: OwnerRunVie
     <section aria-labelledby="progress-heading" className="space-y-4 border-t border-paper-rule px-5 py-6 sm:px-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="progress-heading" className="court-label">
-          Hearing testimony <Plain>generating responses</Plain>
+          Hearing testimony <Plain>{counts.planned === 0 ? 'imported answers' : 'generating responses'}</Plain>
         </h2>
         {!folded && (
           <span className="text-sm text-muted-foreground tabular-nums" role="status">

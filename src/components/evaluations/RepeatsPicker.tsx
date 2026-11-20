@@ -1,7 +1,7 @@
 import { ChoiceCard, ChoiceCardGroup } from '@/components/court/ChoiceCard'
 import { Fold } from '@/components/court/Fold'
 import { Plain } from '@/components/court/Paper'
-import { plannedCalls } from '@/domain/quota'
+import { plannedCalls, plannedCallsAreUpperBound } from '@/domain/quota'
 import { generatedParties } from '@/domain/snapshot'
 import type { DraftInput } from '@/domain/contracts'
 import { plural } from '@/lib/format'
@@ -24,6 +24,8 @@ export function RepeatsPicker({ draft, max, onChange, disabled }: { draft: Draft
   if (generated === 0 || max <= 1) return null
   const current = draft.samplesPerAnswer ?? 1
   const calls = plannedCalls(draft)
+  // Spec 06 §5.2: a tool question may take up to its step cap per answer.
+  const upTo = plannedCallsAreUpperBound(draft)
   const imported = draft.configurations.length - generated
   return (
     <fieldset disabled={disabled} className="mt-8">
@@ -50,8 +52,9 @@ export function RepeatsPicker({ draft, max, onChange, disabled }: { draft: Draft
         {imported > 0 && ' Imported answers are used once.'}
       </p>
       <p className="mt-1 text-sm tabular-nums" aria-live="polite">
-        This hearing makes <strong>{plural(calls, 'paid call')}</strong> ({plural(draft.cases.length, 'question')} × {plural(generated, 'model party', 'model parties')}
-        {current > 1 && <> × {current} samples</>}), billed to your keys.
+        This hearing makes {upTo && 'up to '}<strong>{plural(calls, 'paid call')}</strong> ({plural(draft.cases.length, 'question')} × {plural(generated, 'model party', 'model parties')}
+        {current > 1 && <> × {current} samples</>}
+        {upTo && <> × each question’s step cap</>}), billed to your keys.
       </p>
     </fieldset>
   )

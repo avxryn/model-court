@@ -15,7 +15,7 @@ export function MissingKeys({ missing }: { missing: ProviderId[] }) {
   return (
     <Alert className="mb-6 bg-slip">
       <KeyRound aria-hidden />
-      <AlertTitle>Add your {names} key to start a hearing</AlertTitle>
+      <AlertTitle>Add your {names} {missing.length === 1 ? 'key' : 'keys'} to start a hearing</AlertTitle>
       <AlertDescription>Comparing two models from the same provider needs only one key. Jurors never need keys.</AlertDescription>
       <AlertAction>
         <Button size="sm" variant="outline" render={<Link to="/settings/api-keys" />} nativeButton={false}>

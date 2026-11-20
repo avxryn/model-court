@@ -91,8 +91,14 @@ function QuestionRecord({ testCase, labels, checkLabels, rubricVersion, sources 
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-semibold">{labels[response.configurationKey]}</span>
               <span className="text-xs text-muted-foreground tabular-nums">
-                {formatDuration(response.durationMs)} · tokens in {response.inputTokens ?? 'unavailable'} / out {response.outputTokens ?? 'unavailable'}
-                {response.truncated && ' · truncated at the output limit'}
+                {response.status === 'imported' ? (
+                  'Imported answer'
+                ) : (
+                  <>
+                    {formatDuration(response.durationMs)} · tokens in {response.inputTokens ?? 'unavailable'} / out {response.outputTokens ?? 'unavailable'}
+                    {response.truncated && ' · truncated at the output limit'}
+                  </>
+                )}
               </span>
             </div>
             {response.modelNote && <p className="text-xs text-warning">{response.modelNote}</p>}
@@ -137,7 +143,7 @@ function QuestionRecord({ testCase, labels, checkLabels, rubricVersion, sources 
         )
       })()}
       {testCase.judgments.length > 0 && (
-        <Table>
+        <Table region={`Ratings for ${testCase.title}`}>
           <TableHeader>
             <TableRow>
               <TableHead>Rated by</TableHead>

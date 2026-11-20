@@ -125,7 +125,7 @@ export function ConfigurationsEditor({
                       onChange={(modelKey) => replaceParty(index, { ...configuration, modelKey })}
                       disabledKeys={draft.comparisonMode === 'model' ? new Set(modelParties.filter((c) => c.key !== configuration.key).map((c) => c.modelKey)) : undefined}
                     />
-                    <ModelFacts model={models.find((m) => m.key === configuration.modelKey)} needsConversation={hasHistory || undefined} />
+                    <ModelFacts model={models.find((m) => m.key === configuration.modelKey)} needsConversation={hasHistory || undefined} kitVersion={draft.kit?.version} />
                   </div>
                   {draft.comparisonMode === 'configuration' && (
                     <CountedField

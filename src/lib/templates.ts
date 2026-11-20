@@ -186,7 +186,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
   {
     id: 'summaries',
     name: 'Compare summaries',
-    useCase: 'Summarization kit (D-79): three support threads, a 100-word limit, and free checks for length, required points and invented numbers.',
+    useCase: 'Summarization kit: three support threads, a 100-word limit, and free checks for length, required points and invented numbers.',
     title: 'Support thread summaries',
     task: 'Which setup writes the most faithful, useful hand-over summary of a support thread?',
     apply: (seed, newId) => ({
@@ -207,7 +207,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
   {
     id: 'extraction',
     name: 'Pull fields from documents',
-    useCase: 'Extraction kit (spec 04): three intake emails, a contact field list and answer keys; jurors mark invented values.',
+    useCase: 'Extraction kit: three intake emails, a contact field list and answer keys; jurors mark invented values.',
     title: 'Contact details from intake emails',
     task: 'Which setup pulls contact details out of intake emails correctly, and leaves a field empty instead of guessing?',
     apply: (seed, newId) => ({
@@ -229,7 +229,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
   {
     id: 'sources',
     name: 'Answers from sources',
-    useCase: 'Answers-from-sources kit (spec 05): three help-center questions with the passages a retriever returned, one the sources answer only in part and one they cannot answer; citations and quotes checked for free.',
+    useCase: 'Answers-from-sources kit: three help-center questions with the passages a retriever returned, one the sources answer only in part and one they cannot answer; citations and quotes checked for free.',
     title: 'Help-center answers from retrieved passages',
     task: 'Which setup answers only from the retrieved passages, cites them, and says so when they do not contain the answer?',
     apply: (seed, newId) => ({
@@ -251,7 +251,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
   {
     id: 'tool-use',
     name: 'Tool use (mock tools)',
-    useCase: 'Tool-use kit (spec 06): two support requests, an order lookup and a shipping refund answered from canned responses; required and forbidden calls and the final answer checked for free. Nothing real is run.',
+    useCase: 'Tool-use kit: two support requests, an order lookup and a shipping refund answered from canned responses; required and forbidden calls and the final answer checked for free. Nothing real is run.',
     title: 'Support assistant with order tools',
     task: 'Which setup looks the order up before refunding, refuses to refund without an order ID, and stops when it is done?',
     apply: (seed, newId) => ({
@@ -282,7 +282,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
   {
     id: 'ticket-routing',
     name: 'Route support tickets',
-    useCase: 'Classification kit (D-79): five tickets, five queues, an answer key, and an accuracy number next to the jury’s findings.',
+    useCase: 'Classification kit: five tickets, five queues, an answer key, and an accuracy number next to the jury’s findings.',
     title: 'Support ticket routing',
     task: 'Which setup routes support tickets to the right queue, with reasoning a lead can trust?',
     apply: (seed, newId) => ({
