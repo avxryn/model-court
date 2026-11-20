@@ -45,20 +45,20 @@ export function SourceList({ caseKey, sources, highlights, heading = true }: { c
         </h3>
       )}
       {sources.length === 0 ? (
-        <p className="text-sm text-muted-foreground italic">No sources were entered.</p>
+        <p className="text-small text-muted-foreground italic">No sources were entered.</p>
       ) : (
         <div className="divide-y divide-paper-rule rounded-md border border-paper-rule">
           {sources.map((source) => {
             const marks = highlights?.get(source.number) ?? []
             return (
               <details key={source.number} id={sourceAnchor(caseKey, source.number)} name={`sources-${caseKey}`} className="group scroll-mt-28">
-                <summary className="flex cursor-pointer list-none gap-2 px-3 py-2 text-sm outline-none hover:bg-slip focus-visible:ring-3 focus-visible:ring-ring/50">
+                <summary className="flex cursor-pointer list-none gap-2 px-3 py-2 text-small outline-none hover:bg-slip focus-visible:ring-3 focus-visible:ring-ring/50">
                   <span className="typewriter shrink-0 font-semibold">S{source.number}</span>
                   <span className="min-w-0 truncate">
                     {source.title && <span className="font-medium">{source.title} · </span>}
                     <span className="text-muted-foreground">{firstLine(source.text)}</span>
                   </span>
-                  {marks.length > 0 && <span className="ml-auto shrink-0 text-xs text-muted-foreground">{marks.length === 1 ? '1 quote found' : `${marks.length} quotes found`}</span>}
+                  {marks.length > 0 && <span className="ml-auto shrink-0 text-caption text-muted-foreground">{marks.length === 1 ? '1 quote found' : `${marks.length} quotes found`}</span>}
                 </summary>
                 <div className="space-y-2 px-3 pt-1 pb-3">
                   <p className="max-h-80 overflow-y-auto text-reading leading-relaxed break-words whitespace-pre-wrap">
@@ -74,7 +74,7 @@ export function SourceList({ caseKey, sources, highlights, heading = true }: { c
                           ),
                         )}
                   </p>
-                  {source.origin && <p className="text-xs text-muted-foreground">Judge’s note (not sent, not shown to jurors): {source.origin}</p>}
+                  {source.origin && <p className="text-caption text-muted-foreground">Judge’s note (not sent, not shown to jurors): {source.origin}</p>}
                 </div>
               </details>
             )

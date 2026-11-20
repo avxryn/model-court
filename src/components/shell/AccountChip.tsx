@@ -34,7 +34,7 @@ export function AccountChip({ hint }: { hint: { name: string; initial: string } 
   return (
     <Button variant="ghost" className="h-9 gap-2 pr-3 pl-1" render={<Link to="/evaluations" />} nativeButton={false}>
       <AccountAvatar initial={hint.initial} />
-      <span className="text-sm">
+      <span className="text-small">
         <span className="sr-only">Signed in as {hint.name}. </span>Your cases
       </span>
     </Button>

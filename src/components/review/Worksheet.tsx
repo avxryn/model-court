@@ -113,7 +113,7 @@ export function useWorksheetKeys({ onNextQuestion, onPreviousQuestion }: { onNex
 /** The worksheet's keys, as keycaps. Hidden on small screens, where there is rarely a keyboard. */
 export function WorksheetKeyLegend() {
   return (
-    <p className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex" aria-label="Keyboard: 0, 1 or 2 scores the focused line; J and K move to the next and previous testimony">
+    <p className="hidden items-center gap-1.5 text-caption text-muted-foreground md:flex" aria-label="Keyboard: 0, 1 or 2 scores the focused line; J and K move to the next and previous testimony">
       <Kbd>0</Kbd>
       <Kbd>1</Kbd>
       <Kbd>2</Kbd>

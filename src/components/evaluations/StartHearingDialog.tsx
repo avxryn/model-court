@@ -93,14 +93,14 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl font-medium">Start a hearing</DialogTitle>
+          <DialogTitle>Start a hearing</DialogTitle>
           <DialogDescription>
             {needsConsent
               ? `This freezes the saved draft into an unchangeable hearing (a run) and sends one request per question and model party${samples > 1 ? `, ${samples} times each (repeats)` : ''}, using your own provider keys.${modelParties < draft.configurations.length ? ' Imported answers are not sent.' : ''}`
               : 'This freezes the saved draft into an unchangeable hearing (a run). Every party has imported answers, so nothing is generated.'}
           </DialogDescription>
         </DialogHeader>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-small">
           {scenario && (
             <>
               <dt className="text-muted-foreground">Questions</dt>
@@ -156,7 +156,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
         {kit.family === 'extraction' && <ExtractionSendsLine draft={draft} samples={samples} />}
         {kit.family === 'grounded' && needsConsent && <GroundedSendsLine draft={draft} samples={samples} />}
         {kit.family === 'tools' && needsConsent && (
-          <div className="space-y-1.5 text-sm leading-relaxed text-muted-foreground">
+          <div className="space-y-1.5 text-small leading-relaxed text-muted-foreground">
             <p>
               Each call sends the question, its context, the system instructions and the tools (names, descriptions, argument schemas), then every earlier step of that answer with the canned results of the calls the party made. The rest of your response table and the expectations stay in Model Court. Nothing real is run.
             </p>
@@ -164,12 +164,12 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
           </div>
         )}
         {kit.checks.length > 0 && (
-          <p className="text-sm leading-relaxed text-muted-foreground">
+          <p className="text-small leading-relaxed text-muted-foreground">
             After each answer arrives, Model Court runs these free checks on its own server: {kit.checks.map((check) => check.label).join(', ')}. Nothing extra is sent to a provider and nothing is charged. Results stay sealed until you unseal the record.
           </p>
         )}
         {block && (
-          <p className="rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive" role="alert" id="start-blocked">
+          <p className="rounded-md border border-destructive/25 bg-destructive/5 p-3 text-small text-destructive" role="alert" id="start-blocked">
             {block.message}
             {hint && <span className="mt-1 block">{hint}</span>}
           </p>
@@ -187,7 +187,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
               </FieldLabel>
             </Field>
             {providers.includes('google') && (
-              <p className="text-xs text-muted-foreground" data-testid="google-consent-note">
+              <p className="text-caption text-muted-foreground" data-testid="google-consent-note">
                 Google: if your key’s project is on the free tier, Google may use this content to improve its products.
               </p>
             )}
@@ -207,7 +207,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
             </Field>
           </div>
         ) : (
-          <p className="rounded-md bg-slip p-4 text-sm">Only imported answers: nothing is sent to an AI provider and nothing is charged. Jurors review the answers as you saved them.</p>
+          <p className="rounded-md bg-slip p-4 text-small">Only imported answers: nothing is sent to an AI provider and nothing is charged. Jurors review the answers as you saved them.</p>
         )}
         {error && <FieldError>{error}</FieldError>}
         <DialogFooter>
@@ -224,7 +224,7 @@ export function StartHearingDialog({ evaluationId, revision, draft, providers, k
 function GroundedSendsLine({ draft, samples }: { draft: DraftInput; samples: number }) {
   const estimate = estimateGroundedInput(draft.cases, draft.configurations, samples)
   return (
-    <div className="space-y-1.5 text-sm leading-relaxed text-muted-foreground">
+    <div className="space-y-1.5 text-small leading-relaxed text-muted-foreground">
       <p>Each call sends the party’s instructions, the question’s sources in your order, the request, and the citation format. Your notes, the grounding key and the jury instructions are never sent.</p>
       <p className="tabular-nums">
         About {estimate.total.toLocaleString('en-US')} input tokens across {estimate.calls} {estimate.calls === 1 ? 'call' : 'calls'}, billed to your keys. This is an estimate. Sources are sent with every call, so long sources cost more on every party.
@@ -238,7 +238,7 @@ function ExtractionSendsLine({ draft, samples }: { draft: DraftInput; samples: n
   const estimate = estimateExtractionInput(draft.cases, draft.configurations, samples)
   const largest = Math.max(0, ...estimate.perCall.map((call) => call.tokens))
   return (
-    <div className="space-y-1.5 text-sm leading-relaxed text-muted-foreground">
+    <div className="space-y-1.5 text-small leading-relaxed text-muted-foreground">
       <p>Each call sends the party’s instructions, the document, your request and the field list. Your answer keys and jury instructions are never sent.</p>
       <p className="tabular-nums">
         Estimate: up to about {largest.toLocaleString('en-US')} input tokens a call, {estimate.total.toLocaleString('en-US')} in total. Output tokens, reasoning and retries add to it, billed to your keys.

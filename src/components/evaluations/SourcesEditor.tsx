@@ -121,22 +121,24 @@ export function GroundedQuestionFields({ testCase, index, errors, onChange }: { 
   }
 
   const canEdit = !!context?.saved
+  // D-120: a disabled Save says why, beside it.
+  const saveBlocker = !canEdit ? 'Save the draft first.' : !changed ? (saved.length > 0 ? 'Saved. Change a source to save again.' : 'Add a source to save.') : problems.length > 0 ? 'Fix the problems below first.' : null
   return (
     <div className="space-y-5 border-t border-paper-rule pt-4 md:col-span-2">
       <div className="space-y-1">
         <p className="court-label">
           Sources{saved.length > 0 ? ` · Exhibits S1–S${saved.length}` : ''} <Plain>the passages every party receives</Plain>
         </p>
-        <p className="text-xs text-muted-foreground">Sources are sent to every party’s provider and shown to your jurors. Notes stay with you and the record: they are never sent and never shown to jurors.</p>
+        <p className="text-caption text-muted-foreground">Sources are sent to every party’s provider and shown to your jurors. Notes stay with you and the record: they are never sent and never shown to jurors.</p>
       </div>
-      {!canEdit && <p className="rounded-md bg-slip px-3 py-2 text-sm text-muted-foreground">Save the draft, then add or change this question’s sources.</p>}
+      {!canEdit && <p className="rounded-md bg-slip px-3 py-2 text-small text-muted-foreground">Save the draft, then add or change this question’s sources.</p>}
       <ol className="space-y-3" aria-label={`Sources of question ${index + 1}`}>
         {rows.map((row, rowIndex) => {
           const length = codePointLength(row.text)
           return (
             <li key={row.id} className="space-y-2 rounded-md border border-paper-rule px-3 py-3">
               <div className="flex items-center justify-between gap-2">
-                <span className="typewriter text-sm font-medium">S{rowIndex + 1}</span>
+                <span className="typewriter text-small font-medium">S{rowIndex + 1}</span>
                 <div className="flex gap-1">
                   <Button size="icon-sm" variant="ghost" aria-label={`Move S${rowIndex + 1} up`} disabled={!canEdit || rowIndex === 0} onClick={() => move(rowIndex, -1)}>
                     <ArrowUp aria-hidden />
@@ -151,18 +153,18 @@ export function GroundedQuestionFields({ testCase, index, errors, onChange }: { 
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 <Field className="gap-1">
-                  <FieldLabel htmlFor={id(`${row.id}-title`)} className="text-xs">Title (optional)</FieldLabel>
+                  <FieldLabel htmlFor={id(`${row.id}-title`)} className="text-small">Title (optional)</FieldLabel>
                   <Input id={id(`${row.id}-title`)} value={row.title} disabled={!canEdit} onChange={(event) => update(rowIndex, { title: event.target.value })} />
                 </Field>
                 <Field className="gap-1">
-                  <FieldLabel htmlFor={id(`${row.id}-origin`)} className="text-xs">Your note (optional, never sent)</FieldLabel>
+                  <FieldLabel htmlFor={id(`${row.id}-origin`)} className="text-small">Your note (optional, never sent)</FieldLabel>
                   <Input id={id(`${row.id}-origin`)} value={row.origin} placeholder="kb-1432, retrieved Nov 12" disabled={!canEdit} onChange={(event) => update(rowIndex, { origin: event.target.value })} />
                 </Field>
               </div>
               <Field className="gap-1">
-                <FieldLabel htmlFor={id(`${row.id}-text`)} className="text-xs">Text (sent to the models exactly as written)</FieldLabel>
+                <FieldLabel htmlFor={id(`${row.id}-text`)} className="text-small">Text (sent to the models exactly as written)</FieldLabel>
                 <Textarea id={id(`${row.id}-text`)} rows={4} value={row.text} disabled={!canEdit} aria-describedby={id(`${row.id}-count`)} aria-invalid={length > G.sourceText.max || undefined} onChange={(event) => update(rowIndex, { text: event.target.value })} />
-                <FieldDescription id={id(`${row.id}-count`)} className={cn('text-right text-xs tabular-nums', length > G.sourceText.max && 'text-destructive')}>
+                <FieldDescription id={id(`${row.id}-count`)} className={cn('text-right text-caption tabular-nums', length > G.sourceText.max && 'text-destructive')}>
                   {length.toLocaleString('en-US')}/{G.sourceText.max.toLocaleString('en-US')}
                 </FieldDescription>
               </Field>
@@ -174,7 +176,7 @@ export function GroundedQuestionFields({ testCase, index, errors, onChange }: { 
         <Button size="sm" variant="outline" disabled={!canEdit || rows.length >= G.sourcesPerQuestion.max} onClick={() => setRows([...rows, { id: newIntentKey(), savedNumber: null, title: '', text: '', origin: '' }])}>
           <Plus aria-hidden /> Add a source ({rows.length}/{G.sourcesPerQuestion.max})
         </Button>
-        <Button size="sm" disabled={!canEdit || busy || !changed || problems.length > 0} onClick={() => void save()}>
+        <Button size="sm" disabled={busy || saveBlocker !== null} aria-describedby={saveBlocker && canEdit ? id('save-blocker') : undefined} onClick={() => void save()}>
           {busy ? 'Saving…' : 'Save sources'}
         </Button>
         {saved.length > 0 && (
@@ -182,23 +184,29 @@ export function GroundedQuestionFields({ testCase, index, errors, onChange }: { 
             Remove all sources
           </Button>
         )}
+        {/* Without a saved draft, the note above the list already says why. */}
+        {saveBlocker && canEdit && !busy && (
+          <span id={id('save-blocker')} className="text-caption text-muted-foreground">
+            {saveBlocker}
+          </span>
+        )}
       </div>
-      <p className="text-xs text-muted-foreground tabular-nums" aria-live="polite">
+      <p className="text-caption text-muted-foreground tabular-nums" aria-live="polite">
         This question: {questionChars.toLocaleString('en-US')}/{G.questionChars.toLocaleString('en-US')} characters · the case: {(questionChars + otherChars).toLocaleString('en-US')}/{G.caseChars.toLocaleString('en-US')}
         {minutes > 0 && ` · about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} of reading for each juror`}
         {changed && ' · not saved yet'}
       </p>
       {changed && remap.dropped.length > 0 && fields.answerable !== 'no' && (
-        <p className="text-sm text-warning">{sourceList(remap.dropped)} {remap.dropped.length === 1 ? 'was' : 'were'} required. Saving unticks {remap.dropped.length === 1 ? 'it' : 'them'} under “A good answer cites”.</p>
+        <p className="text-small text-warning">{sourceList(remap.dropped)} {remap.dropped.length === 1 ? 'was' : 'were'} required. Saving unticks {remap.dropped.length === 1 ? 'it' : 'them'} under “A good answer cites”.</p>
       )}
       {changed && problems.length > 0 && (
-        <ul className="list-disc space-y-0.5 pl-5 text-sm text-destructive">
+        <ul className="list-disc space-y-0.5 pl-5 text-small text-destructive">
           {problems.slice(0, 5).map((problem) => (
             <li key={problem}>{problem}</li>
           ))}
         </ul>
       )}
-      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+      {error && <p className="text-small text-destructive" role="alert">{error}</p>}
 
       <Field className="gap-2">
         <Label id={id('answerable-label')} className="font-medium">
@@ -206,11 +214,11 @@ export function GroundedQuestionFields({ testCase, index, errors, onChange }: { 
         </Label>
         <RadioGroup aria-labelledby={id('answerable-label')} value={fields.answerable} onValueChange={(value) => setFields(value === 'no' ? { answerable: 'no', requiredSources: [] } : { answerable: value as Answerable })} className="gap-2 sm:grid-cols-3">
           {(Object.keys(ANSWERABLE_LABELS) as Answerable[]).map((value) => (
-            <label key={value} htmlFor={id(`answerable-${value}`)} className="flex cursor-pointer items-start gap-2 rounded-md border border-paper-rule px-3 py-2 text-sm">
+            <label key={value} htmlFor={id(`answerable-${value}`)} className="flex cursor-pointer items-start gap-2 rounded-md border border-paper-rule px-3 py-2 text-small">
               <RadioGroupItem id={id(`answerable-${value}`)} value={value} className="mt-0.5" />
               <span>
                 <span className="font-medium">{ANSWERABLE_LABELS[value].title}</span>
-                <span className="block text-xs text-muted-foreground">{ANSWERABLE_LABELS[value].hint}</span>
+                <span className="block text-caption text-muted-foreground">{ANSWERABLE_LABELS[value].hint}</span>
               </span>
             </label>
           ))}
@@ -218,9 +226,9 @@ export function GroundedQuestionFields({ testCase, index, errors, onChange }: { 
       </Field>
       {fields.answerable !== 'no' && (
         <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">A good answer cites</legend>
+          <legend className="text-small font-medium">A good answer cites</legend>
           {saved.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Save the sources first.</p>
+            <p className="text-caption text-muted-foreground">Save the sources first.</p>
           ) : (
             <div className="flex flex-wrap gap-3">
               {saved.map((source) => (
@@ -239,8 +247,8 @@ export function GroundedQuestionFields({ testCase, index, errors, onChange }: { 
               ))}
             </div>
           )}
-          {changed && saved.length > 0 && <p className="text-xs text-muted-foreground">Save the sources first; the ticks follow each source when it moves.</p>}
-          {requiredError && <p className="text-xs text-destructive">{requiredError}</p>}
+          {changed && saved.length > 0 && <p className="text-caption text-muted-foreground">Save the sources first; the ticks follow each source when it moves.</p>}
+          {requiredError && <p className="text-caption text-destructive">{requiredError}</p>}
         </fieldset>
       )}
     </div>

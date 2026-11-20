@@ -58,9 +58,9 @@ export function PageHeader({ crumbs, eyebrow, title, description, actions }: { c
       {crumbs && <Breadcrumbs items={crumbs} />}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
         <div className="min-w-0 space-y-1.5">
-          {eyebrow && <div className="text-sm font-medium text-muted-foreground">{eyebrow}</div>}
+          {eyebrow && <div className="text-small font-medium text-muted-foreground">{eyebrow}</div>}
           <h1 className="font-display text-3xl leading-tight font-medium tracking-tight text-foreground">{title}</h1>
-          {description && <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p>}
+          {description && <p className="max-w-2xl text-small leading-relaxed text-muted-foreground">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>

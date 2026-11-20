@@ -73,7 +73,7 @@ export function DisagreementSection({ data }: { data: ResultsView }) {
       }
     >
       {contested.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-small text-muted-foreground">
           No juror was two points from another on any line, and no testimony was flagged for hinting at its party.
           {nearOnly > 0 && ` ${nearOnly === 1 ? 'One question has' : `${nearOnly} questions have`} one-point differences only.`}
         </p>
@@ -82,24 +82,24 @@ export function DisagreementSection({ data }: { data: ResultsView }) {
           {contested.map((q) => (
             <li key={q.key} className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 space-y-2">
-                <div className="text-sm font-medium">
+                <div className="text-small font-medium">
                   Q{q.number}: {q.title}
                 </div>
                 <ul className="flex flex-wrap gap-1.5">
                   {q.splits.map((s) => (
-                    <li key={`${s.configurationKey}-${s.dimension}`} className="rounded-md bg-muted px-2 py-0.5 text-xs">
+                    <li key={`${s.configurationKey}-${s.dimension}`} className="rounded-md bg-muted px-2 py-0.5 text-caption">
                       {lines[s.dimension].label} · {labels[s.configurationKey]}: <span className="font-medium tabular-nums">{s.low} vs {s.high}</span>
                     </li>
                   ))}
                   {q.flags > 0 && (
-                    <li className="inline-flex items-center gap-1 rounded-md bg-warning/10 px-2 py-0.5 text-xs text-warning">
+                    <li className="inline-flex items-center gap-1 rounded-md bg-warning/10 px-2 py-0.5 text-caption text-warning">
                       <Flag aria-hidden className="size-3" />
                       {q.flags === 1 ? 'Identity clue flagged once' : `Identity clue flagged ${q.flags} times`}
                     </li>
                   )}
                 </ul>
               </div>
-              <a href={`#q-${q.key}`} className="inline-flex shrink-0 items-center gap-1 rounded-sm text-sm text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
+              <a href={`#q-${q.key}`} className="inline-flex shrink-0 items-center gap-1 rounded-sm text-small text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
                 Read the testimony <ArrowDown aria-hidden className="size-3.5" />
               </a>
             </li>

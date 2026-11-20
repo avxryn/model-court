@@ -81,7 +81,7 @@ export function DuplicateCaseDialog({ open, onOpenChange, evaluationId, title, r
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl font-medium">Duplicate case</DialogTitle>
+          <DialogTitle>Duplicate case</DialogTitle>
           <DialogDescription>Copy the questions{parties ? ' and parties' : ''} into a new case. Hearings, testimony, worksheets and judgments are not copied. To ask the same questions of new parties, re-hearing this case keeps the hearings comparable side by side.</DialogDescription>
         </DialogHeader>
         <form
@@ -112,7 +112,7 @@ export function DuplicateCaseDialog({ open, onOpenChange, evaluationId, title, r
               </Field>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">The copy counts as one of your cases. Deleting either case leaves the other.</p>
+          <p className="text-small text-muted-foreground">The copy counts as one of your cases. Deleting either case leaves the other.</p>
           {error && <FieldError>{error}</FieldError>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -161,7 +161,7 @@ export function ExportScenarioDialog({ open, onOpenChange, evaluationId, runs }:
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl font-medium">Export scenario file</DialogTitle>
+          <DialogTitle>Export scenario file</DialogTitle>
           <DialogDescription>
             A JSON file with your questions, exhibits and jury instructions{parties ? ', and your system instructions' : ''}. Anyone you send it to can read them, and can open it as a new case of their own. No hearing, answer, score, key or account is in it.
           </DialogDescription>

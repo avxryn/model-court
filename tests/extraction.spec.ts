@@ -27,8 +27,8 @@ test('a field-extraction case carries its field list, documents and answer keys'
   await expect(page.getByText('Pull fields from documents', { exact: true }).first()).toBeVisible()
   await expect(page.getByText(/A field marked Must be filled can.t be left empty/)).toBeVisible()
   await expect(page.getByText(/Field names, descriptions and allowed values are sent to OpenAI and Anthropic/)).toBeVisible()
-  await expect(page.getByRole('button', { name: /Name: must be filled/ })).toBeVisible()
-  await expect(page.getByText(/Saved · \d+ bytes/).first()).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: /Name must be filled/ })).toBeChecked()
+  await expect(page.getByText(/Saved · (under 1|[\d,]+) KB of text/).first()).toBeVisible()
   await expect(page.getByLabel(/Answer key \(optional\)/).first()).toHaveValue(/Dana Whitfield/)
 
   // D-119: at phone width the editor never scrolls sideways (a fieldset used to keep its min-content width).

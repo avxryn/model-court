@@ -125,11 +125,11 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
       )}
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl font-medium">Open a new case</DialogTitle>
+          <DialogTitle>Open a new case</DialogTitle>
           <DialogDescription>
             {importing ? 'Open a scenario file someone exported from Model Court, or the questions of a certified record.' : 'Start from a template. You can edit every question, exhibit, and party before the first hearing.'}{' '}
             {!importing && (
-              <Button type="button" variant="link" size="xs" className="h-auto p-0 align-baseline text-sm" onClick={() => setImporting(true)}>
+              <Button type="button" variant="link" size="xs" className="h-auto p-0 align-baseline text-small" onClick={() => setImporting(true)}>
                 Import a scenario file instead
               </Button>
             )}
@@ -146,7 +146,7 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
           }}
         >
           <fieldset className="space-y-2">
-            <legend id="template-legend" className="mb-2 text-sm font-medium">Template</legend>
+            <legend id="template-legend" className="mb-2 text-small font-medium">Template</legend>
             <ChoiceCardGroup aria-labelledby="template-legend" value={templateId} onValueChange={pickTemplate}>
               {CASE_TEMPLATES.map((t) => (
                 <ChoiceCard key={t.id} id={`template-${t.id}`} value={t.id} title={t.name} description={t.useCase} />
@@ -164,9 +164,9 @@ export function NewCaseDialog({ trigger }: { trigger?: ReactElement }) {
           {error && <FieldError>{error}</FieldError>}
           <DialogFooter className="items-center">
             {restored && (
-              <p className="mr-auto text-xs text-muted-foreground" role="status">
+              <p className="mr-auto text-caption text-muted-foreground" role="status">
                 Restored your unsent draft.{' '}
-                <Button type="button" variant="link" size="xs" className="h-auto p-0 text-xs" onClick={discardDraft}>
+                <Button type="button" variant="link" size="xs" className="h-auto p-0 text-caption" onClick={discardDraft}>
                   Discard draft
                 </Button>
               </p>

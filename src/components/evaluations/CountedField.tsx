@@ -13,7 +13,7 @@ export function CountedField({ id, label, value, onChange, error, max, multiline
     <Field className={cn('gap-1.5', className)}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       {multiline ? <Textarea {...props} rows={rows} onChange={(e) => onChange(e.target.value)} /> : <Input {...props} onChange={(e) => onChange(e.target.value)} />}
-      <FieldDescription id={describedBy} className={cn('flex justify-between gap-4 text-xs', error && 'text-destructive')}>
+      <FieldDescription id={describedBy} className={cn('flex justify-between gap-4 text-caption', error && 'text-destructive')}>
         <span>{error ?? hint}</span>
         <span className={cn('tabular-nums', count > max && 'text-destructive')}>
           {count.toLocaleString()}/{max.toLocaleString()}

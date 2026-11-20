@@ -46,7 +46,7 @@ export function ChecksTable({ checks, parties, print = false }: { checks: Checks
             <TableRow key={definition.id}>
               <TableCell className="min-w-32 align-top whitespace-normal sm:min-w-48">
                 <span className="font-medium">{definition.label}</span>
-                {!print && <span className="mt-0.5 hidden max-w-sm text-xs leading-snug text-muted-foreground sm:block">{definition.description}</span>}
+                {!print && <span className="mt-0.5 hidden max-w-sm text-caption leading-snug text-muted-foreground sm:block">{definition.description}</span>}
               </TableCell>
               {parties.map((party) => (
                 <TableCell key={party.key} className="text-right align-top whitespace-normal tabular-nums">
@@ -130,7 +130,7 @@ function LabelTable({ rows, parties }: { rows: readonly LabelRow[]; parties: rea
             <TableRow key={row.caseKey}>
               <TableCell className="align-top whitespace-nowrap">
                 Q{row.number}
-                {!row.eligible && <span className="block text-xs text-warning">Excluded from scores</span>}
+                {!row.eligible && <span className="block text-caption text-warning">Excluded from scores</span>}
               </TableCell>
               <TableCell className="align-top whitespace-normal">{row.expected}</TableCell>
               {parties.map((party) => {
@@ -139,7 +139,7 @@ function LabelTable({ rows, parties }: { rows: readonly LabelRow[]; parties: rea
                 return (
                   <TableCell key={party.key} className="align-top whitespace-normal">
                     <span className="block">{said?.label ?? 'No allowed label'}</span>
-                    <span className={cn('inline-flex items-center gap-1 text-xs', said?.correct ? 'text-muted-foreground' : 'text-destructive')}>
+                    <span className={cn('inline-flex items-center gap-1 text-caption', said?.correct ? 'text-muted-foreground' : 'text-destructive')}>
                       <Icon aria-hidden className="size-3.5" />
                       {said?.correct ? 'Matches' : 'Does not match'}
                     </span>
@@ -163,7 +163,7 @@ export function ChecksSection({ data }: { data: ResultsView }) {
   const excluded = data.cases.filter((testCase) => !testCase.eligible).length
   return (
     <SheetSection id="checks" label="Automatic checks">
-      <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+      <p className="max-w-2xl text-small leading-relaxed text-muted-foreground">
         Checks Model Court ran on each answer, at no extra cost{data.kit ? ` (${data.kit.name} kit)` : ''}. They are not part of the jury’s findings.
         {excluded > 0 ? ` Counts leave out the ${plural(excluded, 'question')} excluded from scoring.` : ''}
       </p>
@@ -171,16 +171,16 @@ export function ChecksSection({ data }: { data: ResultsView }) {
         <dl className="mt-4 grid gap-4 sm:grid-cols-2">
           {checks.metrics.map((metric) => (
             <div key={metric.id} className="rounded-md border border-paper-rule px-4 py-3">
-              <dt className="text-sm font-medium">{metric.label}</dt>
-              <dd className="mt-1 space-y-0.5 text-sm tabular-nums">
+              <dt className="text-small font-medium">{metric.label}</dt>
+              <dd className="mt-1 space-y-0.5 text-small tabular-nums">
                 {parties.map((party) => (
                   <div key={party.key} className="flex flex-wrap justify-between gap-x-4">
                     <span className="text-muted-foreground">{party.label}</span>
                     <span>{metricText(metric, party.key)}</span>
                   </div>
                 ))}
-                {metric.id === 'invalid-labels' && <p className="pt-1 text-xs leading-snug text-muted-foreground">Lower is better.</p>}
-                {metric.caveat && <p className="pt-1 text-xs leading-snug text-muted-foreground">{metric.caveat}</p>}
+                {metric.id === 'invalid-labels' && <p className="pt-1 text-caption leading-snug text-muted-foreground">Lower is better.</p>}
+                {metric.caveat && <p className="pt-1 text-caption leading-snug text-muted-foreground">{metric.caveat}</p>}
               </dd>
             </div>
           ))}
@@ -190,7 +190,7 @@ export function ChecksSection({ data }: { data: ResultsView }) {
         <ChecksTable checks={checks} parties={parties} />
       </div>
       {samples && (
-        <p className="mt-2 text-sm text-muted-foreground tabular-nums">
+        <p className="mt-2 text-small text-muted-foreground tabular-nums">
           Across every sample:{' '}
           {parties
             .filter((party) => samples[party.key])

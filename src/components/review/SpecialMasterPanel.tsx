@@ -45,16 +45,16 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
           <article key={run.id} className="exhibit-panel px-5 py-4">
             <header className="flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="flex items-center gap-2 text-base font-semibold">
-                <Bot aria-hidden className="size-4" /> {PROVIDER_NAMES[run.model.provider as ProviderId]} <span className="typewriter text-sm font-normal">{run.model.modelId}</span>
+                <Bot aria-hidden className="size-4" /> {PROVIDER_NAMES[run.model.provider as ProviderId]} <span className="typewriter text-small font-normal">{run.model.modelId}</span>
               </h3>
-              <span className="text-sm text-muted-foreground tabular-nums">
+              <span className="text-small text-muted-foreground tabular-nums">
                 {run.status === 'generating' ? 'Grading… ' : run.status === 'canceled' ? 'Canceled · ' : ''}
                 {run.counts.succeeded}/{run.counts.planned} graded{run.counts.failed > 0 && ` · ${run.counts.failed} failed`}
                 {run.counts.uncertain > 0 && ` · ${run.counts.uncertain} uncertain`}
               </span>
             </header>
             {run.selfPreferenceRisk && (
-              <p className="mt-2 flex items-start gap-1.5 text-sm text-warning">
+              <p className="mt-2 flex items-start gap-1.5 text-small text-warning">
                 <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
                 {run.selfPreferenceRisk === 'same_model' ? 'This grader is the same model as one of the parties, so it may favor that party’s answers.' : 'This grader comes from the same provider as one of the parties, so it may favor that party’s style.'}
               </p>
@@ -103,21 +103,21 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
                     </TableBody>
                   </Table>
                 </div>
-                <p className="text-sm">
+                <p className="text-small">
                   {run.calibration.sameTopParty === null
                     ? 'Top party: no single top party on one side, so they can’t be compared.'
                     : run.calibration.sameTopParty
                       ? `Top party: the grader agrees with the jury (${labels[run.calibration.juryTop[0]] ?? '—'}).`
                       : `Top party: the grader prefers ${labels[run.calibration.graderTop[0]] ?? '—'}; the jury preferred ${labels[run.calibration.juryTop[0]] ?? '—'}.`}
                 </p>
-                <p className="text-xs text-muted-foreground">{run.calibration.caveat}</p>
+                <p className="text-caption text-muted-foreground">{run.calibration.caveat}</p>
                 {run.calibration.disagreements.length > 0 && (
                   <Fold summary={<>Where the grader falls outside the jury’s range ({run.calibration.disagreements.length})</>}>
-                    <ul className="space-y-1.5 text-sm">
+                    <ul className="space-y-1.5 text-small">
                       {run.calibration.disagreements.map((d, i) => (
                         <li key={i} className="rounded-md bg-slip px-3 py-2">
                           <span className="font-medium">{results.cases.find((c) => c.key === d.caseKey)?.title}</span> · {labels[d.configurationKey]} · {lines[d.dimension].label}: grader {d.grader}, jury {d.juryMin === d.juryMax ? d.juryMin : `${d.juryMin}–${d.juryMax}`}
-                          {d.note && <span className="block text-xs text-muted-foreground">Grader’s note: {d.note}</span>}
+                          {d.note && <span className="block text-caption text-muted-foreground">Grader’s note: {d.note}</span>}
                         </li>
                       ))}
                     </ul>
@@ -161,7 +161,7 @@ export function SpecialMasterPanel({ results }: { results: ResultsView }) {
                 </div>
               </Fold>
             )}
-            <p className="mt-3 text-xs break-all text-muted-foreground">
+            <p className="mt-3 text-caption break-all text-muted-foreground">
               Grader settings fingerprint <span className="typewriter">{run.configHash.slice(0, 16)}</span>
             </p>
           </article>
@@ -218,16 +218,16 @@ function StartForm({ runId, catalog, keys, plannedCalls, partyProviders, onStart
       <div className="space-y-1.5 sm:max-w-sm">
         <Label htmlFor="special-master-model">Grader model</Label>
         <ModelSelect id="special-master-model" models={models} value={modelKey} onChange={setModelKey} className="bg-exhibit" />
-        {model && !key && <p className="text-xs text-destructive">Add your {providerName} key in Settings first.</p>}
-        {model && partyProviders.includes(model.provider) && <p className="text-xs text-warning">This provider also made one of the parties’ answers; the grader may favor its style.</p>}
+        {model && !key && <p className="text-caption text-destructive">Add your {providerName} key in Settings first.</p>}
+        {model && partyProviders.includes(model.provider) && <p className="text-caption text-warning">This provider also made one of the parties’ answers; the grader may favor its style.</p>}
       </div>
-      <div className="flex items-start gap-2 text-sm">
+      <div className="flex items-start gap-2 text-small">
         <Checkbox id="sm-consent" checked={consent} onCheckedChange={(c) => setConsent(c === true)} />
         <Label htmlFor="sm-consent" className="font-normal leading-snug">
           Send each question, its exhibit, the scoring guide, and every testimony (including any imported answers) to {providerName}. The scoring guide is still never sent to the models being compared.
         </Label>
       </div>
-      <div className="flex items-start gap-2 text-sm">
+      <div className="flex items-start gap-2 text-small">
         <Checkbox id="sm-charges" checked={charges} onCheckedChange={(c) => setCharges(c === true)} />
         <Label htmlFor="sm-charges" className="font-normal leading-snug">
           Charge my {providerName} account for {plannedCalls} calls (one per testimony). A timed-out call may be charged without a result.
@@ -238,12 +238,12 @@ function StartForm({ runId, catalog, keys, plannedCalls, partyProviders, onStart
           <Bot aria-hidden /> {busy ? 'Starting…' : `Ask the special master (${plannedCalls} calls)`}
         </Button>
         {blocker && (
-          <p id="sm-start-blocker" className="text-xs text-muted-foreground">
+          <p id="sm-start-blocker" className="text-caption text-muted-foreground">
             {blocker}
           </p>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-caption text-muted-foreground">
         <Term name="findings" plain={false} /> and your judgment are not affected.
       </p>
     </div>

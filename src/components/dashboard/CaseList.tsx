@@ -20,7 +20,7 @@ const CHIP: Record<ChipTone, string> = {
 export function CaseChip({ item }: { item: Parameters<typeof caseChip>[0] }) {
   const { label, tone } = caseChip(item)
   return (
-    <span className={cn('inline-flex h-5.5 items-center gap-1.5 rounded-full px-2 text-xs font-medium whitespace-nowrap', CHIP[tone])}>
+    <span className={cn('inline-flex h-5.5 items-center gap-1.5 rounded-full px-2 text-caption font-medium whitespace-nowrap', CHIP[tone])}>
       <span aria-hidden className="size-1.5 rounded-full bg-current" />
       {label}
     </span>
@@ -41,7 +41,7 @@ export function CaseList({ items, hasMore, onLoadMore, loadingMore, moreError }:
   return (
     <section aria-labelledby="docket-cases" className="paper overflow-hidden">
       <div className="flex items-center gap-3 border-b border-border px-5 py-3.5">
-        <h2 id="docket-cases" className="text-sm font-semibold text-foreground">
+        <h2 id="docket-cases" className="text-small font-semibold text-foreground">
           Cases
         </h2>
         <span className="ml-auto text-small text-muted-foreground">Sorted by last activity</span>
@@ -56,7 +56,7 @@ export function CaseList({ items, hasMore, onLoadMore, loadingMore, moreError }:
               <span className="min-w-0">
                 <span className="block truncate font-medium text-foreground">{item.title}</span>
                 <span className="mt-0.5 block truncate text-small text-muted-foreground">
-                  <span className="font-mono text-xs tracking-wide">{docketNumber(item.id)}</span>
+                  <span className="font-mono text-caption tracking-wide">{docketNumber(item.id)}</span>
                   <span> · {item.role === 'owner' ? 'Presiding' : 'Jury duty'}</span>
                   <span className="tabular-nums sm:hidden">
                     {' · '}

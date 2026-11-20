@@ -14,7 +14,7 @@ export function ErrorPanel({ error, onRetry, title = 'Could not load this page' 
       <AlertTitle>{title}</AlertTitle>
       <AlertDescription>
         {error.message}
-        {error.requestId && <span className="mt-1 block text-xs opacity-80">Reference: {error.requestId}</span>}
+        {error.requestId && <span className="mt-1 block text-caption opacity-80">Reference: {error.requestId}</span>}
       </AlertDescription>
       {onRetry && (
         <AlertAction>
@@ -50,7 +50,7 @@ export function NotFoundPanel() {
         <Search className="size-5" />
       </span>
       <h1 className="text-2xl font-semibold tracking-tight">Not found</h1>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">This page does not exist, was deleted, or is not shared with your account.</p>
+      <p className="mt-2 text-small leading-relaxed text-muted-foreground">This page does not exist, was deleted, or is not shared with your account.</p>
       <Button className="mt-6" render={<Link to="/evaluations" />} nativeButton={false}>
         Back to your cases
       </Button>

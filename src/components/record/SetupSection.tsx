@@ -35,7 +35,7 @@ const COLUMNS: Column[] = [
     cell: (row) => (
       <>
         {costPerThousand(row.metrics)}
-        {row.metrics.cost.perThousandMicroUsd !== null && <span className="block text-xs text-muted-foreground">at this hearing’s mix</span>}
+        {row.metrics.cost.perThousandMicroUsd !== null && <span className="block text-caption text-muted-foreground">at this hearing’s mix</span>}
       </>
     ),
     numeric: true,
@@ -49,7 +49,7 @@ const COLUMNS: Column[] = [
       return (
         <>
           {t.main}
-          {t.note && <span className="block text-xs text-muted-foreground">{t.note}</span>}
+          {t.note && <span className="block text-caption text-muted-foreground">{t.note}</span>}
         </>
       )
     },
@@ -71,7 +71,7 @@ function PartyName({ row }: { row: SetupRow }) {
   return (
     <>
       <span className="block font-medium text-foreground">{row.label}</span>
-      <span className="block text-xs text-muted-foreground">{row.source}</span>
+      <span className="block text-caption text-muted-foreground">{row.source}</span>
     </>
   )
 }
@@ -120,9 +120,9 @@ export function SetupTable({ rows, caption }: { rows: readonly SetupRow[]; capti
           <li key={row.key} className="exhibit-panel px-4 py-3">
             <PartyName row={row} />
             {row.metrics.source === 'imported' ? (
-              <p className="mt-2 text-sm text-muted-foreground italic">{IMPORTED_TEXT}</p>
+              <p className="mt-2 text-small text-muted-foreground italic">{IMPORTED_TEXT}</p>
             ) : (
-              <dl className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-x-3 gap-y-1.5 text-sm">
+              <dl className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-x-3 gap-y-1.5 text-small">
                 {columns.map((column) => (
                   <div key={column.key} className="contents">
                     <dt className="text-muted-foreground">{column.head}</dt>
@@ -145,7 +145,7 @@ export function SetupFootnote({ rows, priceTable, eligibleCount, illustrative = 
   const read = formatDate(Date.parse(`${priceTable.readOn}T12:00:00Z`))
   const sources = priceSources(priceTable.sources)
   return (
-    <div className="mt-3 max-w-3xl space-y-1.5 text-xs leading-relaxed text-muted-foreground">
+    <div className="mt-3 max-w-3xl space-y-1.5 text-caption leading-relaxed text-muted-foreground">
       {illustrative ? (
         <p>Illustrative numbers, written by hand for this sample: no model was called and no price was read for them.</p>
       ) : (
@@ -213,12 +213,12 @@ function SampleList({ data }: { data: ResultsView }) {
   const generated = data.configurations.filter((c) => c.provider !== null)
   return (
     <div className="space-y-6">
-      <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">Wording overlap compares letters, not meaning: two answers can agree in different words. Read the samples before you conclude.</p>
+      <p className="max-w-3xl text-small leading-relaxed text-muted-foreground">Wording overlap compares letters, not meaning: two answers can agree in different words. Read the samples before you conclude.</p>
       {data.cases.map((testCase, index) => (
         <section key={testCase.key} aria-labelledby={`samples-${testCase.key}`} className="space-y-3">
           <h3 id={`samples-${testCase.key}`} className="font-heading font-bold">
             Q{index + 1}: {testCase.title}
-            {!testCase.eligible && <span className="ml-2 text-xs font-normal text-warning">Excluded from scores</span>}
+            {!testCase.eligible && <span className="ml-2 text-caption font-normal text-warning">Excluded from scores</span>}
           </h3>
           <div className="grid gap-3 lg:grid-cols-2">
             {generated.map((party) => {
@@ -226,20 +226,20 @@ function SampleList({ data }: { data: ResultsView }) {
               const samples = response && 'samples' in response ? (response.samples ?? []) : []
               return (
                 <div key={party.key} className="exhibit-panel min-w-0 px-4 py-3">
-                  <p className="text-sm font-semibold">{party.label}</p>
+                  <p className="text-small font-semibold">{party.label}</p>
                   <ol className="mt-2 space-y-3">
                     {samples.map((sample) => (
                       <li key={sample.sampleNo} className="border-t border-paper-rule pt-2 first:border-t-0 first:pt-0">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground tabular-nums">
+                        <div className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground tabular-nums">
                           <span className="font-medium text-foreground">Sample {sample.sampleNo}</span>
                           {sample.primary && <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary">scored by the jury</span>}
                           {sample.status !== 'succeeded' && <StatusBadge status={sample.status} />}
                           {sample.status === 'succeeded' && <span>{formatDuration(sample.durationMs)}{sample.outputTokens !== null && ` · ${sample.outputTokens.toLocaleString('en-US')} tokens out`}</span>}
                         </div>
                         {sample.text !== null ? (
-                          <p className="mt-1.5 font-heading text-sm leading-relaxed break-words whitespace-pre-wrap">{sample.text}</p>
+                          <p className="mt-1.5 font-heading text-reading leading-relaxed break-words whitespace-pre-wrap">{sample.text}</p>
                         ) : (
-                          <p className="mt-1.5 text-xs text-muted-foreground">{sample.errorCode ? (ERROR_TEXT[sample.errorCode] ?? sample.errorCode) : 'No answer.'}</p>
+                          <p className="mt-1.5 text-caption text-muted-foreground">{sample.errorCode ? (ERROR_TEXT[sample.errorCode] ?? sample.errorCode) : 'No answer.'}</p>
                         )}
                       </li>
                     ))}

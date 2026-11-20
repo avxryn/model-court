@@ -160,7 +160,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                     Presiding: <span className="italic">you, as judge</span>
                   </div>
                   {evaluation.origin && <OriginLine origin={evaluation.origin} />}
-                  {evaluation.taskDescription && <div className="text-xs leading-snug text-muted-foreground">{evaluation.taskDescription}</div>}
+                  {evaluation.taskDescription && <div className="text-caption leading-snug text-muted-foreground">{evaluation.taskDescription}</div>}
                 </>
               }
               stamp={<Stamp kind={stamp ?? 'draft'} />}
@@ -206,7 +206,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
                 {rehearing && <RehearBanner source={rehearing} runs={evaluation.runs} matches={workingScenario === null || workingScenario === rehearing.scenarioHash} onClose={() => setParam('rehearing', null)} />}
                 {credentials.data && <MissingKeys missing={missingProviders} />}
                 {draftKit(draft).family === 'grounded' && (
-                  <p className="mb-6 rounded-md bg-slip px-4 py-3 text-sm text-muted-foreground">The kit adds the citation format and the “not in the sources” sentence to each request. Don’t ask for a different citation style in the system instructions.</p>
+                  <p className="mb-6 rounded-md bg-slip px-4 py-3 text-small text-muted-foreground">The kit adds the citation format and the “not in the sources” sentence to each request. Don’t ask for a different citation style in the system instructions.</p>
                 )}
                 {repeatedImported.length > 0 && (
                   <Alert className="mb-6">
@@ -316,10 +316,10 @@ function RehearBanner({ source, runs, matches, onClose }: { source: OwnerEvaluat
 
 /** Where a copied or imported case came from (D-71). Never a link into a file's content. */
 function OriginLine({ origin }: { origin: NonNullable<OwnerEvaluationView['origin']> }) {
-  if (origin.kind === 'scenario_file') return <div className="text-xs text-muted-foreground">Opened from a scenario file</div>
-  if (origin.kind === 'certified_record') return <div className="text-xs text-muted-foreground">Questions taken from a certified record</div>
+  if (origin.kind === 'scenario_file') return <div className="text-caption text-muted-foreground">Opened from a scenario file</div>
+  if (origin.kind === 'certified_record') return <div className="text-caption text-muted-foreground">Questions taken from a certified record</div>
   return (
-    <div className="text-xs text-muted-foreground">
+    <div className="text-caption text-muted-foreground">
       {origin.sourceDeleted || !origin.fromEvaluationId ? (
         'Copied from a case that was deleted'
       ) : (

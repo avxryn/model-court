@@ -20,13 +20,13 @@ export function SourcePane({ document, pdf }: { document: SourceDocument | null;
         <Plain>the document every party read</Plain>
       </header>
       {document === null ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground italic">No document was attached to this question.</p>
+        <p className="px-4 py-3 text-small text-muted-foreground italic">No document was attached to this question.</p>
       ) : document.kind === 'text' ? (
         <TextSource text={document.text} />
       ) : !document.available ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">{SOURCE_NOT_RESTORED}.</p>
+        <p className="px-4 py-3 text-small text-muted-foreground">{SOURCE_NOT_RESTORED}.</p>
       ) : (
-        (pdf ?? <p className="px-4 py-3 text-sm text-muted-foreground">PDF, {document.pageCount ?? '?'} pages.</p>)
+        (pdf ?? <p className="px-4 py-3 text-small text-muted-foreground">PDF, {document.pageCount ?? '?'} pages.</p>)
       )}
     </section>
   )

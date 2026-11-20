@@ -72,12 +72,12 @@ export function ImportedAnswers({
     <section aria-label={`Answers for ${party.label}`} className="space-y-4 border-t border-paper-rule pt-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h4 className="court-label">Imported answers</h4>
-        <span className="text-xs text-muted-foreground tabular-nums">
+        <span className="text-caption text-muted-foreground tabular-nums">
           {savedCount} of {cases.length} saved
         </span>
       </div>
       {!saved ? (
-        <p className="rounded-md bg-slip px-3 py-2 text-sm text-muted-foreground">Save the draft to add answers for this party.</p>
+        <p className="rounded-md bg-slip px-3 py-2 text-small text-muted-foreground">Save the draft to add answers for this party.</p>
       ) : (
         <>
           {cases.map((testCase, index) => {
@@ -90,7 +90,7 @@ export function ImportedAnswers({
                   Q{index + 1}: {testCase.title}
                 </Label>
                 <Textarea id={id} rows={4} className="bg-exhibit font-heading" value={value} aria-describedby={`${id}-help`} onChange={(e) => setTexts((t) => ({ ...t, [testCase.key]: e.target.value }))} />
-                <div id={`${id}-help`} className="space-y-0.5 text-xs">
+                <div id={`${id}-help`} className="space-y-0.5 text-caption">
                   <div className={cn('tabular-nums', codePointLength(value) > LIMITS.importedText.max ? 'text-destructive' : 'text-muted-foreground')}>
                     {codePointLength(value).toLocaleString()}/{LIMITS.importedText.max.toLocaleString()}
                   </div>
@@ -108,11 +108,11 @@ export function ImportedAnswers({
             <Checkbox id={`import-${party.key}-consent`} checked={consent} onCheckedChange={(checked) => setConsent(checked === true)} />
             <Label htmlFor={`import-${party.key}-consent`} className="flex-col items-start gap-0.5 font-normal leading-snug">
               I may share these answers with the jurors I invite
-              <span className="text-xs text-muted-foreground">They are shown to jurors as written, and deleted with this case. They are never sent to an AI provider.</span>
+              <span className="text-caption text-muted-foreground">They are shown to jurors as written, and deleted with this case. They are never sent to an AI provider.</span>
             </Label>
           </div>
           {error && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="text-small text-destructive">
               {error}
             </p>
           )}

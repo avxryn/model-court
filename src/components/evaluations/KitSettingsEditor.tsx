@@ -45,7 +45,7 @@ function NumberField({ id, label, value, onChange, error, hint, min, max }: { id
         aria-describedby={`${id}-help`}
         onChange={(event) => onChange(event.target.value === '' ? undefined : Math.trunc(Number(event.target.value)))}
       />
-      <FieldDescription id={`${id}-help`} className={cn('text-xs', error && 'text-destructive')}>
+      <FieldDescription id={`${id}-help`} className={cn('text-caption', error && 'text-destructive')}>
         {error ?? hint}
       </FieldDescription>
     </Field>
@@ -61,7 +61,7 @@ function SummarizationSettingsFields({ settings, onChange, errors }: { settings:
         Summary limits <Plain>stated to every party; the checks enforce them</Plain>
       </p>
       <div className="space-y-1.5">
-        <p id="kit-unit-legend" className="text-sm font-medium">Count length in</p>
+        <p id="kit-unit-legend" className="text-small font-medium">Count length in</p>
         <ChoiceCardGroup aria-labelledby="kit-unit-legend" value={settings.lengthUnit} onValueChange={(v) => set({ lengthUnit: v as SummarizationSettings['lengthUnit'] })} className="sm:grid-cols-2">
           <ChoiceCard id="kit-unit-words" value="words" title="Words" />
           <ChoiceCard id="kit-unit-characters" value="characters" title="Characters" description="For languages written without spaces." />
@@ -72,7 +72,7 @@ function SummarizationSettingsFields({ settings, onChange, errors }: { settings:
         <NumberField id="kit-min" label={`Fewest ${settings.lengthUnit} (optional)`} value={settings.minLength} min={0} max={cap} hint="Leave empty for no minimum." error={errors['kit.settings.minLength']} onChange={(value) => onChange(value === undefined ? withoutMin(settings) : { ...settings, minLength: value })} />
       </div>
       <div className="space-y-1.5">
-        <p id="kit-format-legend" className="text-sm font-medium">Format</p>
+        <p id="kit-format-legend" className="text-small font-medium">Format</p>
         <ChoiceCardGroup aria-labelledby="kit-format-legend" value={settings.format} onValueChange={(v) => set({ format: v as SummarizationSettings['format'] })} className="sm:grid-cols-3">
           <ChoiceCard id="kit-format-any" value="any" title="Any" description="Not checked." />
           <ChoiceCard id="kit-format-paragraph" value="paragraph" title="Paragraph" description="No bullet points." />
@@ -83,7 +83,7 @@ function SummarizationSettingsFields({ settings, onChange, errors }: { settings:
         <Checkbox id="kit-numbers" checked={settings.checkNumbers} onCheckedChange={(checked) => set({ checkNumbers: checked === true })} className="mt-0.5" />
         <Label htmlFor="kit-numbers" className="block font-normal leading-snug">
           Check that every number in a summary appears in the document
-          <span className="mt-0.5 block text-xs text-muted-foreground">Catches invented figures. It also flags spelled-out numbers, reworded dates and computed totals, so read a failure before you count it.</span>
+          <span className="mt-0.5 block text-caption text-muted-foreground">Catches invented figures. It also flags spelled-out numbers, reworded dates and computed totals, so read a failure before you count it.</span>
         </Label>
       </div>
     </div>
@@ -119,7 +119,7 @@ function ClassificationSettingsFields({ settings, onChange, errors }: { settings
             onChange({ ...settings, labels: event.target.value.split(/\r?\n/u).filter((line) => line.trim() !== '') })
           }}
         />
-        <FieldDescription id="kit-labels-help" className={cn('text-xs', labelError && 'text-destructive')}>
+        <FieldDescription id="kit-labels-help" className={cn('text-caption', labelError && 'text-destructive')}>
           {labelError ?? `${LIMITS.kits.labels.min}–${LIMITS.kits.labels.max} labels, each up to ${LIMITS.kits.label.max} characters. Every party must answer with one of them on its first line.`}
         </FieldDescription>
       </Field>

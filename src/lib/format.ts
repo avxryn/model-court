@@ -18,3 +18,10 @@ export function formatDuration(ms: number | null | undefined): string {
 export function plural(count: number, one: string, many = `${one}s`): string {
   return `${count} ${count === 1 ? one : many}`
 }
+
+/** A file or text size in plain units: "under 1 KB", "12 KB", "3.2 MB" (1 KB = 1,024 bytes). */
+export function formatSize(bytes: number): string {
+  if (bytes < 1024) return 'under 1 KB'
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024).toLocaleString('en-US')} KB`
+  return `${(bytes / 1024 / 1024).toLocaleString('en-US', { maximumFractionDigits: 1 })} MB`
+}

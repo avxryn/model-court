@@ -25,7 +25,7 @@ export function CaseMaterial({ title, input, reference, expectedBehavior, number
           )}
           {' '}<Plain>test case</Plain>
         </h2>
-        <p className="mt-1.5 text-sm text-muted-foreground">{title}</p>
+        <p className="mt-1.5 text-small text-muted-foreground">{title}</p>
         {messages.length > 0 && (
           <div className="mt-3">
             <ConversationSoFar messages={messages} />
@@ -33,7 +33,7 @@ export function CaseMaterial({ title, input, reference, expectedBehavior, number
           </div>
         )}
         <p className="mt-1.5 font-display text-xl leading-snug break-words whitespace-pre-wrap">{input}</p>
-        {messages.length > 0 && <p className="mt-1 text-xs text-muted-foreground">Each testimony is that party’s reply to this message.</p>}
+        {messages.length > 0 && <p className="mt-1 text-caption text-muted-foreground">Each testimony is that party’s reply to this message.</p>}
       </div>
       {sources !== undefined ? <SourceList caseKey={caseKey ?? 'q'} sources={sources} /> : document !== undefined ? <SourcePane document={document} pdf={pdf} /> : <Exhibit number={1}>{reference || <span className="text-muted-foreground italic">No exhibit was entered. Declining to answer may be correct.</span>}</Exhibit>}
       <JuryInstructions>{expectedBehavior}</JuryInstructions>

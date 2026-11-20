@@ -40,7 +40,7 @@ export function ExtractionTestimony({
   return (
     <article data-testimony className="min-w-0 exhibit-panel">
       <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-        <h3 className="typewriter shrink-0 rounded-[4px] bg-foreground px-2 py-0.5 text-xs font-semibold tracking-[0.06em] whitespace-nowrap text-background">TESTIMONY {label}</h3>
+        <h3 className="typewriter shrink-0 rounded-[4px] bg-foreground px-2 py-0.5 text-caption font-semibold tracking-[0.06em] whitespace-nowrap text-background">TESTIMONY {label}</h3>
         {extraction.status === 'parsed' && (
           <Button size="xs" variant="ghost" aria-pressed={asJson} onClick={() => setAsJson((value) => !value)}>
             {asJson ? 'Show as fields' : 'Show as JSON'}
@@ -50,13 +50,13 @@ export function ExtractionTestimony({
       <div role="region" aria-label={`Testimony ${label} fields`} tabIndex={0} className="max-h-[32rem] overflow-y-auto outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
         {extraction.status === 'unparsed' ? (
           <div className="space-y-2 px-4 py-3">
-            <p className="text-sm text-muted-foreground">{UNPARSED_TEXT}</p>
+            <p className="text-small text-muted-foreground">{UNPARSED_TEXT}</p>
             <pre className="text-reading break-words whitespace-pre-wrap">{text}</pre>
           </div>
         ) : asJson ? (
-          <pre className="typewriter px-4 py-3 text-xs break-words whitespace-pre-wrap">{text}</pre>
+          <pre className="typewriter px-4 py-3 text-small break-words whitespace-pre-wrap">{text}</pre>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-small">
             <caption className="sr-only">Fields of testimony {label}</caption>
             <thead className="sr-only">
               <tr>
@@ -69,7 +69,7 @@ export function ExtractionTestimony({
               {extraction.fields.map((row) =>
                 row.kind === 'group' ? (
                   <tr key={`g${row.path}`} className="border-t border-border first:border-t-0">
-                    <th scope="row" colSpan={3} className="py-1.5 pr-3 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase" style={{ paddingLeft: `${1 + row.depth * 1}rem` }}>
+                    <th scope="row" colSpan={3} className="py-1.5 pr-3 text-left text-caption font-medium tracking-wide text-muted-foreground uppercase" style={{ paddingLeft: `${1 + row.depth * 1}rem` }}>
                       {row.label}
                       {row.empty && <span className="ml-2 normal-case">{LEFT_EMPTY}</span>}
                     </th>
@@ -104,7 +104,7 @@ export function ExtractionTestimony({
           </table>
         )}
       </div>
-      {flags.length > 0 && <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">A flagged value is worth a note: what in the document supports or contradicts it.</p>}
+      {flags.length > 0 && <p className="border-t border-border px-4 py-2 text-caption text-muted-foreground">A flagged value is worth a note: what in the document supports or contradicts it.</p>}
       {children && <div className="border-t border-border px-4 pt-3 pb-4">{children}</div>}
     </article>
   )

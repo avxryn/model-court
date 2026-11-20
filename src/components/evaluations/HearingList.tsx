@@ -37,16 +37,16 @@ function Row({ run, to, latest, version }: { run: HearingRow; to: string; latest
         <span className="min-w-0">
           <span className="font-heading">
             {row ? `Hearing ${row.number}` : 'Hearing'} · {formatTime(run.createdAt)}
-            {latest && <span className="ml-2 font-sans text-xs text-muted-foreground">latest</span>}
+            {latest && <span className="ml-2 font-sans text-caption text-muted-foreground">latest</span>}
           </span>
           {row && (
-            <span className="mt-1 block text-sm text-muted-foreground">
+            <span className="mt-1 block text-small text-muted-foreground">
               {row.parties
                 ? row.parties.map((party) => `${party.label}: ${party.source === 'imported' ? 'imported answers' : modelName(party.provider ?? '', party.modelId ?? '')}`).join(' · ')
                 : `${plural(row.partyCount, 'party', 'parties')}, named once this hearing is unsealed`}
             </span>
           )}
-          {row?.changes && row.changes.length > 0 && <span className="mt-0.5 block text-sm text-foreground/80">Changed: {row.changes.map((change) => describePartyChange(change, modelName)).join('; ')}</span>}
+          {row?.changes && row.changes.length > 0 && <span className="mt-0.5 block text-small text-foreground/80">Changed: {row.changes.map((change) => describePartyChange(change, modelName)).join('; ')}</span>}
         </span>
         <StatusBadge status={run.status} />
       </Link>
@@ -68,7 +68,7 @@ function DraftStanding({ draft, groups }: { draft: DraftVersion; groups: Map<num
   }
   const lines = draft.draftDiff ? describeScenarioDiff(draft.draftDiff) : []
   return (
-    <div className="rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
+    <div className="rounded-lg bg-muted px-4 py-3 text-small text-muted-foreground">
       <p>
         Draft questions differ from every hearing: the next hearing starts <strong className="font-semibold text-foreground">v{draft.nextScenarioVersion}</strong>.
       </p>
@@ -122,7 +122,7 @@ export function HearingList({
       <DraftStanding draft={versions.draft} groups={groups} />
       {ordered.map(([version, rows]) => (
         <section key={version} aria-labelledby={`questions-v${version}`}>
-          <h3 id={`questions-v${version}`} className="mb-2 flex flex-wrap items-baseline gap-x-2 text-sm font-semibold">
+          <h3 id={`questions-v${version}`} className="mb-2 flex flex-wrap items-baseline gap-x-2 text-small font-semibold">
             Questions v{version}
             <span className="font-normal text-muted-foreground">
               {hearingNumbers(rows.map((row) => row.number))}

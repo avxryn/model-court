@@ -146,15 +146,15 @@ export function ConfigurationsEditor({
         ))}
       </div>
       {overLimit && (
-        <p role="alert" className="text-sm text-destructive" data-testid="testimony-limit">
+        <p role="alert" className="text-small text-destructive" data-testid="testimony-limit">
           {overLimit}
         </p>
       )}
       {draft.configurations.length >= 4 && !overLimit && (
-        <p className="text-xs text-muted-foreground">More parties means fewer questions in one hearing: with {draft.configurations.length} parties, up to {maxQuestionsFor(draft.configurations.length)}. With 3 questions the count is less certain. To compare more setups on all 5 questions, re-hear this case with an anchor party.</p>
+        <p className="text-caption text-muted-foreground">More parties means fewer questions in one hearing: with {draft.configurations.length} parties, up to {maxQuestionsFor(draft.configurations.length)}. With 3 questions the count is less certain. To compare more setups on all 5 questions, re-hear this case with an anchor party.</p>
       )}
       {maxParties > draft.configurations.length && !roomForParty && !overLimit && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           To add a party, remove a question first: {draft.configurations.length + 1} parties allow up to {maxQuestionsFor(draft.configurations.length + 1)} questions, so each juror scores at most {LIMITS.maxTestimoniesPerHearing} answers.
         </p>
       )}
@@ -166,7 +166,7 @@ export function ConfigurationsEditor({
           <Button variant="outline" onClick={addImportedParty}>
             <Upload aria-hidden /> Add imported answers
           </Button>
-          <span className="text-xs text-muted-foreground">A model party adds one paid call per question. Imported answers (a human baseline or exported transcripts) cost nothing.</span>
+          <span className="text-caption text-muted-foreground">A model party adds one paid call per question. Imported answers (a human baseline or exported transcripts) cost nothing.</span>
         </div>
       )}
     </fieldset>

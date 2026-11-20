@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 
 /** A court term's plain meaning in brackets after a label: "Findings (scores)". */
 export function Plain({ children }: { children: ReactNode }) {
-  return <span className="inline-block font-sans text-xs font-normal tracking-normal text-muted-foreground normal-case">({children})</span>
+  return <span className="inline-block font-sans text-caption font-normal tracking-normal text-muted-foreground normal-case">({children})</span>
 }
 
 /** A white exhibit-edged panel inside a sheet: lists, tables, side notes. */
@@ -15,7 +15,7 @@ export function Panel({ as: Tag = 'div', className, children }: { as?: 'div' | '
 
 /** A quiet note on a slip: empty lists and short explanations. */
 export function Note({ className, children }: { className?: string; children: ReactNode }) {
-  return <p className={cn('rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground', className)}>{children}</p>
+  return <p className={cn('rounded-lg bg-muted px-4 py-3 text-small text-muted-foreground', className)}>{children}</p>
 }
 
 /**
@@ -26,12 +26,12 @@ export function Slip({ title, icon, className, children, ...rest }: { title?: Re
   return (
     <section {...rest} className={cn('rounded-lg border border-border bg-slip px-4 py-3.5', className)}>
       {title && (
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <h3 className="flex items-center gap-2 text-small font-semibold">
           {icon}
           {title}
         </h3>
       )}
-      <div className={cn('text-sm leading-relaxed text-foreground/80', title && 'mt-2')}>{children}</div>
+      <div className={cn('text-small leading-relaxed text-foreground/80', title && 'mt-2')}>{children}</div>
     </section>
   )
 }

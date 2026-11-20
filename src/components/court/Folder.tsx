@@ -10,6 +10,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Tabs as TabsPrimitive } from '@base-ui/react/tabs'
 import { Lock } from 'lucide-react'
+import { useScrollCue } from '@/lib/use-scroll-cue'
 import { cn } from '@/lib/utils'
 
 /** The tab row (if any) and the sheet below it. `docket` and `title` are kept for callers; the caption shows them. */
@@ -22,7 +23,7 @@ export function CaseFolder({ dividers, children }: { docket?: string; title: str
   )
 }
 
-const ROW = 'relative -mb-px flex min-w-0 items-end gap-1 overflow-x-auto [scrollbar-width:none]'
+const ROW = 'scroll-cue relative -mb-px flex min-w-0 items-end gap-1 overflow-x-auto [scrollbar-width:none]'
 
 /** One tab; `state` picks the open, idle, or locked look. */
 export function dividerClass(state: 'open' | 'idle' | 'locked') {
@@ -47,6 +48,7 @@ export interface DividerLink {
 export function DividerNav({ label, items, current }: { label: string; items: DividerLink[]; current: string }) {
   // On a narrow screen the row scrolls sideways; keep the open divider in view.
   const row = useRef<HTMLElement>(null)
+  useScrollCue(row)
   useEffect(() => {
     const nav = row.current
     const open = nav?.querySelector<HTMLElement>('[aria-current="page"]')
@@ -63,7 +65,7 @@ export function DividerNav({ label, items, current }: { label: string; items: Di
             <span key={item.to} aria-disabled="true" title={item.locked} className={dividerClass('locked')}>
               {item.label}
               <Lock className="size-3" aria-hidden />
-              {item.lockedShort && <span className="hidden text-xs text-muted-foreground/80 sm:inline">{item.lockedShort}</span>}
+              {item.lockedShort && <span className="hidden text-caption text-muted-foreground/80 sm:inline">{item.lockedShort}</span>}
               <span className="sr-only">: {item.locked}</span>
             </span>
           )
@@ -83,8 +85,10 @@ export function DividerNav({ label, items, current }: { label: string; items: Di
  * `Tabs` and put each `TabsContent` inside the sheet.
  */
 export function DividerTabs({ label, items }: { label: string; items: Array<{ value: string; label: string; count?: number }> }) {
+  const row = useRef<HTMLDivElement>(null)
+  useScrollCue(row)
   return (
-    <TabsPrimitive.List aria-label={label} className={ROW}>
+    <TabsPrimitive.List ref={row} aria-label={label} className={ROW}>
       {items.map((item) => (
         <TabsPrimitive.Tab
           key={item.value}
@@ -93,7 +97,7 @@ export function DividerTabs({ label, items }: { label: string; items: Array<{ va
         >
           {item.label}
           {item.count !== undefined && (
-            <span className="rounded-full bg-muted px-1.5 text-xs font-medium text-muted-foreground tabular-nums">
+            <span className="rounded-full bg-muted px-1.5 text-caption font-medium text-muted-foreground tabular-nums">
               <span className="sr-only"> (</span>
               {item.count}
               <span className="sr-only">)</span>

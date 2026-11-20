@@ -11,12 +11,12 @@ export function LegalPage({ title, description, children }: { title: string; des
     <Page>
       <PageHeader eyebrow={`Effective ${LEGAL.effective}`} title={title} description={description} />
       {LEGAL.draft && (
-        <p role="note" className="mb-5 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+        <p role="note" className="mb-5 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-small text-warning">
           Draft for review: this text has not had a legal review yet, and the bracketed details are placeholders.
         </p>
       )}
       <Sheet className="px-5 py-2 sm:px-8">{children}</Sheet>
-      <nav aria-label="Legal" className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+      <nav aria-label="Legal" className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-small text-muted-foreground">
         <Link to="/privacy" className="underline-offset-4 hover:text-foreground hover:underline">
           Privacy
         </Link>
@@ -37,7 +37,7 @@ export function LegalSection({ id, title, children }: { id: string; title: strin
       <h2 id={id} className="mb-3 text-base font-semibold">
         {title}
       </h2>
-      <div className="max-w-[68ch] space-y-3 text-sm leading-relaxed text-foreground/90 [&_li]:ml-5 [&_li]:list-disc [&_li]:pl-1 [&_ul]:space-y-1.5">{children}</div>
+      <div className="max-w-[68ch] space-y-3 text-reading leading-relaxed text-foreground/90 [&_li]:ml-5 [&_li]:list-disc [&_li]:pl-1 [&_ul]:space-y-1.5">{children}</div>
     </section>
   )
 }

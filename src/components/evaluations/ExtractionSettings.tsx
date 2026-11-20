@@ -11,6 +11,7 @@ import { Fold } from '@/components/court/Fold'
 import { Plain } from '@/components/court/Paper'
 import type { FieldErrors } from '@/components/evaluations/DraftEditor'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { validateCompareRules, type CompareRules } from '@/domain/extraction/compare'
@@ -20,7 +21,7 @@ import type { ExtractionSettings } from '@/domain/kits/extraction'
 import { LIMITS } from '@/domain/limits'
 import { cn } from '@/lib/utils'
 
-export const MUST_FILL_WARNING = "A field marked Must be filled can't be left empty, so when a document doesn't have it the model has to guess. Mark it May be empty unless every document has it."
+export const MUST_FILL_WARNING = "A field marked Must be filled can't be left empty, so when a document doesn't have it the model has to guess. Leave it unticked unless every document has it."
 export const FIELD_LIST_PRIVACY = "Field names, descriptions and allowed values are sent to OpenAI and Anthropic with every request, and Anthropic keeps a compiled copy of the schema for up to 24 hours. Don't put personal data in them."
 
 const pretty = (value: unknown) => JSON.stringify(value, null, 2)
@@ -96,7 +97,7 @@ export function ExtractionSettingsFields({ settings, onChange, errors }: { setti
         Fields <Plain>what every party must return, as JSON</Plain>
       </p>
       <div className="space-y-2">
-        <p id="starter-legend" className="text-sm font-medium">Start from</p>
+        <p id="starter-legend" className="text-small font-medium">Start from</p>
         <div role="group" aria-labelledby="starter-legend" className="flex flex-wrap gap-2">
           {EXTRACTION_STARTERS.map((starter) => (
             <Button key={starter.id} size="sm" variant="outline" title={starter.description} onClick={() => replaceSchema(starter.schema)}>
@@ -106,20 +107,20 @@ export function ExtractionSettingsFields({ settings, onChange, errors }: { setti
         </div>
       </div>
 
-      <p className="flex gap-2 rounded-md bg-slip px-3 py-2 text-sm text-muted-foreground">
+      <p className="flex gap-2 rounded-md bg-slip px-3 py-2 text-small text-muted-foreground">
         <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
         <span>{MUST_FILL_WARNING}</span>
       </p>
 
       {checked.ok && (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-small">
             <caption className="sr-only">Fields in the field list</caption>
             <thead>
-              <tr className="text-left text-xs text-muted-foreground">
+              <tr className="text-left text-caption text-muted-foreground">
                 <th scope="col" className="py-1 pr-3 font-medium">Field</th>
-                <th scope="col" className="py-1 pr-3 font-medium">Type</th>
-                <th scope="col" className="py-1 font-medium">Filled</th>
+                <th scope="col" className="hidden py-1 pr-3 font-medium sm:table-cell">Type</th>
+                <th scope="col" className="py-1 text-right font-medium whitespace-nowrap">Must be filled</th>
               </tr>
             </thead>
             <tbody>
@@ -130,21 +131,20 @@ export function ExtractionSettingsFields({ settings, onChange, errors }: { setti
                   <tr key={entry.path} className="border-t border-border align-top">
                     <td className="py-1.5 pr-3" style={{ paddingLeft: `${entry.depth * 1.25}rem` }}>
                       <span className="font-medium">{entry.node.title?.trim() || entry.name}</span>
-                      {entry.node.title && <span className="ml-1.5 typewriter text-xs text-muted-foreground">{entry.name}</span>}
-                      {idLike && <span className="block text-xs text-warning">Use text for IDs, account numbers and phone numbers: long numbers lose digits.</span>}
+                      {entry.node.title && <span className="ml-1.5 typewriter text-caption text-muted-foreground">{entry.name}</span>}
+                      {idLike && <span className="block text-caption text-warning">Use text for IDs, account numbers and phone numbers: long numbers lose digits.</span>}
                     </td>
-                    <td className="py-1.5 pr-3 text-muted-foreground">{typeLabel(entry.node)}</td>
-                    <td className="py-1.5">
-                      <Button size="xs" variant={optional ? 'ghost' : 'secondary'} aria-pressed={!optional} aria-label={`${entry.node.title?.trim() || entry.name}: ${optional ? 'may be empty' : 'must be filled'}. Toggle.`} onClick={() => replaceSchema(toggleRequired(checked.schema, entry.parent, entry.name))}>
-                        {optional ? 'May be empty' : 'Must be filled'}
-                      </Button>
+                    <td className="hidden py-1.5 pr-3 text-muted-foreground sm:table-cell">{typeLabel(entry.node)}</td>
+                    <td className="py-1.5 text-right">
+                      {/* D-120: a checkbox says its state; the old ghost toggle read as a label. Unticked means "may be empty". */}
+                      <Checkbox className="mt-0.5" checked={!optional} aria-label={`${entry.node.title?.trim() || entry.name} must be filled`} onCheckedChange={() => replaceSchema(toggleRequired(checked.schema, entry.parent, entry.name))} />
                     </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
-          <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
+          <p className="mt-1.5 text-caption text-muted-foreground tabular-nums">
             {leaves.length} of {LIMITS.extraction.leafFields} fields · {nullable} of {LIMITS.extraction.nullableFields} may be empty
           </p>
         </div>
@@ -156,7 +156,7 @@ export function ExtractionSettingsFields({ settings, onChange, errors }: { setti
           <Textarea
             id="kit-schema"
             rows={12}
-            className="typewriter text-xs"
+            className="typewriter text-small"
             spellCheck={false}
             value={text}
             aria-invalid={parseError || !checked.ok ? true : undefined}
@@ -169,14 +169,14 @@ export function ExtractionSettingsFields({ settings, onChange, errors }: { setti
               onChange({ ...settings, schema: parsed.value as ExtractionSchema })
             }}
           />
-          <FieldDescription id="kit-schema-help" className="text-xs">
+          <FieldDescription id="kit-schema-help" className="text-caption">
             Types object, array, string, number, integer and boolean; <code>required</code> lists the fields that must be filled; up to {LIMITS.extraction.leafFields} fields, {LIMITS.extraction.nullableFields} that may be empty, {LIMITS.extraction.depth} levels, {LIMITS.extraction.schemaBytes / 1024} KiB.
           </FieldDescription>
         </Field>
         {(parseError || !checked.ok || serverError) && (
-          <ul aria-live="polite" className="space-y-1 text-sm text-destructive">
+          <ul aria-live="polite" className="space-y-1 text-small text-destructive">
             {parseError && <li>{parseError}</li>}
-            {!parseError && !checked.ok && checked.issues.slice(0, 8).map((issue, index) => <li key={index}>{issue.path ? <code className="mr-1 text-xs">{issue.path}</code> : null}{issue.message}</li>)}
+            {!parseError && !checked.ok && checked.issues.slice(0, 8).map((issue, index) => <li key={index}>{issue.path ? <code className="mr-1 text-caption">{issue.path}</code> : null}{issue.message}</li>)}
             {!parseError && checked.ok && serverError && <li>{serverError}</li>}
           </ul>
         )}
@@ -188,7 +188,7 @@ export function ExtractionSettingsFields({ settings, onChange, errors }: { setti
           <Textarea
             id="kit-compare"
             rows={4}
-            className="typewriter text-xs"
+            className="typewriter text-small"
             spellCheck={false}
             value={rulesText}
             aria-invalid={rulesError || ruleIssues.length > 0 ? true : undefined}
@@ -201,7 +201,7 @@ export function ExtractionSettingsFields({ settings, onChange, errors }: { setti
               onChange({ ...settings, compare: parsed.value as CompareRules })
             }}
           />
-          <FieldDescription id="kit-compare-help" className={cn('text-xs', (rulesError || ruleIssues.length > 0) && 'text-destructive')}>
+          <FieldDescription id="kit-compare-help" className={cn('text-caption', (rulesError || ruleIssues.length > 0) && 'text-destructive')}>
             {rulesError ??
               ruleIssues[0]?.message ??
               'By default text ignores case and spacing, numbers must be equal, dates the same day and lists match in any order. Per field: "exact", "alnum" (letters and digits only, for IDs), {"tolerance": 0.01}, "ordered", or {"matchBy": "sku"} for lists of items. Use * for list items, as in /lineItems/*/sku.'}
@@ -209,7 +209,7 @@ export function ExtractionSettingsFields({ settings, onChange, errors }: { setti
         </Field>
       </Fold>
 
-      <p className="text-xs text-muted-foreground">{FIELD_LIST_PRIVACY}</p>
+      <p className="text-caption text-muted-foreground">{FIELD_LIST_PRIVACY}</p>
     </div>
   )
 }

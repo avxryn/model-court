@@ -32,8 +32,8 @@ export function ChoiceCard({ id, value, title, description, disabled, className 
     >
       <RadioGroupItem id={id} value={value} disabled={disabled} className="mt-0.5" aria-labelledby={`${id}-text`} />
       <span id={`${id}-text`} className="leading-snug">
-        <span className="block text-sm font-medium">{title}</span>
-        {description && <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{description}</span>}
+        <span className="block text-small font-medium">{title}</span>
+        {description && <span className="mt-0.5 block text-caption leading-snug text-muted-foreground">{description}</span>}
       </span>
     </Label>
   )

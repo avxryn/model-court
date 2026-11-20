@@ -14,7 +14,7 @@ export function Fold({ summary, children, defaultOpen, open, onOpenChange, class
     <Collapsible defaultOpen={defaultOpen} open={open} onOpenChange={onOpenChange} className={className}>
       <CollapsibleTrigger
         className={cn(
-          'group/fold inline-flex min-h-7 max-w-full cursor-pointer items-center gap-1.5 rounded-sm py-1 text-left text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
+          'group/fold inline-flex min-h-7 max-w-full cursor-pointer items-center gap-1.5 rounded-sm py-1 text-left text-small text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',
           triggerClassName,
         )}
       >

@@ -37,7 +37,7 @@ function Judgment({ data, reload }: { data: ResultsView; reload: () => Promise<v
     <Page width="wide">
       <HearingFolder runId={data.runId} caseId={data.evaluationId} caseTitle={data.evaluationTitle} role={data.role} status={data.status}>
         <div className="relative flex flex-wrap items-center justify-between gap-3 rounded-t-sm border-x border-t border-b border-paper-edge border-b-paper-rule bg-paper px-5 py-3 sm:px-8 print:hidden">
-          <p className="text-sm text-muted-foreground">{latest ? 'The judgment as one printable page. Your browser can save it as a PDF.' : isOwner ? 'No judgment yet. Enter it below; this page prints the latest one.' : 'No judgment yet.'}</p>
+          <p className="text-small text-muted-foreground">{latest ? 'The judgment as one printable page. Your browser can save it as a PDF.' : isOwner ? 'No judgment yet. Enter it below; this page prints the latest one.' : 'No judgment yet.'}</p>
           <Button variant={isOwner && !latest ? 'outline' : 'default'} onClick={() => window.print()} disabled={!latest}>
             <Printer aria-hidden /> Print or save as PDF
           </Button>
@@ -51,7 +51,7 @@ function Judgment({ data, reload }: { data: ResultsView; reload: () => Promise<v
                 <div>Hearing · {formatTime(data.createdAt)}</div>
                 <div>Unsealed · {formatTime(data.revealedAt)}</div>
                 <div>Rubric · {rubricName(data.rubricVersion)}</div>
-                <div className="text-xs break-all text-muted-foreground">
+                <div className="text-caption break-all text-muted-foreground">
                   Snapshot <span className="typewriter">{data.snapshotHash.slice(0, 16)}</span>
                 </div>
               </>
@@ -64,7 +64,7 @@ function Judgment({ data, reload }: { data: ResultsView; reload: () => Promise<v
               <h2 id="j-parties" className="court-label">
                 The parties
               </h2>
-              <ul className="mt-2 space-y-1 font-heading text-sm">
+              <ul className="mt-2 space-y-1 font-heading text-small">
                 {data.configurations.map((c) => (
                   <li key={c.key}>
                     <span className="font-bold">{c.label}</span> — {partySource(c)}
@@ -92,7 +92,7 @@ function Judgment({ data, reload }: { data: ResultsView; reload: () => Promise<v
               </section>
             )}
 
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {data.eligibleCaseKeys.length} of {data.plannedCaseCount} questions were eligible for scoring. Means are on a 0–2 scale. {data.disagreements.length > 0 && `Ratings disagreed by a point or more on ${plural(data.disagreements.length, 'judgment')}.`}
             </p>
 
@@ -104,15 +104,15 @@ function Judgment({ data, reload }: { data: ResultsView; reload: () => Promise<v
                 <>
                   <p className="mt-2 font-display text-2xl font-medium">{outcomeText(latest, data.configurations)}</p>
                   <p className="mt-2 font-heading leading-relaxed whitespace-pre-wrap">{latest.rationale}</p>
-                  {latest.limitations && <p className="mt-2 text-sm whitespace-pre-wrap text-muted-foreground">Limitations: {latest.limitations}</p>}
+                  {latest.limitations && <p className="mt-2 text-small whitespace-pre-wrap text-muted-foreground">Limitations: {latest.limitations}</p>}
                   <div className="mt-10 grid gap-8 sm:grid-cols-2 print:break-inside-avoid">
                     <div>
                       <div className="h-10 border-b border-foreground" />
-                      <div className="mt-1 text-xs text-muted-foreground">Signature of the judge</div>
+                      <div className="mt-1 text-caption text-muted-foreground">Signature of the judge</div>
                     </div>
                     <div>
                       <div className="flex h-10 items-end border-b border-foreground pb-1 font-heading">{new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(latest.createdAt)}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">Date entered (revision {latest.revision})</div>
+                      <div className="mt-1 text-caption text-muted-foreground">Date entered (revision {latest.revision})</div>
                     </div>
                   </div>
                 </>
@@ -141,7 +141,7 @@ function FindingsBlock({ title, cohort, data }: { title: string; cohort: CohortR
   return (
     <section className="print:break-inside-avoid">
       <h2 className="court-label">{title}</h2>
-      <div className="mt-2">{cohort.byConfiguration ? <FindingsTable cohort={cohort} parties={data.configurations} rubricVersion={data.rubricVersion} caption={title} print /> : <p className="text-sm text-muted-foreground">No filed worksheets in this group.</p>}</div>
+      <div className="mt-2">{cohort.byConfiguration ? <FindingsTable cohort={cohort} parties={data.configurations} rubricVersion={data.rubricVersion} caption={title} print /> : <p className="text-small text-muted-foreground">No filed worksheets in this group.</p>}</div>
     </section>
   )
 }

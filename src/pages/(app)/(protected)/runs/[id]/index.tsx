@@ -65,8 +65,8 @@ function Proceedings({ run, reload, live }: { run: OwnerRunView; reload: () => P
               </div>
               <div>Hearing · {formatTime(run.createdAt)}</div>
               <StageLine status={run.status} />
-              <div className="text-xs leading-snug text-muted-foreground">{run.comparisonMode === 'model' ? 'Model comparison: identical instructions, different models.' : 'Configuration comparison: instructions and models may differ; not an isolated model-quality test.'}</div>
-              <div className="mt-1 inline-flex items-center gap-1 font-sans text-xs text-muted-foreground" title={live ? 'Live updates connected' : 'Live updates reconnecting; refreshing every 15 seconds'}>
+              <div className="text-caption leading-snug text-muted-foreground">{run.comparisonMode === 'model' ? 'Model comparison: identical instructions, different models.' : 'Configuration comparison: instructions and models may differ; not an isolated model-quality test.'}</div>
+              <div className="mt-1 inline-flex items-center gap-1 font-sans text-caption text-muted-foreground" title={live ? 'Live updates connected' : 'Live updates reconnecting; refreshing every 15 seconds'}>
                 {live ? <Wifi className="size-3.5" aria-hidden /> : <WifiOff className="size-3.5" aria-hidden />}
                 {live ? 'Live' : 'Reconnecting'}
               </div>
