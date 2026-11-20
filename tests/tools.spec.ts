@@ -19,7 +19,8 @@ for (const width of [1280, 390]) {
     const page = judge.page
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/evaluations')
-    await page.getByRole('button', { name: 'Open a new case' }).first().click()
+    // The sidebar names it 'Open a new case'; at phone width the header's button reads 'New case'.
+    await page.getByRole('button', { name: /new case/i }).first().click()
     const dialog = page.getByRole('dialog')
     await dialog.getByText('Tool use (mock tools)').click()
     await dialog.getByRole('button', { name: 'Open case' }).click()
@@ -39,6 +40,7 @@ for (const width of [1280, 390]) {
     await expect(tryIt.getByText(/the error response is sent: `order_id` is required/)).toBeVisible()
 
     // No route has a recorded live tool check yet, so Start names the missing check.
+    await page.getByRole('button', { name: /things? to do before the hearing/ }).click()
     await expect(page.getByText(/hasn't passed a live tool check yet/).first()).toBeVisible()
   })
 }

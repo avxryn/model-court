@@ -240,6 +240,7 @@ export function createApi(resolveDeps: (c: Context) => Deps | Promise<Deps>): Ho
         structuredVerifiedAt: route.structuredVerifiedAt,
         pdfVerifiedAt: route.pdfVerifiedAt,
         toolsVerifiedAt: route.toolsVerifiedAt,
+        adapterVersion: route.adapterVersion,
       })),
       limits: { maxCases: LIMITS.maxCases, configurations: deps(c).config.maxConfigurationsPerRun, maxTestimoniesPerHearing: LIMITS.maxTestimoniesPerHearing, samplesPerAnswer: deps(c).config.maxSamplesPerAnswer, minConfigurations: LIMITS.minConfigurationsPerRun, maxOutputTokens: LIMITS.maxOutputTokens, reasoningHeadroomTokens: LIMITS.reasoningHeadroomTokens, maxAttemptsPerGeneration: LIMITS.maxAttemptsPerGeneration, credentialTtlDays: Math.round(deps(c).config.credentialTtlMs / 86_400_000), ...deps(c).config.limits, extraction: extractionLimits() },
     }),

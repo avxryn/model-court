@@ -31,7 +31,8 @@ export function CaseActionBar({ saveState, dirty, canSave, onSave, calls, blocke
 function Blockers({ blockers }: { blockers: string[] }) {
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="ghost" className="px-2 text-warning hover:text-warning" />}>
+      {/* The same full name at every width; phones only see the shorter text. */}
+      <PopoverTrigger render={<Button variant="ghost" className="px-2 text-warning hover:text-warning" aria-label={`${blockers.length} ${blockers.length === 1 ? 'thing' : 'things'} to do before the hearing`} />}>
         <AlertTriangle aria-hidden />
         {blockers.length}
         <span className="sm:hidden"> to do</span>

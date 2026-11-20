@@ -196,9 +196,11 @@ export function describeIssue(issue: ReadinessIssue, cases?: ReadonlyArray<Pick<
     case 'feature_unsupported': {
       const route = findRoute(issue.modelKey)
       const name = route ? `${PROVIDER_NAMES[route.provider]} ${route.label}` : 'A selected model'
+      // D-118: only Gemini lacks these features as a provider; otherwise another model of the same provider may have them.
+      const instead = route?.provider === 'google' ? 'Choose an OpenAI or Anthropic model for this party.' : 'Choose another model for this party.'
       return issue.feature === 'json'
-        ? `${name} can't return answers as fields in Model Court, so it can't be a party when fields are pulled from documents. Choose an OpenAI or Anthropic model for this party.`
-        : `${name} can't call mock tools in Model Court, so it can't be a party in a tool-use hearing. Choose an OpenAI or Anthropic model for this party.`
+        ? `${name} can't return answers as fields in Model Court, so it can't be a party when fields are pulled from documents. ${instead}`
+        : `${name} can't call mock tools in Model Court, so it can't be a party in a tool-use hearing. ${instead}`
     }
     case 'tools_imported_unsupported':
       return "Imported answers have no tool calls, so a tool-use hearing can't include an imported party. Remove it or switch the task kit."

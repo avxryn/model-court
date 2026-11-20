@@ -33,7 +33,7 @@ export function ScenarioImport({ onCancel, onCreated }: { onCancel: () => void; 
 
   const parse = async (content: string, parties: boolean) => {
     if (!catalog.data) return
-    const routes = catalog.data.models.map((model) => ({ ...model, adapterVersion: '' })) as ModelRoute[]
+    const routes = catalog.data.models.map((model) => ({ ...model })) as ModelRoute[]
     const defaults = makeExampleDraft(newIntentKey, defaultModelKeys(routes)).configurations as Configuration[]
     setParsed(await parseScenarioFile(content, newIntentKey, { routes, defaults, maxParties: catalog.data.limits.configurations, includeParties: parties }))
   }

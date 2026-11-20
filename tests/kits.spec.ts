@@ -29,7 +29,7 @@ test('a ticket-routing case carries its kit, and switching kits asks first', asy
   await expect(page.getByText('Classification: answer keys').first()).toBeVisible()
 
   // Switching to Summaries would drop five answer keys: the slip names them, and keeping the kit changes nothing.
-  await page.getByRole('button', { name: /Classification.*Change/ }).click()
+  await page.getByRole('button', { name: /^Classification · \d+ automatic.*Change$/ }).click()
   await page.getByText('Summaries', { exact: true }).click()
   const slip = page.getByRole('alertdialog')
   await expect(slip).toContainText('Switching to Summaries removes answer keys from 5 questions.')

@@ -19,7 +19,11 @@ const BASE_URL = `http://127.0.0.1:${PORT}`
 
 export default defineConfig({
   testDir: '.',
-  testMatch: '**/*.spec.ts',
+  // A setup project clears the test accounts' cases once before the specs run in parallel.
+  projects: [
+    { name: 'test-accounts', testMatch: /test-accounts\.setup\.ts$/ },
+    { name: 'app', testMatch: '**/*.spec.ts', dependencies: ['test-accounts'] },
+  ],
   timeout: 30_000,
   retries: 0,
   use: {

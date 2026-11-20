@@ -65,7 +65,7 @@ function OwnerEvaluation({ evaluation, reload }: { evaluation: OwnerEvaluationVi
   const rehearable = (id: string | null) => evaluation.runs.find((run) => run.id === id && (run.status === 'revealed' || run.status === 'decided' || run.status === 'canceled')) ?? null
   const rehearSource = rehearable(params.get('rehear'))
   const rehearing = rehearable(params.get('rehearing'))
-  const routes: ModelRoute[] | null = useMemo(() => (catalog.data ? catalog.data.models.map((m) => ({ ...m, adapterVersion: '' })) : null), [catalog.data])
+  const routes: ModelRoute[] | null = useMemo(() => (catalog.data ? catalog.data.models.map((m) => ({ ...m })) : null), [catalog.data])
   const workingScenario = useDraftScenarioHash(draft)
   // Where the working draft stands (D-68): computed here so it follows edits and saves without a reload.
   const workingVersion = evaluation.runs.find((run) => run.scenarioHash === workingScenario)?.scenarioVersion ?? null

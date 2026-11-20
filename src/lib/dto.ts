@@ -53,6 +53,8 @@ export interface CatalogModel {
   pdfVerifiedAt: string | null
   /** Spec 06 (D-99): a recorded live tool-loop call; tool-use hearings need it. */
   toolsVerifiedAt: string | null
+  /** D-118: the route's plain adapter version, so the browser's readiness check knows which features it can carry. */
+  adapterVersion: string
 }
 
 export interface CatalogView {
