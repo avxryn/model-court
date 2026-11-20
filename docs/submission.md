@@ -3,8 +3,9 @@
 The note to submit, and the checklist to finish first. Due **Friday Nov 20, 2026, 11:59 p.m. Eastern**.
 
 > [!IMPORTANT]
-> Draft. Everything below except the bracketed lines is taken from [verification.md](verification.md)
-> part A (agent checks). Fill each bracket with only what you observed yourself, then delete this box.
+> Ready for your read-through. The agent facts come from [verification.md](verification.md) part A. Your
+> own lines come from part B and from what you said in the working session. Change anything that isn't
+> how you'd put it, then delete this box.
 
 ## Note
 
@@ -42,11 +43,22 @@ The note to submit, and the checklist to finish first. Due **Friday Nov 20, 2026
 > The coding agent implemented the code, tests, docs and deploys, and ran the checks recorded in
 > `docs/verification.md` part A: 679 unit tests and 296 integration tests, each integration test run on
 > local D1 and on the real Durable Object store, plus 42 Playwright tests including signed-in flows. I
-> personally verified [only what you checked yourself: docs/verification.md part B] and decided
-> [your own decisions, for example deploying the roadmap before the deadline]. [Known limitation and next
-> step, for example the paid smoke checks that turn on extraction and tool use.]
+> personally verified that the signed-in pages load on the live app (Nov 17). I also ran one full live
+> hearing on Nov 20. I saved my own OpenAI and Anthropic keys and started a five-question hearing, GPT-6
+> Luna against Claude Haiku 5.5, and all 10 calls succeeded. A guest juror with no account scored the
+> answers blind from a separate private window. After unsealing, I chose the verdict: Claude Haiku 5.5,
+> for better grounding.
 >
-> Live URL: https://model-court.app.space. Repository: [the URL reviewers can open].
+> I decided that live generation stays strictly BYOK, with no sponsored calls, and that keys are never
+> shown, logged or sent anywhere but their own provider. I also decided that the agent's checks and mine
+> are recorded separately. Finally, I chose to deploy the roadmap on Nov 19, before this deadline and
+> without a backup, because no backup path existed yet.
+>
+> Known limitation: the live evidence is small, one juror on five questions. Conversations, extraction,
+> PDF, tool use and Gemini stay off until their paid smoke checks run, and those checks come next. After
+> them come turning on the sealed daily backups and reviewing the four- and five-party screens.
+>
+> Live URL: https://model-court.app.space. Repository: https://github.com/avxryn/model-court.
 
 ## Checklist
 
@@ -56,8 +68,8 @@ The note to submit, and the checklist to finish first. Due **Friday Nov 20, 2026
 - [ ] The repository is accessible to reviewers. `avxryn/model-court` is private; make it public or
       add the reviewers. The tree and full history were scanned for real key formats before each push
       and none were found.
-- [ ] `master` matches what is live: merge `claude/roadmap-1-3` into `master`, or submit the branch
-- [ ] Part B of [verification.md](verification.md) holds your own checks
-- [ ] The note above contains only observed facts, and every bracket is filled
+- [x] `master` matches what is live (fast-forwarded to `claude/roadmap-1-3` on Nov 20)
+- [x] Part B of [verification.md](verification.md) holds your own checks (Nov 17 and Nov 20)
+- [ ] The note above contains only observed facts, and you have read it through (every bracket is filled)
 - [ ] The exposed Anthropic key is rotated
 - [ ] Submitted before **Friday Nov 20, 2026, 11:59 p.m. Eastern**
