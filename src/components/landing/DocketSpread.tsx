@@ -89,11 +89,11 @@ export function DocketSpread() {
           <div className="line-clamp-2 font-display text-[1.0625rem] leading-snug">{CASE.input}</div>
           <div className="mt-2">
             {TICKS.map(([label, criterion, score], t) => (
-              <div key={`${label}-${criterion}`} className="flex items-center gap-2 border-b border-dashed border-border py-1.5 text-xs font-medium last:border-b-0">
+              <div key={`${label}-${criterion}`} className="flex items-center gap-2 border-b border-dashed border-border py-1.5 text-caption font-medium last:border-b-0">
                 {label} · {criterion}
                 <span className="ml-auto inline-flex overflow-hidden rounded-[5px] border border-input">
                   {[0, 1, 2].map((step) => (
-                    <span key={step} className="relative grid h-[1.375rem] w-6 place-items-center border-r border-input text-[0.6875rem] text-muted-foreground last:border-r-0">
+                    <span key={step} className="relative grid h-[1.375rem] w-6 place-items-center border-r border-input text-caption text-muted-foreground last:border-r-0">
                       {step}
                       {step === score && (
                         <b className="ds-tick font-medium" style={vars({ '--t': t })}>
@@ -110,7 +110,7 @@ export function DocketSpread() {
       </div>
       <ol className="mt-1.5 flex flex-wrap justify-center gap-1.5" aria-hidden>
         {STEPS.map(([step, delay]) => (
-          <li key={step} className="ds-step inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground" style={vars({ '--d': delay })}>
+          <li key={step} className="ds-step inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-caption text-muted-foreground" style={vars({ '--d': delay })}>
             <i className="size-1.5 rounded-full bg-input" />
             {step}
           </li>

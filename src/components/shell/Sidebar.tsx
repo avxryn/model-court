@@ -132,7 +132,7 @@ function RailToggle({ rail, onToggle }: { rail: boolean; onToggle: () => void })
         }
       >
         <Icon className="size-4" strokeWidth={1.75} aria-hidden />
-        <span className={cn('flex-1 text-left text-sm', rail && 'lg:hidden')}>Collapse</span>
+        <span className={cn('flex-1 text-left text-small', rail && 'lg:hidden')}>Collapse</span>
         <span className={cn(rail && 'lg:hidden')}>
           <Shortcut />
         </span>
@@ -149,7 +149,7 @@ function NavGroup({ label, action, rail, children }: { label?: string; action?: 
     <div>
       {label && (
         <div className={cn('mb-2 flex h-6 items-center justify-between pr-1 pl-2', rail && 'lg:hidden')}>
-          <span className="text-xs font-medium text-muted-foreground">{label}</span>
+          <span className="text-caption font-medium text-muted-foreground">{label}</span>
           {action}
         </div>
       )}
@@ -161,7 +161,7 @@ function NavGroup({ label, action, rail, children }: { label?: string; action?: 
 
 function rowClass(active: boolean, rail = false) {
   return cn(
-    'relative flex h-8 min-w-0 items-center gap-2.5 rounded-md px-2 text-sm outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50',
+    'relative flex h-8 min-w-0 items-center gap-2.5 rounded-md px-2 text-small outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50',
     active
       ? 'bg-accent font-medium text-accent-foreground'
       : 'text-foreground/80 hover:bg-accent/70 hover:text-foreground',
@@ -240,7 +240,7 @@ function CaseFiles({ rail }: { rail: boolean }) {
           ))}
         </li>
       )}
-      {list.data && items.length === 0 && <li className={cn('px-2 py-1 text-xs leading-relaxed text-muted-foreground', rail && 'lg:hidden')}>No cases yet. Open one with +.</li>}
+      {list.data && items.length === 0 && <li className={cn('px-2 py-1 text-caption leading-relaxed text-muted-foreground', rail && 'lg:hidden')}>No cases yet. Open one with +.</li>}
       {items.map((item) => (
         <CaseFolder
           key={item.id}
@@ -261,7 +261,7 @@ function CaseFiles({ rail }: { rail: boolean }) {
       ))}
       {list.data?.nextCursor && (
         <li className={cn(rail && 'lg:hidden')}>
-          <Link to="/evaluations" className="flex h-8 items-center rounded-md pr-2 pl-[2.125rem] text-xs text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
+          <Link to="/evaluations" className="flex h-8 items-center rounded-md pr-2 pl-[2.125rem] text-caption text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
             All cases
           </Link>
         </li>
@@ -316,7 +316,7 @@ function CaseFolder({ item, rail, open, current, currentRunId, onToggle }: { ite
         {open && (
           <ul className="mt-0.5 ml-4 space-y-0.5 border-l border-drawer-edge pl-2" aria-label={`Hearings in ${item.title}`}>
             {detail.loading && !detail.data && <li className="h-7 animate-pulse rounded bg-muted motion-reduce:animate-none" aria-label="Loading hearings" />}
-            {detail.data && runs.length === 0 && <li className="flex h-7 items-center px-2 text-xs text-muted-foreground">No hearings yet</li>}
+            {detail.data && runs.length === 0 && <li className="flex h-7 items-center px-2 text-caption text-muted-foreground">No hearings yet</li>}
             {runs.map((run) => {
               const info = statusInfo(run.status)
               const runPath = `/runs/${run.id}`

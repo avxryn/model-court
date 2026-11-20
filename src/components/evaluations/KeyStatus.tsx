@@ -33,7 +33,7 @@ export function SavedKeys({ providers, keys }: { providers: ProviderId[]; keys: 
   })
   if (saved.length === 0 || saved.length < providers.length) return null
   return (
-    <p className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
+    <p className="mt-6 flex items-center gap-2 text-caption text-muted-foreground">
       <KeyRound className="size-3.5" aria-hidden /> Keys saved: {saved.join(' · ')}. Jurors never need keys.{' '}
       <Link to="/settings/api-keys" className="underline underline-offset-4 hover:text-foreground">
         Manage keys

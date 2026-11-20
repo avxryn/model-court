@@ -44,8 +44,8 @@ export function ToolTraceView({ label, trace, maxSteps, full, usage, children }:
   return (
     <article data-testimony className="min-w-0 exhibit-panel">
       <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-        <h3 className="typewriter shrink-0 rounded-[4px] bg-foreground px-2 py-0.5 text-xs font-semibold tracking-[0.06em] whitespace-nowrap text-background">TESTIMONY {label}</h3>
-        <span className="text-right text-xs leading-snug text-muted-foreground">{plural(trace.steps.length, 'step')} · {plural(trace.steps.reduce((sum, step) => sum + step.calls.length, 0), 'tool call')}</span>
+        <h3 className="typewriter shrink-0 rounded-[4px] bg-foreground px-2 py-0.5 text-caption font-semibold tracking-[0.06em] whitespace-nowrap text-background">TESTIMONY {label}</h3>
+        <span className="text-right text-caption leading-snug text-muted-foreground">{plural(trace.steps.length, 'step')} · {plural(trace.steps.reduce((sum, step) => sum + step.calls.length, 0), 'tool call')}</span>
       </header>
       <div role="region" aria-label={`Testimony ${label} trace`} tabIndex={0} className="max-h-[32rem] space-y-3 overflow-y-auto px-4 py-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
         <ol className="list-none space-y-3 p-0">
@@ -69,24 +69,24 @@ export function ToolTraceView({ label, trace, maxSteps, full, usage, children }:
                   const result = call.result
                   return (
                     <div key={call.callNo} className="rounded-md border border-border">
-                      <p className="flex flex-wrap items-baseline gap-x-2 border-b border-border px-3 py-1.5 text-sm">
+                      <p className="flex flex-wrap items-baseline gap-x-2 border-b border-border px-3 py-1.5 text-small">
                         <span className="typewriter text-caption text-mark">#{call.callNo}</span>
                         <span>
                           Called <code className="font-mono text-[0.85em]">{call.tool}</code>
                         </span>
-                        {!call.knownTool && <span className="text-xs text-muted-foreground">(not a defined tool)</span>}
+                        {!call.knownTool && <span className="text-caption text-muted-foreground">(not a defined tool)</span>}
                       </p>
-                      <pre className="overflow-x-auto px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">{call.arguments}</pre>
-                      <div className={cn('border-t border-border px-3 py-2 text-sm', 'notSent' in result ? 'text-muted-foreground' : result.isError ? 'bg-destructive/5' : 'bg-muted/40')}>
+                      <pre className="overflow-x-auto px-3 py-2 font-mono text-small leading-relaxed whitespace-pre-wrap break-words">{call.arguments}</pre>
+                      <div className={cn('border-t border-border px-3 py-2 text-small', 'notSent' in result ? 'text-muted-foreground' : result.isError ? 'bg-destructive/5' : 'bg-muted/40')}>
                         {'notSent' in result ? (
                           <p className="italic">Not run: the loop ended before this call was answered.</p>
                         ) : (
                           <>
                             <p className={cn('court-label mb-1', result.isError && 'text-destructive')}>{result.isError ? 'Error result' : 'Result'}</p>
-                            <pre className="font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">{result.text}</pre>
+                            <pre className="font-mono text-small leading-relaxed whitespace-pre-wrap break-words">{result.text}</pre>
                           </>
                         )}
-                        {detail && <p className="mt-1.5 text-xs text-muted-foreground">{describeSource(detail)}</p>}
+                        {detail && <p className="mt-1.5 text-caption text-muted-foreground">{describeSource(detail)}</p>}
                       </div>
                     </div>
                   )
@@ -99,10 +99,10 @@ export function ToolTraceView({ label, trace, maxSteps, full, usage, children }:
           <section aria-label={`Testimony ${label} final answer`} className="space-y-1 border-t border-paper-rule pt-3">
             <p className="court-label">Final answer</p>
             <p className="text-reading leading-[1.65] break-words whitespace-pre-wrap">{trace.finalAnswer ?? ''}</p>
-            {trace.ended === 'truncated' && <p className="text-xs text-muted-foreground">{endLine(trace, maxSteps)}</p>}
+            {trace.ended === 'truncated' && <p className="text-caption text-muted-foreground">{endLine(trace, maxSteps)}</p>}
           </section>
         ) : (
-          <p className="border-t border-paper-rule pt-3 text-sm text-muted-foreground">{endLine(trace, maxSteps)} No final answer.</p>
+          <p className="border-t border-paper-rule pt-3 text-small text-muted-foreground">{endLine(trace, maxSteps)} No final answer.</p>
         )}
       </div>
       {children && <div className="border-t border-border px-4 pt-3 pb-4">{children}</div>}
@@ -137,7 +137,7 @@ export function ToolList({ tools, maxSteps }: { tools: ReadonlyArray<{ name: str
         {tools.map((tool) => (
           <li key={tool.name}>
             <code className="font-mono text-[0.85em] text-foreground">{tool.name}</code>: {tool.description}
-            <span className="block text-xs">Arguments: {argumentSummary(tool.parameters)}</span>
+            <span className="block text-caption">Arguments: {argumentSummary(tool.parameters)}</span>
           </li>
         ))}
       </ul>

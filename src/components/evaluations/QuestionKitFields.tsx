@@ -55,7 +55,7 @@ export function QuestionKitFields({ kit, settings, testCase, index, errors, onCh
         {kit.name}: answer keys <Plain>never sent to the models</Plain>
       </p>
       {body}
-      {other && <p className="text-xs text-destructive">{other}</p>}
+      {other && <p className="text-caption text-destructive">{other}</p>}
     </div>
   )
 }
@@ -66,15 +66,15 @@ function SummaryFields({ fields, id, error, onChange }: { fields: SummarizationF
   return (
     <>
       <div className="space-y-3">
-        <p className="text-sm font-medium">Required points</p>
-        <p className="-mt-2 text-xs text-muted-foreground">A point counts as covered when any of its phrases appears in the summary. Jurors see the point, not the phrases.</p>
-        {points.length === 0 && <p className="text-sm text-muted-foreground">None yet. Without required points the coverage check does not apply.</p>}
+        <p className="text-small font-medium">Required points</p>
+        <p className="-mt-2 text-caption text-muted-foreground">A point counts as covered when any of its phrases appears in the summary. Jurors see the point, not the phrases.</p>
+        {points.length === 0 && <p className="text-small text-muted-foreground">None yet. Without required points the coverage check does not apply.</p>}
         {points.map((point, i) => (
           <div key={`${i}/${points.length}`} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
             <Field className="gap-1.5">
               <FieldLabel htmlFor={id(`point-${i}`)}>Point {i + 1}</FieldLabel>
               <Input id={id(`point-${i}`)} value={point.text} maxLength={LIMITS.kits.requiredPointText.max} aria-invalid={error(`requiredPoints.${i}.text`) ? true : undefined} onChange={(e) => setPoints(points.map((p, j) => (j === i ? { ...p, text: e.target.value } : p)))} />
-              {error(`requiredPoints.${i}.text`) && <FieldDescription className="text-xs text-destructive">{error(`requiredPoints.${i}.text`)}</FieldDescription>}
+              {error(`requiredPoints.${i}.text`) && <FieldDescription className="text-caption text-destructive">{error(`requiredPoints.${i}.text`)}</FieldDescription>}
             </Field>
             <Field className="gap-1.5">
               <FieldLabel htmlFor={id(`phrases-${i}`)}>Phrases that show it</FieldLabel>
@@ -85,7 +85,7 @@ function SummaryFields({ fields, id, error, onChange }: { fields: SummarizationF
                 aria-describedby={id(`phrases-${i}-help`)}
                 onChange={(e) => setPoints(points.map((p, j) => (j === i ? { ...p, anyOf: splitPhrases(e.target.value) } : p)))}
               />
-              <FieldDescription id={id(`phrases-${i}-help`)} className={cn('text-xs', error(`requiredPoints.${i}.anyOf`) && 'text-destructive')}>
+              <FieldDescription id={id(`phrases-${i}-help`)} className={cn('text-caption', error(`requiredPoints.${i}.anyOf`) && 'text-destructive')}>
                 {error(`requiredPoints.${i}.anyOf`) ?? `Separate with | (up to ${LIMITS.kits.phrasesPerPoint}). Whole words; case ignored.`}
               </FieldDescription>
             </Field>
@@ -101,7 +101,7 @@ function SummaryFields({ fields, id, error, onChange }: { fields: SummarizationF
       <Field className="gap-1.5">
         <FieldLabel htmlFor={id('avoid')}>Phrases the summary must not contain (optional)</FieldLabel>
         <Input id={id('avoid')} defaultValue={fields.mustNotMention.join(' | ')} aria-invalid={error('mustNotMention') ? true : undefined} aria-describedby={id('avoid-help')} onChange={(e) => onChange({ ...fields, mustNotMention: splitPhrases(e.target.value) })} />
-        <FieldDescription id={id('avoid-help')} className={cn('text-xs', error('mustNotMention') && 'text-destructive')}>
+        <FieldDescription id={id('avoid-help')} className={cn('text-caption', error('mustNotMention') && 'text-destructive')}>
           {error('mustNotMention') ?? `A name to keep private, or a claim not in the document. Separate with | (up to ${LIMITS.kits.mustNotMention}).`}
         </FieldDescription>
       </Field>
@@ -139,11 +139,11 @@ function LabelKey({ settings, fields, id, error, onChange }: { settings: Classif
             ))}
           </SelectContent>
         </Select>
-        <FieldDescription className={cn('text-xs', error('expectedLabel') && 'text-destructive')}>{error('expectedLabel') ?? 'Without one, the accuracy check does not apply to this question.'}</FieldDescription>
+        <FieldDescription className={cn('text-caption', error('expectedLabel') && 'text-destructive')}>{error('expectedLabel') ?? 'Without one, the accuracy check does not apply to this question.'}</FieldDescription>
       </Field>
       {expected && labels.length > 1 && (
         <fieldset className="space-y-1.5">
-          <legend className="text-sm font-medium">Also accept (optional, when more than one label fits)</legend>
+          <legend className="text-small font-medium">Also accept (optional, when more than one label fits)</legend>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             {labels
               .filter((label) => label !== expected)
@@ -156,7 +156,7 @@ function LabelKey({ settings, fields, id, error, onChange }: { settings: Classif
                 </div>
               ))}
           </div>
-          {error('alsoAccept') && <p className="text-xs text-destructive">{error('alsoAccept')}</p>}
+          {error('alsoAccept') && <p className="text-caption text-destructive">{error('alsoAccept')}</p>}
         </fieldset>
       )}
     </>

@@ -57,7 +57,7 @@ export function CaseImport({ currentCount, newId, onImport, disabled, kitVersion
         <Button variant="ghost" size="sm" onClick={downloadTemplate}>
           <Download aria-hidden /> Download a CSV template
         </Button>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           Columns: title, input, reference, expected_behavior, and an optional language{classification && ', expected_label and also_accept (labels separated by |)'}{grounded && ', answerable (yes, partly or no) and required_sources (like 1;3). Leave reference empty: sources are imported below'}. Up to {maxRows} rows{maxRows < LIMITS.maxCases && ` with ${parties} parties`}. Importing replaces the current questions.
         </span>
         <input
@@ -74,7 +74,7 @@ export function CaseImport({ currentCount, newId, onImport, disabled, kitVersion
         />
       </div>
       {issues.length > 0 && (
-        <div role="alert" className="text-sm text-destructive">
+        <div role="alert" className="text-small text-destructive">
           <p className="font-medium">The file could not be imported:</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             {issues.slice(0, 8).map((issue, index) => (

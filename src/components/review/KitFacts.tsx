@@ -10,7 +10,7 @@ import { ToolList } from '@/components/review/ToolTrace'
 
 export function KitFacts({ view, kitName }: { view: KitJurorCaseView; kitName: string }) {
   return (
-    <section aria-label={`${kitName}: what the judge set`} className="rounded-lg border border-border px-4 py-3.5 text-sm">
+    <section aria-label={`${kitName}: what the judge set`} className="rounded-lg border border-border px-4 py-3.5 text-small">
       <h3 className="court-label">
         {kitName}: what the judge set <Plain>part of the jury instructions</Plain>
       </h3>

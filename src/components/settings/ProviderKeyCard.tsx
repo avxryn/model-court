@@ -111,10 +111,10 @@ export function ProviderKeyCard({ provider, current, writesEnabled, ttlDays, onC
               <span>
                 {current.label} · added {formatTime(current.createdAt)}
               </span>
-              <span className="basis-full text-xs">
+              <span className="basis-full text-caption">
                 Expires {formatTime(current.expiresAt)} · {current.lastUsedAt ? `last used ${formatTime(current.lastUsedAt)}` : 'not used yet'}
               </span>
-              <span className="flex basis-full flex-wrap items-center gap-2 text-xs">
+              <span className="flex basis-full flex-wrap items-center gap-2 text-caption">
                 {current.lastCheckResult && current.lastCheckedAt ? (
                   <>
                     <StatusBadge status={current.lastCheckResult} label={CHECK_BADGE[current.lastCheckResult].label} tone={CHECK_BADGE[current.lastCheckResult].tone} />
@@ -131,7 +131,7 @@ export function ProviderKeyCard({ provider, current, writesEnabled, ttlDays, onC
         </CardDescription>
       </CardHeader>
       {provider === 'google' && (
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
+        <CardContent className="space-y-2 text-small text-muted-foreground">
           <p>Gemini parties use your own Google AI Studio API key. Google bills your Google project. Model Court asks Google not to keep these requests in your project’s logs. Google still keeps a copy for a limited time to check for abuse.</p>
           <p className="rounded-sm bg-warning/10 p-2.5 text-foreground ring-1 ring-warning/25" data-testid="google-free-tier">
             On Google’s free tier, Google may use what you send to improve its products, and people at Google may read it. Use a paid-tier project for anything private. In the EEA, Switzerland or the UK, a paid-tier project is required.
@@ -152,7 +152,8 @@ export function ProviderKeyCard({ provider, current, writesEnabled, ttlDays, onC
         </CardContent>
       ) : (
         <CardFooter className="flex-wrap gap-2">
-          <Button variant={current ? 'outline' : 'default'} disabled={!writesEnabled} onClick={() => setEditing(true)}>
+          {/* D-120: outline on every card; three primary buttons on one page competed. */}
+          <Button variant="outline" disabled={!writesEnabled} onClick={() => setEditing(true)}>
             {current ? 'Replace key' : 'Add key'}
           </Button>
           {current && (
@@ -184,7 +185,7 @@ export function ProviderKeyCard({ provider, current, writesEnabled, ttlDays, onC
               </AlertDialogContent>
             </AlertDialog>
           )}
-          {!writesEnabled && <span className="text-xs text-muted-foreground">Adding keys is paused by the operator. Removal stays available.</span>}
+          {!writesEnabled && <span className="text-caption text-muted-foreground">Adding keys is paused by the operator. Removal stays available.</span>}
         </CardFooter>
       )}
     </Card>
@@ -265,7 +266,7 @@ function KeyForm({ provider, current, ttlDays, onDone }: { provider: ProviderId;
         <FieldLabel htmlFor={keyId}>API key</FieldLabel>
         <Input id={keyId} type="password" value={apiKey} autoComplete="off" spellCheck={false} data-1p-ignore data-lpignore="true" aria-invalid={mismatch !== null || undefined} aria-describedby={mismatch ? `${keyId}-mismatch ${keyId}-help` : `${keyId}-help`} onChange={(e) => setApiKey(e.target.value)} />
         {mismatch && <FieldError id={`${keyId}-mismatch`}>{mismatch}</FieldError>}
-        <FieldDescription id={`${keyId}-help`} className="text-xs">
+        <FieldDescription id={`${keyId}-help`} className="text-caption">
           Saving alone does not contact {name}. Check key asks {name} to list its models with this key, which is free and generates nothing. Balance and model access are confirmed on the first hearing call.
         </FieldDescription>
       </Field>

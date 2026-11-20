@@ -11,7 +11,7 @@ import { formatTime } from '@/lib/format'
 export function DailyAllowance({ quota }: { quota: QuotaView | null }) {
   if (!quota) return null
   return (
-    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-muted-foreground">
       <Gauge className="size-4" aria-hidden />
       <span>
         <strong className="font-semibold text-foreground tabular-nums">
@@ -19,7 +19,7 @@ export function DailyAllowance({ quota }: { quota: QuotaView | null }) {
         </strong>{' '}
         provider calls left for you today. One call is one question answered by one model party; retries count too.
       </span>
-      <span className="text-xs">Resets {formatTime(quota.resetsAt)}.</span>
+      <span className="text-caption">Resets {formatTime(quota.resetsAt)}.</span>
     </p>
   )
 }

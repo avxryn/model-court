@@ -57,10 +57,10 @@ export function AccountMenu({ className, compact = false }: { className?: string
           <Button variant="ghost" className={cn('h-11 w-full justify-start gap-2.5 px-2 text-left', compact && 'lg:size-10 lg:justify-center lg:px-0', className)} aria-label="Account menu">
             <AccountAvatar imageUrl={user.imageUrl} initial={(user.name?.[0] ?? user.email?.[0] ?? '?').toUpperCase()} />
             <span className={cn('min-w-0 flex-1', compact && 'lg:hidden')}>
-              <span data-testid="nav-user-name" className="block truncate text-sm font-medium">
+              <span data-testid="nav-user-name" className="block truncate text-small font-medium">
                 {user.name || user.email}
               </span>
-              {user.name && user.email && <span className="block truncate text-xs font-normal text-muted-foreground">{user.email}</span>}
+              {user.name && user.email && <span className="block truncate text-caption font-normal text-muted-foreground">{user.email}</span>}
             </span>
             <ChevronsUpDown className={cn('size-4 text-muted-foreground', compact && 'lg:hidden')} aria-hidden />
           </Button>
@@ -70,7 +70,7 @@ export function AccountMenu({ className, compact = false }: { className?: string
         <DropdownMenuGroup>
           <DropdownMenuLabel>
             <div className="truncate font-medium text-foreground">{user.name || 'Signed in'}</div>
-            <div data-testid="nav-user-email" className="truncate text-xs font-normal text-muted-foreground">
+            <div data-testid="nav-user-email" className="truncate text-caption font-normal text-muted-foreground">
               {user.email}
             </div>
           </DropdownMenuLabel>
@@ -84,7 +84,7 @@ export function AccountMenu({ className, compact = false }: { className?: string
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-xs text-muted-foreground">Appearance</DropdownMenuLabel>
+          <DropdownMenuLabel className="text-caption text-muted-foreground">Appearance</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={choice} onValueChange={(value) => setThemeChoice(value as ThemeChoice)}>
             <DropdownMenuRadioItem value="light">
               <Sun aria-hidden /> Paper

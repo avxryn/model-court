@@ -265,6 +265,19 @@
   @apply rounded-lg bg-exhibit ring-1 ring-exhibit-edge;
 }
 
+/* A row that scrolls sideways fades the edge that hides more (D-120; see lib/use-scroll-cue). */
+@utility scroll-cue {
+  &[data-more-end] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+  }
+  &[data-more-start] {
+    mask-image: linear-gradient(to right, transparent, #000 2.5rem);
+  }
+  &[data-more-start][data-more-end] {
+    mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+  }
+}
+
 /* Typewriter face: docket numbers, stamps, exhibit stickers. */
 @utility typewriter {
   font-family: var(--font-typewriter);
@@ -273,7 +286,7 @@
 
 /* Court label above a section of a document (QUESTION PRESENTED, JURY INSTRUCTIONS). */
 @utility court-label {
-  @apply text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase;
+  @apply text-caption font-semibold tracking-[0.06em] text-muted-foreground uppercase;
   font-family: var(--font-sans);
 }
 

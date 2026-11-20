@@ -13,7 +13,7 @@ export function EmptyDocket({ newCase }: { newCase: ReactNode }) {
       <h2 id="docket-empty" className="mt-4 font-display text-2xl font-medium tracking-[-0.02em] text-foreground">
         Open your first case
       </h2>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">Start from a template and edit the questions, or walk through the sample case, which needs no keys.</p>
+      <p className="mx-auto mt-2 max-w-md text-small leading-relaxed text-muted-foreground">Start from a template and edit the questions, or walk through the sample case, which needs no keys.</p>
       <div className="mt-6 flex flex-wrap justify-center gap-2">
         {newCase}
         <Button variant="outline" size="lg" render={<Link to="/sample" />} nativeButton={false}>

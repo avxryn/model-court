@@ -47,13 +47,13 @@ export function JuryPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean
         <h2 id="review-heading" className="court-label">
           The jury <Plain>blind review</Plain>
         </h2>
-        <span className="text-sm text-muted-foreground tabular-nums" role="status">
+        <span className="text-small text-muted-foreground tabular-nums" role="status">
           {run.review.submittedCount} filed · {run.review.pendingCount} unfinished (worksheets in progress and unused summonses)
         </span>
       </div>
       <Panel as="ul" className="divide-y divide-paper-rule">
         {run.review.participants.map((p) => (
-          <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+          <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-small">
             <span>
               {p.label}
               {p.guest && (
@@ -76,7 +76,7 @@ export function JuryPanel({ run, busy, act }: { run: OwnerRunView; busy: boolean
         {run.review.invites
           .filter((i) => i.state !== 'redeemed')
           .map((invite) => (
-            <li key={invite.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm text-muted-foreground">
+            <li key={invite.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-small text-muted-foreground">
               <span>Jury summons · expires {formatTime(invite.expiresAt)}</span>
               <span className="flex items-center gap-2">
                 <StatusBadge status={invite.state} />
@@ -139,8 +139,8 @@ function JurySummonsDialog({ url, onClose }: { url: string | null; onClose: () =
     <Dialog open={url !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="border-t-4 border-dashed border-t-paper-edge sm:max-w-lg">
         <DialogHeader>
-          <div className="typewriter text-xs font-medium text-muted-foreground">JURY SUMMONS</div>
-          <DialogTitle className="font-display text-xl font-medium">You are summoned to serve as a juror</DialogTitle>
+          <div className="typewriter text-caption font-medium text-muted-foreground">JURY SUMMONS</div>
+          <DialogTitle>You are summoned to serve as a juror</DialogTitle>
           <DialogDescription>Send this invitation link to one person. It works once, expires in 24 hours, and anyone holding it can take the seat, so share it directly. It is shown only once. Jurors need no API key. If you summon someone who saw an earlier hearing of this case unsealed, their findings on a party shared with it may not be blind; the comparison of hearings marks them.</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
@@ -164,7 +164,7 @@ function JurySummonsDialog({ url, onClose }: { url: string | null; onClose: () =
 /** Also shown on the judge's filed worksheet, so filing is never a dead end. */
 export function UnsealButton({ run, busy, act }: { run: OwnerRunView; busy: boolean; act: Act }) {
   const { submittedCount, pendingCount } = run.review
-  if (submittedCount === 0) return <span className="self-center text-xs text-muted-foreground">Unsealing needs at least one filed worksheet.</span>
+  if (submittedCount === 0) return <span className="self-center text-caption text-muted-foreground">Unsealing needs at least one filed worksheet.</span>
   return (
     <AlertDialog>
       <AlertDialogTrigger render={<Button disabled={busy} />}>Unseal the record</AlertDialogTrigger>

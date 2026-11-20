@@ -18,7 +18,7 @@ export function WaitingOnYou({ items, className }: { items: WaitingItem[]; class
   return (
     <section aria-labelledby="docket-waiting" className={cn('paper overflow-hidden', className)}>
       <div className="flex items-center gap-3 border-b border-border px-5 py-3.5">
-        <h2 id="docket-waiting" className="text-sm font-semibold text-foreground">
+        <h2 id="docket-waiting" className="text-small font-semibold text-foreground">
           Waiting on you
         </h2>
         {items.length > 0 && <span className="ml-auto text-small text-muted-foreground tabular-nums">{items.length}</span>}

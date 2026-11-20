@@ -43,7 +43,7 @@ function JsonField({ id, label, value, onChange, rows = 4, hint, problems, error
       <Textarea
         id={id}
         rows={rows}
-        className="font-mono text-xs"
+        className="font-mono text-small"
         spellCheck={false}
         value={text}
         aria-invalid={shown ? true : undefined}
@@ -65,7 +65,7 @@ function JsonField({ id, label, value, onChange, rows = 4, hint, problems, error
           onChange(parsed as Record<string, unknown>)
         }}
       />
-      <FieldDescription id={`${id}-help`} className={cn('text-xs', shown && 'text-destructive')}>
+      <FieldDescription id={`${id}-help`} className={cn('text-caption', shown && 'text-destructive')}>
         {shown ?? hint}
       </FieldDescription>
     </Field>
@@ -137,14 +137,14 @@ export function ToolsQuestionFields({ testCase, index, errors, onChange }: { tes
             ))}
           </SelectContent>
         </Select>
-        <FieldDescription className="text-xs">
+        <FieldDescription className="text-caption">
           Each party may make up to {fields.maxSteps} {fields.maxSteps === 1 ? 'call' : 'calls'} to its model for this question. All of them are reserved from your daily allowance at Start; unused ones come back.
         </FieldDescription>
       </Field>
 
       <Expectations fields={fields} names={names} id={id} errorAt={errorAt} onChange={(expect) => set({ expect })} />
       <TryACall fields={fields} id={id} />
-      {taskError && <p className="text-xs text-destructive">{taskError}</p>}
+      {taskError && <p className="text-caption text-destructive">{taskError}</p>}
     </div>
   )
 }
@@ -152,12 +152,12 @@ export function ToolsQuestionFields({ testCase, index, errors, onChange }: { tes
 function ToolCard({ tool, toolIndex, id, errorAt, canRemove, onChange, onRemove }: { tool: ToolDefinition; toolIndex: number; id: (field: string) => string; errorAt: (suffix: string) => string | undefined; canRemove: boolean; onChange: (patch: Partial<ToolDefinition>) => void; onRemove: () => void }) {
   const problems = useMemo(() => schemaIssues(tool.parameters).map((issue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message)), [tool.parameters])
   return (
-    <section aria-label={`Tool ${toolIndex + 1}`} className="space-y-3 rounded-md border border-border p-4">
+    <section aria-label={`Tool ${toolIndex + 1}`} className="space-y-3 border-t border-paper-rule pt-4 sm:rounded-md sm:border sm:border-border sm:p-4">
       <div className="flex flex-wrap items-end gap-3">
         <Field className="min-w-48 flex-1 gap-1.5">
           <FieldLabel htmlFor={id('name')}>Name</FieldLabel>
           <Input id={id('name')} className="font-mono" value={tool.name} maxLength={T.name} aria-invalid={errorAt('name') ? true : undefined} onChange={(event) => onChange({ name: event.target.value })} />
-          {errorAt('name') && <FieldDescription className="text-xs text-destructive">{errorAt('name')}</FieldDescription>}
+          {errorAt('name') && <FieldDescription className="text-caption text-destructive">{errorAt('name')}</FieldDescription>}
         </Field>
         <Button size="icon-sm" variant="ghost" aria-label={`Remove tool ${toolIndex + 1}`} disabled={!canRemove} onClick={onRemove}>
           <Trash2 aria-hidden />
@@ -166,7 +166,7 @@ function ToolCard({ tool, toolIndex, id, errorAt, canRemove, onChange, onRemove 
       <Field className="gap-1.5">
         <FieldLabel htmlFor={id('description')}>Description</FieldLabel>
         <Textarea id={id('description')} rows={2} value={tool.description} onChange={(event) => onChange({ description: event.target.value })} />
-        {errorAt('description') && <FieldDescription className="text-xs text-destructive">{errorAt('description')}</FieldDescription>}
+        {errorAt('description') && <FieldDescription className="text-caption text-destructive">{errorAt('description')}</FieldDescription>}
       </Field>
       <JsonField
         id={id('parameters')}
@@ -183,12 +183,12 @@ function ToolCard({ tool, toolIndex, id, errorAt, canRemove, onChange, onRemove 
           Responses <Plain>the first row whose arguments match is returned to the party</Plain>
         </p>
         {tool.responses.map((response, row) => (
-          <div key={row} className="grid gap-3 rounded-md bg-muted/30 p-3 md:grid-cols-2">
+          <div key={row} className="grid gap-3 border-l-2 border-paper-rule pl-3 sm:rounded-md sm:border-l-0 sm:bg-muted/30 sm:p-3 md:grid-cols-2">
             <JsonField id={id(`when-${row}`)} label={`Row ${row + 1}: when these arguments`} rows={3} value={response.when} hint="A partial object; {} matches any valid call." error={errorAt(`responses.${row}.when`)} onChange={(when) => onChange({ responses: tool.responses.map((r, i) => (i === row ? { ...r, when: when ?? {} } : r)) })} />
             <Field className="gap-1.5">
               <FieldLabel htmlFor={id(`output-${row}`)}>Return this</FieldLabel>
-              <Textarea id={id(`output-${row}`)} rows={3} className="font-mono text-xs" value={response.output} onChange={(event) => onChange({ responses: tool.responses.map((r, i) => (i === row ? { ...r, output: event.target.value } : r)) })} />
-              {errorAt(`responses.${row}.output`) && <FieldDescription className="text-xs text-destructive">{errorAt(`responses.${row}.output`)}</FieldDescription>}
+              <Textarea id={id(`output-${row}`)} rows={3} className="font-mono text-small" value={response.output} onChange={(event) => onChange({ responses: tool.responses.map((r, i) => (i === row ? { ...r, output: event.target.value } : r)) })} />
+              {errorAt(`responses.${row}.output`) && <FieldDescription className="text-caption text-destructive">{errorAt(`responses.${row}.output`)}</FieldDescription>}
             </Field>
             <div className="flex flex-wrap items-center gap-4 md:col-span-2">
               <Label className="font-normal">
@@ -209,16 +209,16 @@ function ToolCard({ tool, toolIndex, id, errorAt, canRemove, onChange, onRemove 
         <div className="grid gap-3 md:grid-cols-2">
           <Field className="gap-1.5">
             <FieldLabel htmlFor={id('default')}>Default response (no row matched)</FieldLabel>
-            <Textarea id={id('default')} rows={2} className="font-mono text-xs" value={tool.defaultResponse.output} onChange={(event) => onChange({ defaultResponse: { ...tool.defaultResponse, output: event.target.value } })} />
+            <Textarea id={id('default')} rows={2} className="font-mono text-small" value={tool.defaultResponse.output} onChange={(event) => onChange({ defaultResponse: { ...tool.defaultResponse, output: event.target.value } })} />
             <Label className="font-normal">
               <Checkbox checked={tool.defaultResponse.isError} onCheckedChange={(checked) => onChange({ defaultResponse: { ...tool.defaultResponse, isError: checked === true } })} /> Is an error
             </Label>
-            {errorAt('defaultResponse') && <FieldDescription className="text-xs text-destructive">{errorAt('defaultResponse')}</FieldDescription>}
+            {errorAt('defaultResponse') && <FieldDescription className="text-caption text-destructive">{errorAt('defaultResponse')}</FieldDescription>}
           </Field>
           <Field className="gap-1.5">
             <FieldLabel htmlFor={id('error')}>Error response (arguments didn’t fit the schema)</FieldLabel>
-            <Textarea id={id('error')} rows={2} className="font-mono text-xs" value={tool.errorResponse.output} onChange={(event) => onChange({ errorResponse: { output: event.target.value } })} />
-            {errorAt('errorResponse') && <FieldDescription className="text-xs text-destructive">{errorAt('errorResponse')}</FieldDescription>}
+            <Textarea id={id('error')} rows={2} className="font-mono text-small" value={tool.errorResponse.output} onChange={(event) => onChange({ errorResponse: { output: event.target.value } })} />
+            {errorAt('errorResponse') && <FieldDescription className="text-caption text-destructive">{errorAt('errorResponse')}</FieldDescription>}
           </Field>
         </div>
       </div>
@@ -229,12 +229,12 @@ function ToolCard({ tool, toolIndex, id, errorAt, canRemove, onChange, onRemove 
 function Expectations({ fields, names, id, errorAt, onChange }: { fields: ToolsFields; names: string[]; id: (field: string) => string; errorAt: (suffix: string) => string | undefined; onChange: (next: ToolsFields['expect']) => void }) {
   const expect = fields.expect
   return (
-    <section aria-label="What should happen" className="space-y-3 rounded-md border border-dashed border-border p-4">
-      <p className="court-label">
+    <section aria-labelledby={id('expect-heading')} className="space-y-3 border-t border-paper-rule pt-4">
+      <h3 id={id('expect-heading')} className="court-label">
         What should happen <Plain>never sent to the models; checked for free after each answer</Plain>
-      </p>
+      </h3>
       <div className="space-y-2">
-        <p className="text-sm font-medium">Required calls</p>
+        <p className="text-small font-medium">Required calls</p>
         {expect.requiredCalls.map((call, row) => (
           <div key={row} className="grid gap-2 md:grid-cols-[12rem_1fr_auto] md:items-start">
             <Select value={names.includes(call.tool) ? call.tool : NONE} onValueChange={(tool) => onChange({ ...expect, requiredCalls: expect.requiredCalls.map((c, i) => (i === row ? { ...c, tool: String(tool) } : c)) })}>
@@ -265,10 +265,10 @@ function Expectations({ fields, names, id, errorAt, onChange }: { fields: ToolsF
         </div>
       </div>
       <fieldset className="space-y-1.5">
-        <legend className="text-sm font-medium">Forbidden tools</legend>
+        <legend className="text-small font-medium">Forbidden tools</legend>
         <div className="flex flex-wrap gap-4">
           {names.map((name) => (
-            <Label key={name} className="font-mono text-sm font-normal">
+            <Label key={name} className="font-mono text-small font-normal">
               <Checkbox
                 checked={expect.forbiddenTools.includes(name)}
                 onCheckedChange={(checked) => onChange({ ...expect, forbiddenTools: checked === true ? [...expect.forbiddenTools, name] : expect.forbiddenTools.filter((other) => other !== name) })}
@@ -277,7 +277,7 @@ function Expectations({ fields, names, id, errorAt, onChange }: { fields: ToolsF
             </Label>
           ))}
         </div>
-        {errorAt('expect.forbiddenTools') && <p className="text-xs text-destructive">{errorAt('expect.forbiddenTools')}</p>}
+        {errorAt('expect.forbiddenTools') && <p className="text-caption text-destructive">{errorAt('expect.forbiddenTools')}</p>}
       </fieldset>
       <div className="grid gap-3 md:grid-cols-[12rem_10rem_1fr]">
         <Field className="gap-1.5">
@@ -313,11 +313,11 @@ function Expectations({ fields, names, id, errorAt, onChange }: { fields: ToolsF
           <Field className="gap-1.5">
             <FieldLabel htmlFor={id('answer-value')}>Expected text</FieldLabel>
             <Input id={id('answer-value')} value={expect.finalAnswer.value} maxLength={T.expectedAnswer.max} onChange={(event) => onChange({ ...expect, finalAnswer: { mode: expect.finalAnswer!.mode, value: event.target.value } })} />
-            {errorAt('expect.finalAnswer') && <FieldDescription className="text-xs text-destructive">{errorAt('expect.finalAnswer')}</FieldDescription>}
+            {errorAt('expect.finalAnswer') && <FieldDescription className="text-caption text-destructive">{errorAt('expect.finalAnswer')}</FieldDescription>}
           </Field>
         )}
       </div>
-      {errorAt('expect.targetSteps') && <p className="text-xs text-destructive">{errorAt('expect.targetSteps')}</p>}
+      {errorAt('expect.targetSteps') && <p className="text-caption text-destructive">{errorAt('expect.targetSteps')}</p>}
     </section>
   )
 }
@@ -351,17 +351,17 @@ function TryACall({ fields, id }: { fields: ToolsFields; id: (field: string) => 
         </Field>
         <Field className="gap-1.5">
           <FieldLabel htmlFor={id('try-args')}>Arguments</FieldLabel>
-          <Textarea id={id('try-args')} rows={2} className="font-mono text-xs" spellCheck={false} value={args} onChange={(event) => setArgs(event.target.value)} />
+          <Textarea id={id('try-args')} rows={2} className="font-mono text-small" spellCheck={false} value={args} onChange={(event) => setArgs(event.target.value)} />
         </Field>
         <Button variant="outline" onClick={() => setShown(answerCall(fields, { name, argumentsRaw: args, argumentsParsed: parseArguments(args) }, { inStep: 0, inTrace: 0 }))}>
           Try it
         </Button>
       </div>
       {shown && (
-        <div role="status" className="space-y-1 text-sm">
+        <div role="status" className="space-y-1 text-small">
           <p className="text-muted-foreground">{describeAnswer(shown)}</p>
           <p className={cn('court-label', shown.isError && 'text-destructive')}>{shown.isError ? 'Error result' : 'Result'}</p>
-          <pre className="rounded-md bg-background px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words">{shown.output}</pre>
+          <pre className="rounded-md bg-background px-3 py-2 font-mono text-small whitespace-pre-wrap break-words">{shown.output}</pre>
         </div>
       )}
     </section>

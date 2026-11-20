@@ -5,7 +5,8 @@
  * The answer key is judge-only: never sent to a provider, hidden from jurors until unsealing.
  */
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Plain } from '@/components/court/Paper'
 import type { FieldErrors } from '@/components/evaluations/DraftEditor'
@@ -19,8 +20,8 @@ import type { ExtractionFields, ExtractionSettings } from '@/domain/kits/extract
 import { LIMITS } from '@/domain/limits'
 import { utf8ByteLength } from '@/domain/text'
 import { ChoiceCard, ChoiceCardGroup } from '@/components/court/ChoiceCard'
-import { Label } from '@/components/ui/label'
 import { api, ApiClientError, apiUploadPdf, describeError } from '@/lib/api-client'
+import { formatSize } from '@/lib/format'
 import type { PdfFacts } from '@/lib/pdf'
 import { cn } from '@/lib/utils'
 
@@ -91,13 +92,15 @@ function DocumentEditor({ testCase }: { testCase: CaseInput }) {
   const bytes = utf8ByteLength(text ?? '')
   const [pdf, setPdf] = useState<{ bytes: ArrayBuffer; facts: PdfFacts } | null>(null)
   const [delivery, setDelivery] = useState<'pdf_native' | 'text'>('pdf_native')
+  const [pdfName, setPdfName] = useState<string | null>(null)
+  const pdfInput = useRef<HTMLInputElement>(null)
 
   // Spec 04 §3.3 (D-90): the browser reads the PDF (pages, that it opens, its text layer); nothing is uploaded yet.
   const choosePdf = async (file: File | undefined) => {
     setError(null)
     setPdf(null)
     if (!file) return
-    if (file.size > LIMITS.extraction.pdfBytes) return setError(`A PDF is at most ${LIMITS.extraction.pdfBytes / 1024 / 1024} MiB.`)
+    if (file.size > LIMITS.extraction.pdfBytes) return setError(`A PDF is at most ${formatSize(LIMITS.extraction.pdfBytes)}.`)
     try {
       const data = await file.arrayBuffer()
       const { readPdf } = await import('@/lib/pdf')
@@ -145,7 +148,7 @@ function DocumentEditor({ testCase }: { testCase: CaseInput }) {
         Document <Plain>the source to pull fields from; sent to the models</Plain>
       </FieldLabel>
       {!context?.saved && !saved ? (
-        <p className="rounded-md bg-slip px-3 py-2 text-sm text-muted-foreground">Save the draft, then paste this question’s document.</p>
+        <p className="rounded-md bg-slip px-3 py-2 text-small text-muted-foreground">Save the draft, then paste this question’s document.</p>
       ) : (
         <>
           <Textarea id={id} rows={8} value={text ?? ''} placeholder={saved && !loaded ? 'Loading…' : 'Paste the document text here.'} aria-describedby={`${id}-help`} aria-invalid={error || bytes > LIMITS.extraction.textDocumentBytes ? true : undefined} onChange={(event) => setText(event.target.value)} />
@@ -153,20 +156,38 @@ function DocumentEditor({ testCase }: { testCase: CaseInput }) {
             <Button size="sm" variant="outline" disabled={busy || !text?.trim() || bytes > LIMITS.extraction.textDocumentBytes || !context?.saved || (pdf !== null && delivery === 'pdf_native')} onClick={() => void save()}>
               {saved ? 'Replace with this text' : 'Save document'}
             </Button>
-            <FieldDescription id={`${id}-help`} className={cn('text-xs tabular-nums', (error || bytes > LIMITS.extraction.textDocumentBytes) && 'text-destructive')}>
+            <FieldDescription id={`${id}-help`} className={cn('text-caption tabular-nums', (error || bytes > LIMITS.extraction.textDocumentBytes) && 'text-destructive')}>
               {error ??
-                (ref ? (ref.delivery === 'pdf_native' ? `Saved: a PDF of ${ref.pageCount ?? '?'} ${ref.pageCount === 1 ? 'page' : 'pages'}, sent as the file. ` : `Saved · ${ref.byteLength.toLocaleString('en-US')} bytes of text. `) : 'Not saved yet. ') +
-                  `Up to ${LIMITS.extraction.textDocumentBytes / 1024} KiB of text.`}
+                (ref ? (ref.delivery === 'pdf_native' ? `Saved: a PDF of ${ref.pageCount ?? '?'} ${ref.pageCount === 1 ? 'page' : 'pages'}, sent as the file. ` : `Saved · ${formatSize(ref.byteLength)} of text. `) : 'Not saved yet. ') +
+                  `Up to ${formatSize(LIMITS.extraction.textDocumentBytes)} of text.`}
             </FieldDescription>
           </div>
           <div className="space-y-2 rounded-md border border-paper-rule px-3 py-3">
-            <Label htmlFor={`${id}-pdf`} className="text-sm font-medium">
-              Or upload a PDF <span className="font-normal text-muted-foreground">(up to {LIMITS.extraction.pdfBytes / 1024 / 1024} MiB and {LIMITS.extraction.pdfPages} pages, no password)</span>
-            </Label>
-            <input id={`${id}-pdf`} type="file" accept="application/pdf" className="block text-sm" disabled={!context?.saved || busy} onChange={(event) => void choosePdf(event.target.files?.[0])} />
+            <p id={`${id}-pdf-label`} className="text-small font-medium">
+              Or upload a PDF <span className="font-normal text-muted-foreground">(up to {formatSize(LIMITS.extraction.pdfBytes)} and {LIMITS.extraction.pdfPages} pages, no password)</span>
+            </p>
+            {/* D-120: the same hidden input and outline button as the CSV import. */}
+            <Button size="sm" variant="outline" aria-describedby={`${id}-pdf-label`} disabled={!context?.saved || busy} onClick={() => pdfInput.current?.click()}>
+              <Upload aria-hidden /> Choose a PDF{pdf && pdfName && <span className="max-w-48 truncate font-normal text-muted-foreground">: {pdfName}</span>}
+            </Button>
+            <input
+              ref={pdfInput}
+              id={`${id}-pdf`}
+              type="file"
+              accept="application/pdf"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                setPdfName(file?.name ?? null)
+                void choosePdf(file)
+                event.target.value = ''
+              }}
+            />
             {pdf && (
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground tabular-nums">
+                <p className="text-caption text-muted-foreground tabular-nums">
                   {pdf.facts.pageCount} {pdf.facts.pageCount === 1 ? 'page' : 'pages'} · {(pdf.bytes.byteLength / 1024).toLocaleString('en-US', { maximumFractionDigits: 0 })} KB · read in your browser, not uploaded yet
                 </p>
                 <ChoiceCardGroup aria-label="How parties get this PDF" value={delivery} onValueChange={(value) => {
@@ -178,14 +199,14 @@ function DocumentEditor({ testCase }: { testCase: CaseInput }) {
                   <ChoiceCard id={`${id}-text`} value="text" title="Send the text only" description="You review the text below; every party gets exactly the same characters. Charts, stamps and scans are lost." />
                 </ChoiceCardGroup>
                 {delivery === 'text' && !pdf.facts.hasTextLayer && (
-                  <p className="text-sm text-warning">{NO_TEXT_LAYER}</p>
+                  <p className="text-small text-warning">{NO_TEXT_LAYER}</p>
                 )}
                 {delivery === 'pdf_native' ? (
                   <Button size="sm" variant="outline" disabled={busy || !context?.saved} onClick={() => void savePdf()}>
                     Save the PDF file
                   </Button>
                 ) : (
-                  <p className="text-xs text-muted-foreground">The PDF never leaves your browser. Edit the text above, then save it.</p>
+                  <p className="text-caption text-muted-foreground">The PDF never leaves your browser. Edit the text above, then save it.</p>
                 )}
               </div>
             )}
@@ -215,7 +236,7 @@ function AnswerKeyEditor({ settings, testCase, index, errors, onChange }: { sett
       <Textarea
         id={id}
         rows={6}
-        className="typewriter text-xs"
+        className="typewriter text-small"
         spellCheck={false}
         value={text}
         placeholder='{"fullName": "Dana Whitfield", "phone": null}'
@@ -250,7 +271,7 @@ function AnswerKeyEditor({ settings, testCase, index, errors, onChange }: { sett
         >
           Start from the field list
         </Button>
-        <FieldDescription id={`${id}-help`} className={cn('text-xs', (parseError || local.length > 0 || serverError) && 'text-destructive')}>
+        <FieldDescription id={`${id}-help`} className={cn('text-caption', (parseError || local.length > 0 || serverError) && 'text-destructive')}>
           {parseError ?? (local[0] ? `${local[0].path || '(the key)'}: ${local[0].problem}` : serverError) ?? 'Write null for a field the document doesn’t have, so invented values can be counted; leave a field out to not compare it.'}
         </FieldDescription>
       </div>

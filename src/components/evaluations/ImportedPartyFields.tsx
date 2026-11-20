@@ -53,7 +53,7 @@ export function ImportedPartyFields({ party, index, errors, onChange, renderAnsw
           aria-describedby={errors[`${base}.collectedOn`] ? `cfg-${party.key}-collected-help` : undefined}
         />
         {errors[`${base}.collectedOn`] && (
-          <FieldError id={`cfg-${party.key}-collected-help`} className="text-xs">
+          <FieldError id={`cfg-${party.key}-collected-help`} className="text-caption">
             {errors[`${base}.collectedOn`]}
           </FieldError>
         )}
@@ -62,7 +62,7 @@ export function ImportedPartyFields({ party, index, errors, onChange, renderAnsw
         <Checkbox id={`cfg-${party.key}-redacted`} checked={party.provenance.redacted} onCheckedChange={(checked) => set({ redacted: checked === true })} />
         <Label htmlFor={`cfg-${party.key}-redacted`} className="flex-col items-start gap-0.5 font-normal leading-snug">
           I removed names, emails, and other details that could reveal the source
-          <span className="text-xs text-muted-foreground">The record says the answers were redacted.</span>
+          <span className="text-caption text-muted-foreground">The record says the answers were redacted.</span>
         </Label>
       </div>
       {renderAnswers?.(party)}

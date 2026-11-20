@@ -98,12 +98,12 @@ export function TestimonyDeck({ items, noun = 'Testimony', keys = true }: { item
   return (
     <div ref={root} className="space-y-3" data-testimony-deck>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {items.length} testimonies, one at a time. {items.filter((item) => item.done).length > 0 && `${items.filter((item) => item.done).length} of ${items.length} scored.`}
         </p>
         <div className="flex items-center gap-2">
           {keys && (
-            <span className="hidden items-center gap-1 text-xs text-muted-foreground md:flex" aria-hidden>
+            <span className="hidden items-center gap-1 text-caption text-muted-foreground md:flex" aria-hidden>
               <Kbd>[</Kbd>
               <Kbd>]</Kbd>
               previous / next

@@ -64,7 +64,7 @@ export function GenerationSection({ run, busy, act, folded }: { run: OwnerRunVie
   const body = (
     <div className="space-y-4">
       <Progress value={(terminal / Math.max(counts.planned, 1)) * 100} aria-label="Generation progress" />
-      {run.status === 'generating' && <p className="text-xs text-muted-foreground">Jobs run one at a time and survive closing this page. Each request has a 90-second deadline; there are no automatic paid retries.</p>}
+      {run.status === 'generating' && <p className="text-caption text-muted-foreground">Jobs run one at a time and survive closing this page. Each request has a 90-second deadline; there are no automatic paid retries.</p>}
       <GenerationTable run={run} selected={selected} onToggle={toggle} />
     </div>
   )
@@ -76,7 +76,7 @@ export function GenerationSection({ run, busy, act, folded }: { run: OwnerRunVie
           Hearing testimony <Plain>{counts.planned === 0 ? 'imported answers' : 'generating responses'}</Plain>
         </h2>
         {!folded && (
-          <span className="text-sm text-muted-foreground tabular-nums" role="status">
+          <span className="text-small text-muted-foreground tabular-nums" role="status">
             {tally}
           </span>
         )}
@@ -100,9 +100,9 @@ function GenerationTable({ run, selected, onToggle }: { run: OwnerRunView; selec
         <TableRow>
           <TableHead>Case</TableHead>
           {run.configurations.map((c) => (
-            <TableHead key={c.key} className="h-auto py-2.5 text-sm text-foreground">
+            <TableHead key={c.key} className="h-auto py-2.5 text-small text-foreground">
               {c.label}
-              <span className="block text-xs font-normal text-muted-foreground">{partySource(c)}</span>
+              <span className="block text-caption font-normal text-muted-foreground">{partySource(c)}</span>
             </TableHead>
           ))}
         </TableRow>
@@ -112,7 +112,7 @@ function GenerationTable({ run, selected, onToggle }: { run: OwnerRunView; selec
           <TableRow key={testCase.key}>
             <TableCell className="font-medium">
               {testCase.title}
-              {run.eligibility.excludedCaseKeys.includes(testCase.key) && run.status !== 'generating' && <span className="block text-xs font-normal text-warning">Not comparable (excluded)</span>}
+              {run.eligibility.excludedCaseKeys.includes(testCase.key) && run.status !== 'generating' && <span className="block text-caption font-normal text-warning">Not comparable (excluded)</span>}
             </TableCell>
             {run.configurations.map((c) => {
               const samples = run.generations.filter((x) => x.caseKey === testCase.key && x.configurationKey === c.key).sort((a, b) => a.sampleNo - b.sampleNo)
@@ -120,7 +120,7 @@ function GenerationTable({ run, selected, onToggle }: { run: OwnerRunView; selec
               if (!g) {
                 const imported = run.imported.some((i) => i.caseKey === testCase.key && i.configurationKey === c.key)
                 return (
-                  <TableCell key={c.key} className="align-top text-sm text-muted-foreground">
+                  <TableCell key={c.key} className="align-top text-small text-muted-foreground">
                     {imported ? 'Imported answer' : '—'}
                   </TableCell>
                 )
@@ -138,12 +138,12 @@ function GenerationTable({ run, selected, onToggle }: { run: OwnerRunView; selec
                     {g.retryable && <Checkbox aria-label={`Select ${testCase.title} / ${c.label} for retry`} checked={selected.has(g.id)} onCheckedChange={(checked) => onToggle(g.id, checked === true)} />}
                     <StatusBadge status={g.status} />
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+                  <div className="mt-1 text-caption text-muted-foreground tabular-nums">
                     Attempt {g.attemptCount}/2 · {formatDuration(g.durationMs)}
                   </div>
                   {/* Spec 06 §3 (D-103): a tool loop's progress; the cap and the real count, never tokens before unsealing. */}
-                  {g.steps && <div className="mt-1 text-xs text-muted-foreground tabular-nums">{stepLine(g.status, g.steps)}</div>}
-                  {g.errorCode && <div className="mt-1 max-w-56 text-xs text-destructive">{ERROR_TEXT[g.errorCode] ?? g.errorCode}</div>}
+                  {g.steps && <div className="mt-1 text-caption text-muted-foreground tabular-nums">{stepLine(g.status, g.steps)}</div>}
+                  {g.errorCode && <div className="mt-1 max-w-56 text-caption text-destructive">{ERROR_TEXT[g.errorCode] ?? g.errorCode}</div>}
                 </TableCell>
               )
             })}
@@ -167,13 +167,13 @@ function SampleCell({ samples, label, selected, onToggle }: { samples: Generatio
         {samples.map((s) => (
           <span key={s.id} aria-hidden className={`size-2.5 rounded-full border border-foreground/40 ${DOT[s.status] ?? 'bg-transparent'}`} />
         ))}
-        <span className="ml-1 text-xs text-muted-foreground tabular-nums">
+        <span className="ml-1 text-caption text-muted-foreground tabular-nums">
           {done}/{samples.length}
         </span>
       </div>
       <ol className="space-y-1">
         {samples.map((s) => (
-          <li key={s.id} className="text-xs">
+          <li key={s.id} className="text-caption">
             <div className="flex items-center gap-2">
               {s.retryable && <Checkbox aria-label={`Select ${label}, sample ${s.sampleNo}, for retry`} checked={selected.has(s.id)} onCheckedChange={(checked) => onToggle(s.id, checked === true)} />}
               <span className="text-muted-foreground tabular-nums">Sample {s.sampleNo}</span>
@@ -192,7 +192,7 @@ function SampleCell({ samples, label, selected, onToggle }: { samples: Generatio
 
 function StaleKeyNotice({ stale }: { stale: StaleKey[] }) {
   return (
-    <div className="flex basis-full items-start gap-2 text-sm" role="status">
+    <div className="flex basis-full items-start gap-2 text-small" role="status">
       <KeyRound className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
       <div>
         {stale.map(({ provider, current }) => {
@@ -261,7 +261,7 @@ function OpenDeliberationButton({ run, busy, act }: { run: OwnerRunView; busy: b
   const eligible = run.eligibility.caseKeys.length
   const excluded = run.eligibility.excludedCaseKeys.length
   if (eligible === 0) {
-    return <p className="self-center text-sm text-destructive">No question has testimony from both parties, so there is nothing comparable to review. Retry failures or cancel.</p>
+    return <p className="self-center text-small text-destructive">No question has testimony from both parties, so there is nothing comparable to review. Retry failures or cancel.</p>
   }
   return (
     <AlertDialog onOpenChange={() => setAck(false)}>

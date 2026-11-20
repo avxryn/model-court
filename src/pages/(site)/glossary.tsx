@@ -42,7 +42,7 @@ export default function GlossaryPage() {
                 <Panel as="li" key={step.key} className="px-3 py-2.5">
                   <div className="typewriter text-caption font-medium text-muted-foreground">STEP {index + 1}</div>
                   <div className="font-heading font-bold">{step.name}</div>
-                  <div className="text-xs text-muted-foreground">{step.plain}</div>
+                  <div className="text-caption text-muted-foreground">{step.plain}</div>
                 </Panel>
               ))}
             </ol>
@@ -59,7 +59,7 @@ export default function GlossaryPage() {
                     <div key={key} id={`term-${key}`} className="grid scroll-mt-20 gap-1 py-3.5 sm:grid-cols-[12rem_1fr] sm:gap-6">
                       <dt>
                         <span className="font-heading text-base font-bold">{entry.term}</span>
-                        <span className="block text-xs text-muted-foreground">{entry.plain}</span>
+                        <span className="block text-caption text-muted-foreground">{entry.plain}</span>
                       </dt>
                       <dd className="font-heading text-reading leading-relaxed">{entry.explain}</dd>
                     </div>

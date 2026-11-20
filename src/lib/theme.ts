@@ -1,6 +1,6 @@
 /**
  * Light paper or "desk at night" (D-47). The choice is kept in this browser;
- * "system" follows the operating system. public/theme.js applies the saved
+ * "system", the default (D-120), follows the operating system. public/theme.js applies the saved
  * choice before the first paint (the CSP allows only same-origin scripts),
  * and this module keeps it in sync afterwards.
  */
@@ -14,9 +14,9 @@ const EVENT = 'mc-theme'
 export function readThemeChoice(): ThemeChoice {
   try {
     const value = window.localStorage.getItem(KEY)
-    return value === 'dark' || value === 'system' ? value : 'light'
+    return value === 'dark' || value === 'light' ? value : 'system'
   } catch {
-    return 'light'
+    return 'system'
   }
 }
 

@@ -33,8 +33,8 @@ export function HeadlineSummary({ tally, questionHref, children }: { tally: Tall
           <dl className="grid gap-3 sm:grid-cols-2">
             {tally.parties.map((p) => (
               <div key={p.key} className={cn('exhibit-panel px-4 py-3', tally.leader === p.key && 'ring-1 ring-primary/40')}>
-                <dt className="text-sm font-semibold">{p.label}</dt>
-                <dd className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm text-muted-foreground tabular-nums">
+                <dt className="text-small font-semibold">{p.label}</dt>
+                <dd className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-small text-muted-foreground tabular-nums">
                   <span>
                     {p.wins} won · {p.ties} tied · {p.losses} lost
                   </span>
@@ -45,7 +45,7 @@ export function HeadlineSummary({ tally, questionHref, children }: { tally: Tall
               </div>
             ))}
           </dl>
-          <ul className="space-y-1 text-sm text-muted-foreground">
+          <ul className="space-y-1 text-small text-muted-foreground">
             <li className="tabular-nums">
               {tally.totalLeader ? (
                 <>
@@ -88,14 +88,15 @@ export function HeadlineSummary({ tally, questionHref, children }: { tally: Tall
   )
 }
 
-/** Per question, each party's points with a mark on the winner. Scrolls inside its own frame on a phone. */
+/** Per question, each party's points with a mark on the winner. A card per question on a phone (D-120), so party names keep their width. */
 export function HeadToHeadTable({ tally, questionHref }: { tally: Tally; questionHref?: (key: string) => string }) {
   if (tally.questions.length === 0) return null
   const parties = tally.parties
   return (
-    <div className="exhibit-panel overflow-hidden">
+    <>
+    <div className="hidden exhibit-panel overflow-hidden sm:block">
       <div className="overflow-x-auto outline-none focus-visible:ring-3 focus-visible:ring-ring/50" tabIndex={0} role="region" aria-label="Head to head, question by question">
-        <table className="w-full caption-bottom text-sm">
+        <table className="w-full caption-bottom text-small">
           <caption className="sr-only">
             Head to head: each party’s points per question, out of {tally.maxPerQuestion}. A check marks the higher score.
           </caption>
@@ -121,7 +122,7 @@ export function HeadToHeadTable({ tally, questionHref }: { tally: Tally; questio
                   ) : (
                     <span className="font-medium">Q{q.number}</span>
                   )}
-                  <span className="ml-2 text-xs text-muted-foreground">{q.title}</span>
+                  <span className="ml-2 text-caption text-muted-foreground">{q.title}</span>
                 </TableCell>
                 {parties.map((p) => {
                   const won = q.winner === p.key
@@ -153,6 +154,53 @@ export function HeadToHeadTable({ tally, questionHref }: { tally: Tally; questio
         </table>
       </div>
     </div>
+    <ul className="space-y-2 sm:hidden" aria-label={`Head to head, question by question: each party’s points out of ${tally.maxPerQuestion}`}>
+      {tally.questions.map((q) => (
+        <li key={q.key} className="exhibit-panel px-4 py-3">
+          <p className="text-small">
+            {questionHref ? (
+              <a href={questionHref(q.key)} className={cn(linkClass, 'font-medium text-foreground')}>
+                Q{q.number}
+              </a>
+            ) : (
+              <span className="font-medium">Q{q.number}</span>
+            )}
+            <span className="ml-2 text-caption text-muted-foreground">{q.title}</span>
+          </p>
+          <dl className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-small">
+            {parties.map((p) => {
+              const won = q.winner === p.key
+              return (
+                <div key={p.key} className={cn('contents', won ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                  <dt>{p.label}</dt>
+                  <dd className="inline-flex items-center justify-end gap-1 tabular-nums">
+                    {won && <Check aria-hidden className="size-3.5 text-primary" />}
+                    {formatPoints(q.scores[p.key])}
+                    {won && <span className="sr-only"> (higher)</span>}
+                  </dd>
+                </div>
+              )
+            })}
+            <dt className="text-muted-foreground">Margin</dt>
+            <dd className="text-right text-muted-foreground tabular-nums">{q.winner ? formatPoints(q.margin) : 'Tie'}</dd>
+          </dl>
+        </li>
+      ))}
+      <li className="rounded-lg bg-slip px-4 py-3 ring-1 ring-exhibit-edge">
+        <p className="text-small font-semibold">Total</p>
+        <dl className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-small">
+          {parties.map((p) => (
+            <div key={p.key} className="contents">
+              <dt>{p.label}</dt>
+              <dd className={cn('text-right font-semibold tabular-nums', tally.totalLeader === p.key && 'text-primary')}>{formatPoints(p.total)}</dd>
+            </div>
+          ))}
+          <dt>Margin</dt>
+          <dd className="text-right font-semibold tabular-nums">{tally.totalLeader ? formatPoints(tally.totalMargin) : 'Tie'}</dd>
+        </dl>
+      </li>
+    </ul>
+    </>
   )
 }
 
@@ -177,11 +225,11 @@ export function HeadlineSection({ data }: { data: ResultsView }) {
       }
     >
       {tally.source === 'none' ? (
-        <p className="text-sm text-muted-foreground">No worksheet was filed for this hearing, so there are no scores to count.</p>
+        <p className="text-small text-muted-foreground">No worksheet was filed for this hearing, so there are no scores to count.</p>
       ) : (
         <div className="space-y-5">
           <HeadlineSummary tally={tally} questionHref={questionHref}>
-            <p className="text-xs leading-relaxed text-muted-foreground">
+            <p className="text-caption leading-relaxed text-muted-foreground">
               {sourceNote(tally.source, tally.raters, data.cohorts.owner.reviewerCount > 0)} Each question is worth {tally.maxPerQuestion} points: three lines scored 0–2. This is a count, not the judgment.
               {showSplits && (
                 <>

@@ -71,14 +71,14 @@ export function RehearDialog({
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl font-medium">Re-hear with different parties</DialogTitle>
+          <DialogTitle>Re-hear with different parties</DialogTitle>
           <DialogDescription>
             Start a new hearing on the same questions as {name} (v{source.scenarioVersion}), then change only the parties. Every answer is generated again and a new jury is summoned.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 rounded-md bg-slip p-4">
           {questionsMatch ? (
-            <p className="text-sm">Your draft already asks {name}’s questions, so they stay as they are.</p>
+            <p className="text-small">Your draft already asks {name}’s questions, so they stay as they are.</p>
           ) : (
             <Field orientation="horizontal" className="items-start">
               <Checkbox id="rehear-questions" checked={questions} onCheckedChange={(c) => setQuestions(c === true)} />
@@ -94,7 +94,7 @@ export function RehearDialog({
             </FieldLabel>
           </Field>
         </div>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-small text-muted-foreground">
           {questions || parties ? `This replaces your draft’s ${what} with ${name}’s. ${name.charAt(0).toUpperCase() + name.slice(1)} itself never changes.` : 'Nothing is replaced: you go to the Parties tab with your draft as it is.'}
           {dirty && (questions || parties) && ' Unsaved edits in this tab are discarded.'}
         </p>

@@ -43,7 +43,7 @@ export function JudgmentSummary({ data }: { data: ResultsView }) {
         <div className="mt-3 space-y-2">
           <p className="font-display text-2xl leading-snug font-medium">{outcomeText(latest, data.configurations)}</p>
           <p className="max-w-3xl font-heading leading-relaxed whitespace-pre-wrap">{latest.rationale}</p>
-          {latest.limitations && <p className="max-w-3xl text-sm whitespace-pre-wrap text-muted-foreground">Limitations: {latest.limitations}</p>}
+          {latest.limitations && <p className="max-w-3xl text-small whitespace-pre-wrap text-muted-foreground">Limitations: {latest.limitations}</p>}
           <div className="pt-4">
             <JudgeSignature note={`Entered ${formatTime(latest.createdAt)} · revision ${latest.revision}`} stamp={<Stamp kind="entered" detail={formatDate(latest.createdAt).toUpperCase()} />} />
           </div>
@@ -59,7 +59,7 @@ export function EarlierRevisions({ verdicts }: { verdicts: ResultsView['verdicts
   if (verdicts.length < 2) return null
   return (
     <Fold className="mt-4 print:hidden" summary={`Earlier revisions (${verdicts.length - 1})`}>
-      <ol className="space-y-2 text-sm">
+      <ol className="space-y-2 text-small">
         {verdicts
           .slice(0, -1)
           .reverse()
@@ -128,7 +128,7 @@ export function VerdictForm({ data, reload }: { data: ResultsView; reload: () =>
       <Field className="gap-1.5">
         <FieldLabel htmlFor="verdict-rationale">Reasons</FieldLabel>
         <Textarea id="verdict-rationale" className="bg-exhibit font-heading" rows={4} value={rationale} onChange={(e) => setRationale(e.target.value)} aria-describedby="rationale-help" />
-        <FieldDescription id="rationale-help" className="text-xs tabular-nums">
+        <FieldDescription id="rationale-help" className="text-caption tabular-nums">
           {codePointLength(rationale.trim())}/{LIMITS.verdictRationale.max} · at least {LIMITS.verdictRationale.min} characters
         </FieldDescription>
       </Field>

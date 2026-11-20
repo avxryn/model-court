@@ -29,7 +29,7 @@ export function CertifiedRecord({ runId, className }: { runId: string; className
   }
   return (
     <SheetSection id="certified-record" label={<Term name="certified" />} className={className}>
-      <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+      <p className="max-w-2xl text-small leading-relaxed text-muted-foreground">
         A copy of this hearing’s record for your files: questions, testimony, every rating, findings, failures, and judgments. It never includes API keys, invitation links, or account ids. Only you, the judge, can download it, and each download is logged.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -41,7 +41,7 @@ export function CertifiedRecord({ runId, className }: { runId: string; className
         </Button>
       </div>
       {hash && (
-        <p className="mt-3 text-xs break-all text-muted-foreground">
+        <p className="mt-3 text-caption break-all text-muted-foreground">
           Content fingerprint (SHA-256): <span className="typewriter text-foreground">{hash}</span>. Two copies of the same record have the same fingerprint. It is not a signature.
         </p>
       )}

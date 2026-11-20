@@ -145,7 +145,7 @@ export default function SamplePage() {
                 </WorksheetGrid>
 
                 <QuestionStepper current={caseIndex} count={SAMPLE_CASES.length} onGo={goTo}>
-                  <span id="sample-unseal-status" aria-live="polite" className="text-xs text-muted-foreground tabular-nums">
+                  <span id="sample-unseal-status" aria-live="polite" className="text-caption text-muted-foreground tabular-nums">
                     {scoredCount} of {responseIds.length} testimonies scored
                     {scoredCount < responseIds.length ? ' · score every line to unseal' : notesMissing > 0 ? ` · add a note for each 0 (${notesMissing} missing)` : ''}
                   </span>
@@ -161,7 +161,7 @@ export default function SamplePage() {
                     Headline from your scores
                   </h2>
                   <HeadlineSummary tally={tally} questionHref={(key) => `#q-${key}`}>
-                    <p className="text-xs leading-relaxed text-muted-foreground">Each question is worth {tally.maxPerQuestion} points: three lines scored 0–2. In a real case this counts the jury’s scores; it is a count, not the judgment.</p>
+                    <p className="text-caption leading-relaxed text-muted-foreground">Each question is worth {tally.maxPerQuestion} points: three lines scored 0–2. In a real case this counts the jury’s scores; it is a count, not the judgment.</p>
                   </HeadlineSummary>
                 </section>
 
@@ -191,7 +191,7 @@ export default function SamplePage() {
                                 return (
                                   <TableCell key={r.responseId} className="min-w-26 px-2 align-top whitespace-normal sm:px-3">
                                     <span className="block">{labelFor(r.configurationKey)}</span>
-                                    <span className={cn('mt-0.5 inline-flex items-center gap-1 text-xs tabular-nums', won ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                                    <span className={cn('mt-0.5 inline-flex items-center gap-1 text-caption tabular-nums', won ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
                                       {won && <Check aria-hidden className="size-3.5 text-primary" />}
                                       {formatPoints(pointsFor(r.responseId))} of {tally.maxPerQuestion} ({DIMENSIONS.map((d) => ratings[r.responseId]?.[d] ?? '–').join(' · ')})
                                       {won && <span className="sr-only"> (higher on this question)</span>}
@@ -206,7 +206,7 @@ export default function SamplePage() {
                       </TableBody>
                     </Table>
                   </div>
-                  <ul className="mt-4 space-y-1.5 text-sm leading-relaxed text-muted-foreground">
+                  <ul className="mt-4 space-y-1.5 text-small leading-relaxed text-muted-foreground">
                     {SAMPLE_CONFIGURATIONS.map((c) => (
                       <li key={c.key}>
                         <span className="font-medium text-foreground">{c.label}:</span> {c.description}
@@ -246,7 +246,7 @@ export default function SamplePage() {
                   </h2>
                   <p className="mt-3 font-display text-2xl leading-snug font-medium">{SAMPLE_VERDICT.outcome}</p>
                   <p className="mt-3 max-w-3xl font-heading leading-relaxed">{SAMPLE_VERDICT.rationale}</p>
-                  <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">Limitations: {SAMPLE_VERDICT.limitations}</p>
+                  <p className="mt-2 max-w-3xl text-small leading-relaxed text-muted-foreground">Limitations: {SAMPLE_VERDICT.limitations}</p>
                   <div className="mt-8">
                     <JudgeSignature note="Signature · practice only" stamp={<Stamp kind="entered" detail="ILLUSTRATIVE" />} />
                   </div>

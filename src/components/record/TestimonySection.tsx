@@ -54,7 +54,7 @@ export function TestimonySection({ data }: { data: ResultsView }) {
                 <span className="font-heading text-base font-bold">
                   Q{index + 1}: {testCase.title}
                 </span>
-                {!testCase.eligible && <span className="text-xs font-normal text-warning">Excluded from scores</span>}
+                {!testCase.eligible && <span className="text-caption font-normal text-warning">Excluded from scores</span>}
               </span>
             </AccordionTrigger>
             <AccordionContent className="space-y-5 border-t border-paper-rule px-5 py-5">
@@ -81,16 +81,16 @@ function QuestionRecord({ testCase, labels, checkLabels, rubricVersion, sources 
         <span className="court-label mr-2">{testCase.messages.length > 0 ? 'Next message' : 'Question presented'}</span>
         {testCase.input}
       </p>
-      <p className="text-xs text-muted-foreground">Jury instructions: {testCase.expectedBehavior}</p>
-      {sources && key?.kind === 'grounded' && key.answerable && <p className="text-xs text-muted-foreground">{groundingKeyText({ answerable: key.answerable, requiredSources: key.requiredSources ?? [] })}</p>}
+      <p className="text-caption text-muted-foreground">Jury instructions: {testCase.expectedBehavior}</p>
+      {sources && key?.kind === 'grounded' && key.answerable && <p className="text-caption text-muted-foreground">{groundingKeyText({ answerable: key.answerable, requiredSources: key.requiredSources ?? [] })}</p>}
       {sources && <SourceList caseKey={`record-${testCase.key}`} sources={sources} highlights={highlights} />}
       {(() => {
         // Spec 07 §9.4 (D-111): from four parties on, the same tabs and "Compare two" as the worksheet.
         const card = (response: Question['responses'][number]) => (
           <div key={response.configurationKey} className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-sm font-semibold">{labels[response.configurationKey]}</span>
-              <span className="text-xs text-muted-foreground tabular-nums">
+              <span className="text-small font-semibold">{labels[response.configurationKey]}</span>
+              <span className="text-caption text-muted-foreground tabular-nums">
                 {response.status === 'imported' ? (
                   'Imported answer'
                 ) : (
@@ -101,7 +101,7 @@ function QuestionRecord({ testCase, labels, checkLabels, rubricVersion, sources 
                 )}
               </span>
             </div>
-            {response.modelNote && <p className="text-xs text-warning">{response.modelNote}</p>}
+            {response.modelNote && <p className="text-caption text-warning">{response.modelNote}</p>}
             {(response as { trace?: ToolTrace }).trace ? (
               // Spec 06 §3 (D-103): after unsealing, which response answered each call and per-step usage.
               <ToolTraceView label={labels[response.configurationKey] ?? ''} trace={jurorTrace((response as { trace: ToolTrace }).trace)} full={(response as { trace: ToolTrace }).trace} usage={(response as { steps?: StepUsage[] }).steps} maxSteps={(testCase as { kitFields?: { maxSteps?: number } | null }).kitFields?.maxSteps} />
@@ -110,12 +110,12 @@ function QuestionRecord({ testCase, labels, checkLabels, rubricVersion, sources 
                 {sources ? <CitedText text={response.text} caseKey={`record-${testCase.key}`} sources={sources} /> : response.text}
               </div>
             ) : (
-              <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
+              <p className="rounded-md border border-dashed border-border p-3 text-small text-muted-foreground">
                 No accepted response ({response.status}). {response.errorCode ? ERROR_TEXT[response.errorCode] ?? response.errorCode : ''}
               </p>
             )}
             {findings && (findings.get(response.configurationKey)?.length ?? 0) > 0 && (
-              <ul aria-label={`${labels[response.configurationKey]} quotes`} className="space-y-1 text-xs">
+              <ul aria-label={`${labels[response.configurationKey]} quotes`} className="space-y-1 text-caption">
                 {findings.get(response.configurationKey)!.map((finding, index) => (
                   <li key={index} className={finding.foundIn === null ? 'text-destructive' : 'text-muted-foreground'}>
                     <q className="italic">{finding.quote.length > 80 ? `${finding.quote.slice(0, 79)}…` : finding.quote}</q>{' '}
@@ -166,7 +166,7 @@ function QuestionRecord({ testCase, labels, checkLabels, rubricVersion, sources 
                     {j[d]}
                   </TableCell>
                 ))}
-                <TableCell className="min-w-48 text-xs text-muted-foreground">
+                <TableCell className="min-w-48 text-caption text-muted-foreground">
                   {j.note || '—'}
                   {j.suspectedIdentityClue && <span className="ml-1 text-warning">(identity clue flagged)</span>}
                 </TableCell>

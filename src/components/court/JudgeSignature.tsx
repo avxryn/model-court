@@ -6,7 +6,7 @@ export function JudgeSignature({ note, stamp }: { note: ReactNode; stamp?: React
     <div className="flex flex-wrap items-end justify-between gap-6">
       <div className="min-w-56">
         <div className="border-b border-foreground pb-1 font-display text-xl italic">The judge</div>
-        <div className="mt-1 text-xs text-muted-foreground">{note}</div>
+        <div className="mt-1 text-caption text-muted-foreground">{note}</div>
       </div>
       {stamp}
     </div>

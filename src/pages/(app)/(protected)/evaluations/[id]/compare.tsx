@@ -82,7 +82,7 @@ function Compare({ evaluation }: { evaluation: OwnerEvaluationView }) {
                 Case no. <DocketNumber>{docketNumber(evaluation.id)}</DocketNumber>
               </div>
               <div>{evaluation.title}</div>
-              <div className="text-xs leading-snug text-muted-foreground">Each hearing is scored on its own. Nothing here adds scores from different hearings together.</div>
+              <div className="text-caption leading-snug text-muted-foreground">Each hearing is scored on its own. Nothing here adds scores from different hearings together.</div>
             </>
           }
         />
@@ -99,7 +99,7 @@ function Compare({ evaluation }: { evaluation: OwnerEvaluationView }) {
                     <Checkbox id={`pick-${run.id}`} checked={checked} disabled={!checked && selected.length >= MAX} onCheckedChange={(c) => toggle(run.id, c === true)} />
                     <FieldLabel htmlFor={`pick-${run.id}`} className="block font-normal">
                       <span className="font-medium">Hearing {run.number}</span> · questions v{run.scenarioVersion}
-                      <span className="block text-xs text-muted-foreground">{formatTime(run.createdAt)}</span>
+                      <span className="block text-caption text-muted-foreground">{formatTime(run.createdAt)}</span>
                     </FieldLabel>
                   </Field>
                 )
@@ -157,7 +157,7 @@ export function ComparisonBody({ data, runs, records }: { data: ComparisonView; 
   return (
     <>
       <SheetSection id="comparable" label="Can these be compared?">
-        <ul className="space-y-1.5 text-sm">
+        <ul className="space-y-1.5 text-small">
           {checklist.map((item) => (
             <li key={item.text} className="flex items-start gap-2">
               <Mark ok={item.ok} />
@@ -182,7 +182,7 @@ export function ComparisonBody({ data, runs, records }: { data: ComparisonView; 
             const rows = setupRows({ configurations: hearing.parties.map((p) => ({ key: p.key, label: p.label, provider: p.provider as ProviderId | null, modelId: p.modelId, ...(p.source === 'imported' ? { source: 'imported' as const } : {}) })), setupMetrics: data.setupMetrics[hearing.runId] }, partySource)
             return (
               <div key={hearing.runId}>
-                <h3 className="mb-2 text-sm font-semibold">Hearing {numberOf(hearing.runId)}</h3>
+                <h3 className="mb-2 text-small font-semibold">Hearing {numberOf(hearing.runId)}</h3>
                 <SetupTable rows={rows} caption={`Estimated cost and speed for hearing ${numberOf(hearing.runId)}`} />
               </div>
             )
@@ -212,17 +212,17 @@ function HearingColumn({ runId, number, hearing, record }: { runId: string; numb
         <Link to={`/runs/${runId}/results`} className="underline-offset-4 hover:underline">
           Hearing {number}
         </Link>
-        <span className="ml-2 font-sans text-xs text-muted-foreground">questions v{hearing.scenarioVersion}</span>
+        <span className="ml-2 font-sans text-caption text-muted-foreground">questions v{hearing.scenarioVersion}</span>
       </h3>
-      <p className="mt-0.5 text-xs text-muted-foreground">
+      <p className="mt-0.5 text-caption text-muted-foreground">
         {hearing.raterSource === 'jury' ? `${plural(hearing.raterCount, 'juror')}${hearing.guestRaterCount ? `, ${hearing.guestRaterCount} without an account` : ''}` : 'The judge alone'}
         {hearing.repeatJurorCount > 0 && ` · ${plural(hearing.repeatJurorCount, 'juror')} may not be blind`}
       </p>
-      {tally ? <p className="mt-2 font-heading leading-snug">{tally.sentence}</p> : <p className="mt-2 text-sm text-muted-foreground">{results.error ? 'Could not load this record.' : 'Loading the record…'}</p>}
-      <table className="mt-3 w-full text-sm">
+      {tally ? <p className="mt-2 font-heading leading-snug">{tally.sentence}</p> : <p className="mt-2 text-small text-muted-foreground">{results.error ? 'Could not load this record.' : 'Loading the record…'}</p>}
+      <table className="mt-3 w-full text-small">
         <caption className="sr-only">Mean points per question in hearing {number}</caption>
         <thead>
-          <tr className="text-left text-xs text-muted-foreground">
+          <tr className="text-left text-caption text-muted-foreground">
             <th className="py-1 font-normal">Party</th>
             {tally && <th className="py-1 text-right font-normal">Won · tied · lost</th>}
             <th className="py-1 text-right font-normal">Points per question</th>
@@ -241,7 +241,7 @@ function HearingColumn({ runId, number, hearing, record }: { runId: string; numb
           })}
         </tbody>
       </table>
-      <p className="mt-2 text-xs text-muted-foreground">Points per question use the {plural(hearing.parties[0]?.questions ?? 0, 'question')} every selected hearing shares.</p>
+      <p className="mt-2 text-caption text-muted-foreground">Points per question use the {plural(hearing.parties[0]?.questions ?? 0, 'question')} every selected hearing shares.</p>
     </Panel>
   )
 }
@@ -259,7 +259,7 @@ function AnchorSection({ data, name }: { data: ComparisonView; name: (runId: str
         const drift = data.hearings.map((hearing) => ({ runId: hearing.runId, value: anchor.byHearing[hearing.runId]?.meanPoints ?? null }))
         return (
           <div key={anchor.fingerprint} className="space-y-3">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               Anchor: <span className="font-medium text-foreground">{anchor.label}</span>, the same model and instructions in every hearing.
             </p>
             <ul className="max-w-3xl space-y-1.5 font-heading leading-relaxed">
@@ -272,7 +272,7 @@ function AnchorSection({ data, name }: { data: ComparisonView; name: (runId: str
                   </li>
                 ))}
             </ul>
-            <p className="max-w-3xl text-sm">
+            <p className="max-w-3xl text-small">
               <span className="font-medium">Panel drift:</span> the anchor scored {drift.map((d) => `${d.value === null ? '—' : formatPoints(d.value)} in ${name(d.runId)}`).join(', ')}. {new Set(drift.map((d) => d.value?.toFixed(2))).size > 1 ? 'The juries differed, or the model changed behind the same name.' : 'The same in each hearing.'}
             </p>
           </div>

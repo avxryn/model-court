@@ -23,11 +23,11 @@ function Chip({ caseKey, source }: { caseKey: string; source: ListedSource }) {
         S{source.number}
       </PopoverTrigger>
       <PopoverContent className="w-[min(22rem,calc(100vw-2rem))]" align="start">
-        <p className="text-sm font-medium">
+        <p className="text-small font-medium">
           S{source.number}
           {source.title ? ` · ${source.title}` : ''}
         </p>
-        <p className="max-h-60 overflow-y-auto text-sm leading-relaxed break-words whitespace-pre-wrap">{source.text}</p>
+        <p className="max-h-60 overflow-y-auto text-reading leading-relaxed break-words whitespace-pre-wrap">{source.text}</p>
         <Button size="xs" variant="outline" className="self-start" onClick={() => showSource(caseKey, source.number)}>
           Show in sources
         </Button>

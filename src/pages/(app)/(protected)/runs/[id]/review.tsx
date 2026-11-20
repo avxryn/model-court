@@ -93,9 +93,9 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
                 )}
               </div>
               <h1 className="font-display text-2xl leading-tight font-medium tracking-tight sm:text-3xl">Score the testimony</h1>
-              <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Score each testimony against the exhibit and the jury instructions. Labels are shuffled for every question and every person.</p>
+              <p className="max-w-2xl text-small leading-relaxed text-muted-foreground">Score each testimony against the exhibit and the jury instructions. Labels are shuffled for every question and every person.</p>
               {!isOwner && !filed && (
-                <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                <p className="max-w-2xl text-small leading-relaxed text-muted-foreground">
                   First time scoring?{' '}
                   <a href="/sample" target="_blank" rel="noopener" className="text-foreground underline underline-offset-4">
                     Practice on the sample case
@@ -104,12 +104,12 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
                 </p>
               )}
               {isOwner && w.editable && (
-                <p className="flex max-w-2xl items-start gap-1.5 text-sm leading-relaxed text-muted-foreground">
+                <p className="flex max-w-2xl items-start gap-1.5 text-small leading-relaxed text-muted-foreground">
                   <Info aria-hidden className="mt-0.5 size-4 shrink-0" /> You know which parties you chose, so your review is reported separately as context-aware, never as part of the jury’s findings.
                 </p>
               )}
               {filed && (
-                <p className="max-w-2xl text-sm leading-relaxed text-foreground" role="status">
+                <p className="max-w-2xl text-small leading-relaxed text-foreground" role="status">
                   Your ratings are final.{' '}
                   {isUnsealed(review.runStatus) ? (
                     <>
@@ -172,8 +172,8 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
 
             <div className="flex flex-wrap items-center gap-3">
               <QuestionPager count={review.cases.length} current={caseIndex} isDone={(index) => review.cases[index].responses.every((r) => isComplete(w.ratings[r.responseId]))} onSelect={(index) => void goTo(index)} />
-              {review.cases.some((testCase) => testCase.document !== undefined) && <span className="text-xs text-muted-foreground">You’ll see the source documents for this case: the same file for every party.</span>}
-              {review.cases.length === 1 && <span className="text-xs text-muted-foreground">Only one question was eligible — treat conclusions as exploratory.</span>}
+              {review.cases.some((testCase) => testCase.document !== undefined) && <span className="text-caption text-muted-foreground">You’ll see the source documents for this case: the same file for every party.</span>}
+              {review.cases.length === 1 && <span className="text-caption text-muted-foreground">Only one question was eligible — treat conclusions as exploratory.</span>}
               {w.editable && (
                 <div className="ml-auto">
                   <WorksheetKeyLegend />
@@ -223,7 +223,7 @@ function ReviewWorkspace({ review, reload }: { review: AnonymousReview; reload: 
             <QuestionStepper current={caseIndex} count={review.cases.length} onGo={(index) => void goTo(index)}>
               {w.editable && (
                 <>
-                  <span className="text-xs text-muted-foreground tabular-nums" role="status">
+                  <span className="text-caption text-muted-foreground tabular-nums" role="status">
                     {w.scored < w.total ? `${w.scored} of ${w.total} testimonies scored` : w.issues.length > 0 ? 'Add a note to every 0 before filing' : `All ${w.total} testimonies scored`}
                   </span>
                   {isOwner && solo ? (

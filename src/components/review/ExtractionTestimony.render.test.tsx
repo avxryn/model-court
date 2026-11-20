@@ -47,13 +47,18 @@ describe('SourcePane', () => {
 })
 
 describe('ExtractionSettingsFields', () => {
-  it('shows the starters, the must-fill warning, each field with its toggle, and the privacy line', () => {
-    const plain = text(renderToStaticMarkup(<ExtractionSettingsFields settings={{ schema: contact, compare: {} }} errors={{}} onChange={() => {}} />))
+  it('shows the starters, the must-fill warning, each field with its checkbox, and the privacy line', () => {
+    const html = renderToStaticMarkup(<ExtractionSettingsFields settings={{ schema: contact, compare: {} }} errors={{}} onChange={() => {}} />)
+    const plain = text(html)
     for (const starter of EXTRACTION_STARTERS) expect(plain).toContain(starter.name)
     expect(plain).toContain(MUST_FILL_WARNING)
     expect(plain).toContain(FIELD_LIST_PRIVACY)
-    expect(plain).toContain('Name fullName text Must be filled')
-    expect(plain).toContain('Email email text (email) May be empty')
+    expect(plain).toContain('Name fullName text')
+    expect(plain).toContain('Email email text (email)')
+    // D-120: a checkbox per field, ticked when it must be filled.
+    const box = (name: string) => html.match(new RegExp(`<[^>]*aria-label="${name} must be filled"[^>]*>`))?.[0] ?? ''
+    expect(box('Name')).toContain('aria-checked="true"')
+    expect(box('Email')).toContain('aria-checked="false"')
     expect(plain).toContain('5 of 60 fields · 4 of 16 may be empty')
   })
 

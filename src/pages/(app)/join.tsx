@@ -111,14 +111,14 @@ export default function JoinPage() {
     <div className="flex min-h-[60vh] items-center justify-center px-4 py-16">
       <Card className="w-full max-w-md py-7">
         <CardHeader>
-          <div className="typewriter mb-2 text-xs font-medium text-muted-foreground">JURY SUMMONS · MODEL COURT</div>
+          <div className="typewriter mb-2 text-caption font-medium text-muted-foreground">JURY SUMMONS · MODEL COURT</div>
           <CardTitle className="text-2xl font-medium tracking-tight"><h1 className="font-display">You are summoned to serve as a juror</h1></CardTitle>
           <CardDescription className="leading-relaxed">
             You were invited to review blind. You will score anonymous AI answers against a short rubric. You don’t need an API key, and you won’t see which models gave the answers — or anyone else’s ratings — until the judge unseals the record.
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-2 space-y-4">
-          <p className="text-sm leading-relaxed text-muted-foreground">
+          <p className="text-small leading-relaxed text-muted-foreground">
             First time?{' '}
             <a href="/sample" target="_blank" rel="noopener" className="text-foreground underline underline-offset-4">
               Practice on the sample case
@@ -127,29 +127,29 @@ export default function JoinPage() {
           </p>
           {status === 'missing' && !pendingResume && !guest && (
             <div className="space-y-3">
-              <p className="text-sm text-destructive">This page needs an invitation link. Open the link the judge sent you, or ask them for a new one.</p>
+              <p className="text-small text-destructive">This page needs an invitation link. Open the link the judge sent you, or ask them for a new one.</p>
               <Button variant="outline" className="w-full" onClick={() => navigate('/')}>
                 Back to Model Court
               </Button>
             </div>
           )}
           {status === 'error' && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="text-small text-destructive">
               {message}
             </p>
           )}
           {resumeFailed && !guest && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-small text-muted-foreground">
               Each resume link works once. Open the newest link you saved, or ask the judge for a new invitation.
             </p>
           )}
           {status === 'redeeming' && (
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="text-small text-muted-foreground">
               Joining…
             </p>
           )}
           {pendingResume && !guest && (
-            <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
+            <div className="space-y-3 rounded-md bg-slip p-4 text-small">
               <p className="font-medium">Continue your review on this device?</p>
               <p>Use this only with a resume link you saved yourself. Anyone else’s link would put you in their seat.</p>
               <Button className="w-full" disabled={guestBusy} onClick={() => void resume()}>
@@ -158,7 +158,7 @@ export default function JoinPage() {
             </div>
           )}
           {guest && (
-            <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
+            <div className="space-y-3 rounded-md bg-slip p-4 text-small">
               <p className="font-medium">You are seated as a juror.</p>
               {guest.resumeLink && (
                 <div className="space-y-1.5">
@@ -190,7 +190,7 @@ export default function JoinPage() {
               >
                 <Label htmlFor="guest-name">Or join with just a name</Label>
                 <Input id="guest-name" value={guestName} maxLength={40} onChange={(e) => setGuestName(e.target.value)} placeholder="The name the judge will see" />
-                <p className="text-xs text-muted-foreground">No account needed. Only the judge sees this name. This browser keeps you signed in to this one hearing for up to 14 days.</p>
+                <p className="text-caption text-muted-foreground">No account needed. Only the judge sees this name. This browser keeps you signed in to this one hearing for up to 14 days.</p>
                 <Button type="submit" variant="outline" className="mt-2 w-full" disabled={guestBusy || guestName.trim().length === 0}>
                   {guestBusy ? 'Joining…' : 'Join without an account'}
                 </Button>

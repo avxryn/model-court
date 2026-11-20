@@ -50,10 +50,10 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
             >
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <span id={`${id}-${dimension}-legend`} className="block text-sm font-medium">
+                  <span id={`${id}-${dimension}-legend`} className="block text-small font-medium">
                     {RUBRIC[dimension].label} <span className="sr-only">for testimony {label}</span>
                   </span>
-                  <span aria-live="polite" className="block text-xs leading-snug text-muted-foreground">
+                  <span aria-live="polite" className="block text-caption leading-snug text-muted-foreground">
                     {value === null ? 'Not scored yet' : RUBRIC[dimension].anchors[value]}
                   </span>
                 </div>
@@ -91,7 +91,7 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor={`${id}-note`} className="flex-wrap gap-x-2 gap-y-1 text-sm leading-snug font-medium">
+        <Label htmlFor={`${id}-note`} className="flex-wrap gap-x-2 gap-y-1 text-small leading-snug font-medium">
           Evidence note {needsNote ? <span className={noteInvalid ? 'text-destructive' : 'font-normal text-muted-foreground'}>(required for any 0)</span> : <span className="font-normal text-muted-foreground">(optional)</span>}
         </Label>
         <Textarea
@@ -106,7 +106,7 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
           className="bg-card"
           rows={2}
         />
-        <FieldDescription id={`${id}-note-help`} className={cn('text-xs', noteInvalid && 'text-destructive')}>
+        <FieldDescription id={`${id}-note-help`} className={cn('text-caption', noteInvalid && 'text-destructive')}>
           {noteInvalid ? `Explain the 0 in at least ${LIMITS.ratingNote.min} characters.` : `${noteLength}/${LIMITS.ratingNote.max} characters`}
         </FieldDescription>
       </div>
@@ -118,9 +118,9 @@ export function RubricForm({ label, rating, onChange, disabled, rubricVersion }:
           disabled={disabled}
           onCheckedChange={(checked) => onChange({ ...rating, suspectedIdentityClue: checked === true })}
         />
-        <Label htmlFor={`${id}-clue`} className="flex-col items-start gap-1 text-sm leading-snug font-normal text-pretty">
+        <Label htmlFor={`${id}-clue`} className="flex-col items-start gap-1 text-small leading-snug font-normal text-pretty">
           This testimony hints at which party gave it
-          <span className="block text-xs leading-snug text-muted-foreground">Flagged sessions are counted as potentially unblinded in results.</span>
+          <span className="block text-caption leading-snug text-muted-foreground">Flagged sessions are counted as potentially unblinded in results.</span>
         </Label>
       </div>
     </div>

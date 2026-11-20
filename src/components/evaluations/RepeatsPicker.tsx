@@ -47,11 +47,11 @@ export function RepeatsPicker({ draft, max, onChange, disabled }: { draft: Draft
           ))}
         </ChoiceCardGroup>
       </Fold>
-      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+      <p className="mt-2 max-w-2xl text-small leading-relaxed text-muted-foreground">
         Repeats show whether a setup gives the same answer each time. Jurors still score one answer per party; you can read the others on the record after unsealing.
         {imported > 0 && ' Imported answers are used once.'}
       </p>
-      <p className="mt-1 text-sm tabular-nums" aria-live="polite">
+      <p className="mt-1 text-small tabular-nums" aria-live="polite">
         This hearing makes {upTo && 'up to '}<strong>{plural(calls, 'paid call')}</strong> ({plural(draft.cases.length, 'question')} × {plural(generated, 'model party', 'model parties')}
         {current > 1 && <> × {current} samples</>}
         {upTo && <> × each question’s step cap</>}), billed to your keys.

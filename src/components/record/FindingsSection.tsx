@@ -44,7 +44,7 @@ export function FindingsSection({ data }: { data: ResultsView }) {
           </TabsContent>
           <TabsContent value="owner" className="pt-3">
             <Cohort cohort={owner} data={data} />
-            <p className="mt-2 text-xs text-muted-foreground">{solo ? 'No jurors scored this case, so this review is the result. ' : ''}The judge knew which setups were in the case when scoring. This review is reported on its own and never combined with the jury’s findings.</p>
+            <p className="mt-2 text-caption text-muted-foreground">{solo ? 'No jurors scored this case, so this review is the result. ' : ''}The judge knew which setups were in the case when scoring. This review is reported on its own and never combined with the jury’s findings.</p>
           </TabsContent>
         </Tabs>
       </SheetSection>

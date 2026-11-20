@@ -46,7 +46,7 @@ export function ExtractionSection({ data }: { data: ResultsView }) {
   ]
   return (
     <SheetSection id="extraction" label="Extraction">
-      <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+      <p className="max-w-2xl text-small leading-relaxed text-muted-foreground">
         How each party’s fields compare with the answer keys, on eligible questions, next to what the jury flagged. These are counts, not part of the jury’s findings. A juror’s Invented flag and the key’s invented count can disagree; where they do is worth a look.
       </p>
       <div className="exhibit-panel mt-4 overflow-x-auto">
@@ -80,7 +80,7 @@ export function ExtractionSection({ data }: { data: ResultsView }) {
         .filter((testCase) => testCase.fields.length > 0)
         .map((testCase) => (
           <div key={testCase.caseKey} className="mt-6">
-            <h3 className="mb-2 text-sm font-medium">{titleOf(testCase.caseKey)}</h3>
+            <h3 className="mb-2 text-small font-medium">{titleOf(testCase.caseKey)}</h3>
             <div className="exhibit-panel overflow-x-auto">
               <Table>
                 <caption className="sr-only">Fields of {titleOf(testCase.caseKey)}: the answer key and each party</caption>
@@ -105,8 +105,8 @@ export function ExtractionSection({ data }: { data: ResultsView }) {
                         return (
                           <TableCell key={party.key} className="align-top">
                             <span className="block break-words">{show(cell.value)}</span>
-                            {cell.outcome && <span className={cn('text-xs', cell.outcome === 'match' ? 'text-success' : 'text-destructive')}>{OUTCOME_WORDS[cell.outcome] ?? cell.outcome}</span>}
-                            {flags && <span className="block text-xs text-muted-foreground">{flags}</span>}
+                            {cell.outcome && <span className={cn('text-caption', cell.outcome === 'match' ? 'text-success' : 'text-destructive')}>{OUTCOME_WORDS[cell.outcome] ?? cell.outcome}</span>}
+                            {flags && <span className="block text-caption text-muted-foreground">{flags}</span>}
                           </TableCell>
                         )
                       })}
@@ -117,7 +117,7 @@ export function ExtractionSection({ data }: { data: ResultsView }) {
             </div>
           </div>
         ))}
-      <p className="mt-4 text-xs text-muted-foreground">
+      <p className="mt-4 text-caption text-muted-foreground">
         Field list {section.schemaSha256.slice(0, 12)}… · {plural(section.documents.length, 'document')} · {section.documents.some((document) => document.delivery === 'pdf_native') ? 'each provider read the PDF its own way' : 'every party read the same text'}
       </p>
     </SheetSection>

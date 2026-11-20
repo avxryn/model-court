@@ -45,7 +45,7 @@ function Record({ data }: { data: ResultsView }) {
                 <div>Unsealed · {formatTime(data.revealedAt)}</div>
                 <StageLine status={data.status} />
                 <div>Rubric · {rubricName(data.rubricVersion)}</div>
-                <div className="text-xs leading-snug text-muted-foreground">Scores are 0–2 means over {plural(data.eligibleCaseKeys.length, 'eligible question')}. The headline counts scores; only the judge enters judgment.</div>
+                <div className="text-caption leading-snug text-muted-foreground">Scores are 0–2 means over {plural(data.eligibleCaseKeys.length, 'eligible question')}. The headline counts scores; only the judge enters judgment.</div>
               </>
             }
             stamp={<Stamp kind={data.status === 'decided' ? 'entered' : 'unsealed'} />}

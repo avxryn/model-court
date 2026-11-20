@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 /** Same width and gutters as the app's wide pages (src/components/layout/Page.tsx). */
 export const SITE_CONTAINER = 'mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10'
 
-const NAV_LINK = 'rounded-md px-1 py-1 text-sm whitespace-nowrap text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=page]:font-medium aria-[current=page]:text-foreground'
+const NAV_LINK = 'rounded-md px-1 py-1 text-small whitespace-nowrap text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current=page]:font-medium aria-[current=page]:text-foreground'
 
 const LEGAL_LINKS = [
   { to: '/privacy', label: 'Privacy' },

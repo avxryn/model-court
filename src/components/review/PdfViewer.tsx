@@ -54,7 +54,7 @@ export function PdfViewer({ runId, caseKey, pageCount }: { runId: string; caseKe
   // D-91: never more than the 20-page limit of buttons, whatever the file claims.
   const pages = Math.min(doc?.numPages ?? pageCount ?? 1, MAX_PAGES)
   const truncated = (doc?.numPages ?? 0) > MAX_PAGES
-  if (error) return <p className="px-4 py-3 text-sm text-destructive">{error}</p>
+  if (error) return <p className="px-4 py-3 text-small text-destructive">{error}</p>
   return (
     <div className="space-y-2 py-2">
       <div className="flex flex-wrap items-center gap-2 px-4">
@@ -65,10 +65,10 @@ export function PdfViewer({ runId, caseKey, pageCount }: { runId: string; caseKe
             </Button>
           ))}
         </nav>
-        {truncated && <span className="text-xs text-muted-foreground">Showing the first {MAX_PAGES} pages; the file has {doc?.numPages}.</span>}
-        <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+        {truncated && <span className="text-caption text-muted-foreground">Showing the first {MAX_PAGES} pages; the file has {doc?.numPages}.</span>}
+        <label className="ml-auto flex items-center gap-1.5 text-caption text-muted-foreground">
           Zoom
-          <select className="rounded-sm border border-border bg-background px-1 py-0.5 text-xs" value={zoom} onChange={(event) => setZoom(Number(event.target.value) as (typeof ZOOMS)[number])}>
+          <select className="rounded-sm border border-border bg-background px-1 py-0.5 text-caption" value={zoom} onChange={(event) => setZoom(Number(event.target.value) as (typeof ZOOMS)[number])}>
             {ZOOMS.map((value) => (
               <option key={value} value={value}>
                 {Math.round(value * 100)}%
@@ -78,7 +78,7 @@ export function PdfViewer({ runId, caseKey, pageCount }: { runId: string; caseKe
         </label>
       </div>
       <div role="region" aria-label={`Source PDF, page ${page} of ${pages}`} tabIndex={0} className="max-h-[36rem] overflow-auto px-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-        {!doc && <p className="py-3 text-sm text-muted-foreground">Loading the PDF…</p>}
+        {!doc && <p className="py-3 text-small text-muted-foreground">Loading the PDF…</p>}
         <div className={cn('pdf-page relative inline-block bg-white shadow-sm', !doc && 'hidden')}>
           <canvas ref={canvas} aria-hidden />
           <div ref={text} className="textLayer absolute inset-0" />

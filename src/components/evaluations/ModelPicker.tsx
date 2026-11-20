@@ -63,14 +63,14 @@ export function ModelSelect({
               {index > 0 && <SelectSeparator />}
               <SelectLabel className="flex items-baseline justify-between gap-2 pt-2">
                 <span className="court-label">{PROVIDER_NAMES[group.provider]}</span>
-                <span className="text-[0.6875rem]">
+                <span className="text-caption">
                   {counts.get(group.provider)?.checked} of {counts.get(group.provider)?.total} live-checked
                 </span>
               </SelectLabel>
               {group.routes.map((model) => (
                 <SelectItem key={model.key} value={model.key} disabled={disabledKeys?.has(model.key)}>
                   <span className="min-w-0 flex-1 truncate">{model.label}</span>
-                  <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="ml-auto flex shrink-0 items-center gap-1.5 text-caption text-muted-foreground">
                     {disabledKeys?.has(model.key) && <span>in use</span>}
                     {model.reasoning === 'low' && <span>reasons</span>}
                     <span className="tabular-nums">{formatTokens(model.contextTokens)}</span>
@@ -88,7 +88,7 @@ export function ModelSelect({
         </SelectContent>
       </Select>
       {(hiddenCount > 0 || showAll) && (
-        <button type="button" onClick={() => setShowAll((v) => !v)} aria-pressed={showAll} className="rounded-sm text-xs text-muted-foreground underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
+        <button type="button" onClick={() => setShowAll((v) => !v)} aria-pressed={showAll} className="rounded-sm text-caption text-muted-foreground underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
           {showAll ? 'Hide models not yet live-checked' : `Show ${hiddenCount} more not yet live-checked (a hearing can’t use them yet)`}
         </button>
       )}
@@ -98,7 +98,7 @@ export function ModelSelect({
 
 /** What this choice means for the hearing: identity, limits, reasoning, live checks. */
 export function ModelFacts({ model, needsConversation, kitVersion, className }: { model: CatalogModel | undefined; needsConversation?: boolean; /** D-119: the case's kit, so the checks it needs are listed too. */ kitVersion?: string; className?: string }) {
-  if (!model) return <p className={cn('text-xs text-muted-foreground', className)}>Answers are capped at {LIMITS.maxOutputTokens} tokens. No tools, browsing, or streaming.</p>
+  if (!model) return <p className={cn('text-caption text-muted-foreground', className)}>Answers are capped at {LIMITS.maxOutputTokens} tokens. No tools, browsing, or streaming.</p>
   const sentCap = model.reasoning === 'low' ? LIMITS.maxOutputTokens + LIMITS.reasoningHeadroomTokens : LIMITS.maxOutputTokens
   const rows: Array<[string, ReactNode]> = [
     [
@@ -152,7 +152,7 @@ export function ModelFacts({ model, needsConversation, kitVersion, className }: 
   if (model.retiresNotBefore) rows.push(['Retirement', `The provider may retire it from ${formatDate(model.retiresNotBefore)}.`])
 
   return (
-    <div className={cn('@container space-y-1.5 text-xs', className)}>
+    <div className={cn('@container space-y-1.5 text-caption', className)}>
       {/* Term beside detail when the card is wide enough; stacked in a narrow three-party row. */}
       <dl className="grid gap-x-3 leading-snug @[20rem]:grid-cols-[max-content_1fr] @[20rem]:gap-y-1">
         {rows.map(([term, detail]) => (

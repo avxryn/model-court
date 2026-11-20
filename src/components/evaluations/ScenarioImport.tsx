@@ -73,15 +73,15 @@ export function ScenarioImport({ onCancel, onCreated }: { onCancel: () => void; 
       <Field className="gap-1.5">
         <FieldLabel htmlFor="scenario-file">Scenario file or certified record (JSON)</FieldLabel>
         <Input id="scenario-file" type="file" accept="application/json,.json" disabled={!catalog.data} onChange={(event) => void choose(event.target.files?.[0])} />
-        <p className="text-xs text-muted-foreground">Read in this browser only. Nothing is sent until you open the case.</p>
+        <p className="text-caption text-muted-foreground">Read in this browser only. Nothing is sent until you open the case.</p>
       </Field>
       {parsed && !parsed.ok && (
-        <div role="alert" className="rounded-md border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+        <div role="alert" className="rounded-md border border-destructive/25 bg-destructive/5 p-3 text-small text-destructive">
           <p className="font-medium">{fileName} cannot be opened as a case.</p>
           <ul className="mt-1 list-disc pl-5">
             {parsed.issues.slice(0, 6).map((issue, index) => (
               <li key={index}>
-                {issue.path && <span className="font-mono text-xs">{issue.path}: </span>}
+                {issue.path && <span className="font-mono text-caption">{issue.path}: </span>}
                 {issue.message}
               </li>
             ))}
@@ -89,7 +89,7 @@ export function ScenarioImport({ onCancel, onCreated }: { onCancel: () => void; 
         </div>
       )}
       {ok && (
-        <div className="space-y-3 rounded-md bg-slip p-4 text-sm">
+        <div className="space-y-3 rounded-md bg-slip p-4 text-small">
           <p className="font-medium">
             “{ok.title}”: {plural(ok.draft.cases.length, 'question')}, rubric {rubricName(ok.draft.rubricVersion ?? 'reference-qa-v1')}, {plural(ok.draft.configurations.length, 'party', 'parties')}
             {ok.partiesFromFile === 0 && ' (the default pair)'}.
@@ -125,8 +125,8 @@ export function ScenarioImport({ onCancel, onCreated }: { onCancel: () => void; 
               {ok.draft.configurations.map((party) =>
                 'systemPrompt' in party ? (
                   <figure key={party.key} className="rounded-md border border-border bg-background p-3">
-                    <figcaption className="text-xs font-medium">{party.label}</figcaption>
-                    <p className="mt-1 max-h-40 overflow-y-auto text-sm whitespace-pre-wrap">{party.systemPrompt}</p>
+                    <figcaption className="text-caption font-medium">{party.label}</figcaption>
+                    <p className="mt-1 max-h-40 overflow-y-auto text-small whitespace-pre-wrap">{party.systemPrompt}</p>
                   </figure>
                 ) : null,
               )}

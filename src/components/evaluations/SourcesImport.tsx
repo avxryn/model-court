@@ -79,7 +79,7 @@ export function SourcesImport({ cases, disabled }: { cases: readonly CaseInput[]
         <Button variant="ghost" size="sm" onClick={() => saveBlob(new Blob([SOURCES_CSV_TEMPLATE], { type: 'text/csv;charset=utf-8' }), 'model-court-sources-template.csv')}>
           <Download aria-hidden /> Download a sources template
         </Button>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-caption text-muted-foreground">
           Columns: question (1–{LIMITS.maxCases} or Q1), text, and optional source (1–{LIMITS.grounded.sourcesPerQuestion.max}), title and origin (your note, never sent). Read in your browser; the file isn’t uploaded. {canSave ? 'Replaces the sources of the questions it names.' : 'Save the draft first.'}
         </span>
         <input
@@ -96,7 +96,7 @@ export function SourcesImport({ cases, disabled }: { cases: readonly CaseInput[]
         />
       </div>
       {issues.length > 0 && (
-        <div role="alert" className="text-sm text-destructive">
+        <div role="alert" className="text-small text-destructive">
           <p className="font-medium">The file could not be imported:</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             {issues.slice(0, 8).map((issue, index) => (
@@ -110,7 +110,7 @@ export function SourcesImport({ cases, disabled }: { cases: readonly CaseInput[]
         </div>
       )}
       {outcome && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-small text-destructive">
           {outcome}
         </p>
       )}

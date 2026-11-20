@@ -71,7 +71,7 @@ export function QuestionsEditor({ cases, onChange, errors, newId, disabled, kit 
         <Plus aria-hidden /> Add a question ({cases.length}/{maxQuestions})
       </Button>
       {maxQuestions < LIMITS.maxCases && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           With {parties} parties a hearing holds up to {maxQuestions} questions, so each juror scores at most {LIMITS.maxTestimoniesPerHearing} answers.
         </p>
       )}
@@ -135,7 +135,7 @@ function QuestionFields({ testCase, index, errors, onChange, kit, kitSettings }:
         onOpenChange={setOpen}
         summary={
           <span>
-            {takesConversation ? 'Earlier conversation and language' : 'Language'} <span className="text-xs">(optional{extras ? `: ${extras}` : ''})</span>
+            {takesConversation ? 'Earlier conversation and language' : 'Language'} <span className="text-caption">(optional{extras ? `: ${extras}` : ''})</span>
           </span>
         }
         contentClassName="space-y-4"

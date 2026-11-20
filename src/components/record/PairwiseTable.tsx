@@ -13,15 +13,15 @@ export function PairwiseTable({ tally }: { tally: Pick<Tally, 'questions' | 'par
   return (
     <div className="exhibit-panel overflow-hidden">
       <div className="overflow-x-auto outline-none focus-visible:ring-3 focus-visible:ring-ring/50" tabIndex={0} role="region" aria-label="Pairwise, party against party" aria-describedby="pairwise-hint">
-        <table className="w-full caption-bottom text-sm">
+        <table className="w-full caption-bottom text-small">
           <caption className="sr-only">Pairwise: the number of questions on which the party in the row scored more points than the party in the column, out of {questions}.</caption>
           <thead>
             <tr className="border-b border-border">
-              <th scope="col" className="sticky left-0 z-10 min-w-32 bg-card px-3 py-2 text-left text-xs font-medium text-muted-foreground">
+              <th scope="col" className="sticky left-0 z-10 min-w-32 bg-card px-3 py-2 text-left text-caption font-medium text-muted-foreground">
                 Row beat column on
               </th>
               {tally.parties.map((p) => (
-                <th key={p.key} scope="col" className="min-w-24 px-3 py-2 text-right text-xs font-medium whitespace-normal">
+                <th key={p.key} scope="col" className="min-w-24 px-3 py-2 text-right text-caption font-medium whitespace-normal">
                   {p.label}
                 </th>
               ))}
@@ -48,7 +48,7 @@ export function PairwiseTable({ tally }: { tally: Pick<Tally, 'questions' | 'par
           </tbody>
         </table>
       </div>
-      <p id="pairwise-hint" className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+      <p id="pairwise-hint" className="border-t border-border px-3 py-2 text-caption text-muted-foreground">
         Questions where the row party scored more points than the column party; ties count for neither. Scroll sideways for more parties.
       </p>
     </div>

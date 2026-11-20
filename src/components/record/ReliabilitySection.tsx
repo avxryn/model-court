@@ -73,7 +73,7 @@ function Coverage({ data }: { data: ResultsView }) {
           </TableBody>
         </Table>
       </Panel>
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-caption text-muted-foreground">
         {data.excludedCaseKeys.length} of {data.plannedCaseCount} planned questions were excluded from scoring because a party had no accepted testimony. Times and cost are under Cost and speed.
       </p>
     </div>
@@ -107,7 +107,7 @@ function ByLanguage({ data }: { data: ResultsView }) {
                 {data.configurations.map((c) => (
                   <TableCell key={c.key} className="text-right tabular-nums">
                     {group.invited.byConfiguration ? formatScore(group.invited.byConfiguration[c.key].overallMean) : '—'}
-                    {group.owner.byConfiguration && <span className="ml-1 text-xs text-muted-foreground">({formatScore(group.owner.byConfiguration[c.key].overallMean)})</span>}
+                    {group.owner.byConfiguration && <span className="ml-1 text-caption text-muted-foreground">({formatScore(group.owner.byConfiguration[c.key].overallMean)})</span>}
                   </TableCell>
                 ))}
               </TableRow>
@@ -115,7 +115,7 @@ function ByLanguage({ data }: { data: ResultsView }) {
           </TableBody>
         </Table>
       </Panel>
-      <p className="mt-2 text-xs text-muted-foreground">Each language is scored on its own questions only. With few questions per language, treat differences as exploratory.</p>
+      <p className="mt-2 text-caption text-muted-foreground">Each language is scored on its own questions only. With few questions per language, treat differences as exploratory.</p>
     </div>
   )
 }
