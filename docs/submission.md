@@ -1,11 +1,26 @@
 # Submission
 
-The note to submit, and the checklist to finish first. Due **Friday Nov 20, 2026, 11:59 p.m. Eastern**.
+The submission for the task form, due **Friday Nov 20, 2026, 11:59 p.m. Eastern**. The form takes three
+fields: the deployed app URL, the repository, and a writeup (what you built, which primitives you used,
+where the agent helped). The full note follows the form text. Agent facts come from
+[verification.md](verification.md) part A, and Avery's own lines from part B.
 
-> [!IMPORTANT]
-> Ready for your read-through. The agent facts come from [verification.md](verification.md) part A. Your
-> own lines come from part B and from what you said in the working session. Change anything that isn't
-> how you'd put it, then delete this box.
+## Form fields
+
+| Field | Value |
+|---|---|
+| Deployed app URL | `https://model-court.app.space/` |
+| Repository | `github.com/avxryn/model-court` (reviewers need access: make it public or add them) |
+
+### Writeup (plain text, paste as is)
+
+```text
+I built Model Court, a blind human-review app for choosing between AI setups (models, prompts, settings) on your own questions. A judge writes a case (up to 5 questions, a scoring guide, 2 to 5 parties), starts a hearing in which every party answers every question, and reviews the answers without knowing which setup wrote them, alone or with up to three invited jurors who can join as guests without an account. After unsealing, the record shows the jury's scores, free automatic checks, cost, speed and consistency, and the judge records a verdict. Kits cover plain Q&A, summaries, classification, field extraction from text or PDF, answers from supplied sources, and tool use against mock tools. Live generation is strictly BYOK: the judge's own OpenAI, Anthropic or Google key pays for every call; keys are encrypted with AES-256-GCM, pinned to each hearing, expire after 7 days, and only reach their own provider through a three-host allowlist.
+
+DeepSpace primitives: authentication; an app-owned SQLite Durable Object as the transactional store (the free tier refuses D1, and unique submissions, unseal ordering, frozen snapshots and budget reservations need guarded writes); JobRoom for paid generation and tool-step jobs (outbox, guarded claim, send outside a transaction, fenced commit, no automatic paid retry); CronRoom for repair, maintenance and sealed daily backups; RecordRoom for ID-only live notices; the app secrets store for the key-encryption roots; the owner's private app files for backups; and deepspace deploy.
+
+Where the agent helped: the coding agent wrote the code, tests, docs and deploys from my spec and seven roadmap specs, ran parallel sessions with independent review passes, and kept its own checks apart from mine: 679 unit and 296 integration tests (each on local D1 and the real Durable Object), 42 Playwright tests including signed-in flows. I set the rules (strict BYOK, keys never shown or logged, agent checks recorded separately), decided what shipped and when, and verified it live myself: on Nov 20 I ran a full hearing on the deployed app with my own keys, GPT-6 Luna against Claude Haiku 5.5, all 10 calls succeeded, a guest juror scored blind, and I recorded the verdict after unsealing. Known limitation: that live evidence is one juror on five questions, and extraction, PDF, tool use, conversations and Gemini stay off until their paid live checks run.
+```
 
 ## Note
 
