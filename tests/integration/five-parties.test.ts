@@ -93,7 +93,9 @@ describe('five parties: limits', () => {
     const over = fiveDraft(setup, 5, 4)
     await h.db.prepare('UPDATE evaluations SET draft_json = ?, revision = revision + 1 WHERE id = ?').bind(JSON.stringify({ ...over, schemaVersion: 1 }), setup.evaluationId).run()
     const atStart = await start(setup, 4)
-    expect(atStart.status).toBeGreaterThanOrEqual(400)
+    // D-114: the same plain-words refusal as on save, not a generic error.
+    expect(atStart.status).toBe(422)
+    expect(JSON.stringify(atStart.json)).toContain('5 parties × 4 questions is 20 answers for each juror to score. The limit is 15: remove a question or a party.')
     expect(h.providerCalls).toHaveLength(0)
     expect(await bucket(`user:${OWNER}`)).toBe(0)
     expect(Number((await h.db.prepare('SELECT COUNT(*) AS n FROM runs').first<{ n: number }>())?.n)).toBe(0)

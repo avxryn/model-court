@@ -175,6 +175,32 @@ async function tableSql(db: Db) {
   return Object.fromEntries(list.map((t) => [t.name, normalize(t.sql)]))
 }
 
+/**
+ * What migrations after 0015 add to the rebuilt tables. `migrateRest` applies every later migration too,
+ * so the comparison with the 0014 state leaves these out.
+ */
+const LATER: Record<string, { columns: string[]; objects: string[] }> = {
+  // 0016_attempt_unsent (D-113).
+  generation_attempts: { columns: ['unsent'], objects: ['generation_attempts_unsent_immutable'] },
+}
+
+function withoutLaterRows(state: Record<string, Array<Record<string, unknown>>>) {
+  return Object.fromEntries(
+    Object.entries(state).map(([table, list]) => [table, list.map((row) => Object.fromEntries(Object.entries(row).filter(([column]) => !LATER[table]?.columns.includes(column))))]),
+  )
+}
+
+function withoutLaterShape(state: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(state).map(([table, value]) => {
+      const later = LATER[table]
+      if (!later) return [table, value]
+      const v = value as { columns: Array<{ name: unknown }>; objects: Array<{ name: unknown }> }
+      return [table, { ...v, columns: v.columns.filter((c) => !later.columns.includes(String(c.name))), objects: v.objects.filter((o) => !later.objects.includes(String(o.name))) }]
+    }),
+  )
+}
+
 describe('migration 0015_provider_google', () => {
   let legacy: Awaited<ReturnType<typeof openDatabaseBefore>> | null = null
   afterEach(async () => {
@@ -195,10 +221,10 @@ describe('migration 0015_provider_google', () => {
     expect(await legacy.migrateRest()).toEqual(MIGRATIONS.slice(MIGRATIONS.findIndex((m) => m.id === '0015_provider_google')).map((m) => m.id))
 
     // Same rows, same values, same order of columns.
-    const after = await tableRows(db)
+    const after = withoutLaterRows(await tableRows(db))
     for (const table of TABLES) expect(after[table], table).toEqual(before[table])
     // Same columns, foreign keys (now naming the renamed tables), indexes and triggers.
-    expect(await shape(db)).toEqual(shapeBefore)
+    expect(withoutLaterShape(await shape(db))).toEqual(shapeBefore)
     // The table SQL differs only in the provider CHECK (columns added by ALTER sit at the end of the old text).
     const sqlAfter = await tableSql(db)
     for (const table of TABLES) {

@@ -264,7 +264,7 @@ export async function handleGenerationJob(deps: Deps, job: GenerationJob, jobSig
         const now = deps.now()
         await runGuarded(deps.db, 'attempt.fenced', cond(`EXISTS (SELECT 1 FROM generation_attempts WHERE id = ? AND fence_token = ? AND status = 'running')`, attemptId, fence), [
           ...releaseReservations(deps.db, cond('r.generation_id = ? AND r.attempt_no = ?', job.generationId, job.attemptNo), 'consumed', now),
-          deps.db.prepare(`UPDATE generation_attempts SET status = 'failed', error_code = 'CANCELED', finished_at = ? WHERE id = ?`).bind(now, attemptId),
+          deps.db.prepare(`UPDATE generation_attempts SET status = 'failed', error_code = 'CANCELED', finished_at = ?, unsent = 1 WHERE id = ?`).bind(now, attemptId),
         ])
       } catch (fenceError) {
         if (!(fenceError instanceof GuardFailed)) throw fenceError
@@ -347,8 +347,8 @@ async function finishAttempt(deps: Deps, ref: AttemptRef, outcome: ProviderOutco
       await runGuarded(db, 'generation.fail', current, [
         ...(unsent ? releaseReservations(db, cond('r.generation_id = ? AND r.attempt_no = ?', job.generationId, job.attemptNo), 'consumed', now) : []),
         db
-          .prepare(`UPDATE generation_attempts SET status = ?, finished_at = ?, error_code = ?, duration_ms = ?, provider_request_id = ? WHERE id = ?`)
-          .bind(status, now, outcome.code, outcome.durationMs, outcome.providerRequestId, ref.attemptId),
+          .prepare(`UPDATE generation_attempts SET status = ?, finished_at = ?, error_code = ?, duration_ms = ?, provider_request_id = ?, unsent = ? WHERE id = ?`)
+          .bind(status, now, outcome.code, outcome.durationMs, outcome.providerRequestId, unsent ? 1 : 0, ref.attemptId),
         db.prepare(`UPDATE generations SET status = ?, last_error_code = ?, updated_at = ? WHERE id = ?`).bind(status, outcome.code, now, job.generationId),
         terminalOutbox,
         touchRunStatement(db, context.runId, now),

@@ -186,6 +186,44 @@ describe('a three-provider hearing', () => {
     expect(gemini.cost.hearingMicroUsd).toBeGreaterThan(0)
     expect(gemini.tokens.totalReasoning).toBeGreaterThan(0)
   })
+
+  it('says on the record when Google answers from another model than the one asked for (D-115)', async () => {
+    const unseal = async (runId: string) => {
+      const review = (await h.request('GET', `/runs/${runId}/review`, { as: OWNER })).json.data
+      const ratings = review.cases.flatMap((c: any) => c.responses.map((r: any) => ({ responseId: r.responseId, correctness: 2, completeness: 2, grounding: 2, note: '', suspectedIdentityClue: false })))
+      const saved = await h.request('PUT', `/runs/${runId}/review`, { as: OWNER, ifMatch: review.sessionRevision, body: { ratings } })
+      expect((await h.request('POST', `/runs/${runId}/review/file-and-unseal`, { as: OWNER, ifMatch: saved.json.data.sessionRevision, body: {} })).status).toBe(200)
+      return (await h.request('GET', `/runs/${runId}/results`, { as: OWNER })).json.data
+    }
+    const setup = await setupThreeProviders()
+    const geminiKey = setup.draft.configurations[2].key
+    // The default fake answers `gemini-3.6-flash-001`: a stable version of the model asked for, so no note.
+    const first = (await start(setup)).json.data.runId as string
+    await h.drainJobs()
+    const plain = await unseal(first)
+    for (const testCase of plain.cases) for (const response of testCase.responses) expect(response.modelNote).toBeNull()
+
+    h.setProvider(async (call) => {
+      if (!call.url.includes('googleapis')) return okStub(call, new AbortController().signal)
+      const body = await googleOk().json()
+      return new Response(JSON.stringify({ ...body, modelVersion: 'gemini-3.6-flash-lite' }), { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+    // A new day, so the daily call cap does not refuse the second hearing.
+    h.advance(24 * 60 * 60 * 1000)
+    const again = await h.request('POST', `/evaluations/${setup.evaluationId}/runs`, {
+      as: OWNER,
+      body: { draftRevision: setup.revision, credentialIdsByProvider: { openai: setup.openaiKeyId, anthropic: setup.anthropicKeyId, google: setup.googleKeyId }, consentToProviderProcessing: true, acknowledgeProviderCharges: true },
+    })
+    expect(again.status, JSON.stringify(again.json)).toBe(202)
+    await h.drainJobs()
+    const rerouted = await unseal(again.json.data.runId as string)
+    for (const testCase of rerouted.cases) {
+      for (const response of testCase.responses) {
+        if (response.configurationKey === geminiKey) expect(response.modelNote).toBe('Google reported that gemini-3.6-flash-lite answered, not gemini-3.6-flash, the model this hearing asked for.')
+        else expect(response.modelNote).toBeNull()
+      }
+    }
+  })
 })
 
 describe('the special master on a Gemini route', () => {
@@ -224,8 +262,13 @@ describe('the outbound allowlist', () => {
     const runId = (await start(setup)).json.data.runId as string
     await h.drainJobs()
     expect(googleCalls()).toEqual([])
-    const attempts = await h.db.prepare(`SELECT a.error_code, a.status FROM generation_attempts a JOIN generations g ON g.id = a.generation_id WHERE g.run_id = ? AND g.provider = 'google'`).bind(runId).all()
-    expect(attempts.results.every((a) => a.error_code === 'PROVIDER_REJECTED_REQUEST' && a.status === 'failed')).toBe(true)
+    const attempts = await h.db.prepare(`SELECT a.error_code, a.status, a.unsent FROM generation_attempts a JOIN generations g ON g.id = a.generation_id WHERE g.run_id = ? AND g.provider = 'google'`).bind(runId).all()
+    expect(attempts.results.length).toBeGreaterThan(0)
+    // D-113: marked unsent, so setup metrics do not count it as a provider call.
+    expect(attempts.results.every((a) => a.error_code === 'PROVIDER_REJECTED_REQUEST' && a.status === 'failed' && a.unsent === 1)).toBe(true)
+    const sent = await h.db.prepare(`SELECT a.unsent FROM generation_attempts a JOIN generations g ON g.id = a.generation_id WHERE g.run_id = ? AND g.provider <> 'google'`).bind(runId).all()
+    expect(sent.results.length).toBeGreaterThan(0)
+    expect(sent.results.every((a) => a.unsent === 0)).toBe(true)
     const reservations = await h.db.prepare(`SELECT r.state FROM attempt_reservations r JOIN generations g ON g.id = r.generation_id WHERE g.run_id = ? AND g.provider = 'google'`).bind(runId).all()
     expect(reservations.results.every((r) => r.state === 'released')).toBe(true)
     void REVIEWER

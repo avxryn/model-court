@@ -95,6 +95,7 @@ function QuestionRecord({ testCase, labels, checkLabels, rubricVersion, sources 
                 {response.truncated && ' · truncated at the output limit'}
               </span>
             </div>
+            {response.modelNote && <p className="text-xs text-warning">{response.modelNote}</p>}
             {(response as { trace?: ToolTrace }).trace ? (
               // Spec 06 §3 (D-103): after unsealing, which response answered each call and per-step usage.
               <ToolTraceView label={labels[response.configurationKey] ?? ''} trace={jurorTrace((response as { trace: ToolTrace }).trace)} full={(response as { trace: ToolTrace }).trace} usage={(response as { steps?: StepUsage[] }).steps} maxSteps={(testCase as { kitFields?: { maxSteps?: number } | null }).kitFields?.maxSteps} />

@@ -3,6 +3,7 @@
  * demand from the frozen manifest and the cohort captured at reveal.
  */
 
+import { observedModelNote } from '../../domain/observed-model'
 import { z } from 'zod'
 import type { DraftRating } from '../../domain/contracts'
 import { verdictSchema } from '../../domain/contracts'
@@ -41,6 +42,9 @@ interface AttemptRow {
   truncated: number
   observed_model: string | null
   trace_json: string | null
+  kind: string
+  steps_used: number | null
+  unsent: number
 }
 
 /** Spec 06 §5.4 (D-102): per-step usage of a tool attempt, after unsealing only. No provider ids. */
@@ -69,7 +73,7 @@ export async function loadScoredRun(deps: Deps, run: RunRow) {
   const attempts = (
     await db
       .prepare(
-        `SELECT a.id, a.generation_id, a.attempt_no, a.status, a.output_text, a.finish_reason, a.input_tokens, a.output_tokens, a.cached_input_tokens, a.reasoning_tokens, a.duration_ms, a.error_code, a.truncated, a.observed_model, a.trace_json
+        `SELECT a.id, a.generation_id, a.attempt_no, a.status, a.output_text, a.finish_reason, a.input_tokens, a.output_tokens, a.cached_input_tokens, a.reasoning_tokens, a.duration_ms, a.error_code, a.truncated, a.observed_model, a.trace_json, a.kind, a.steps_used, a.unsent
          FROM generation_attempts a JOIN generations g ON g.id = a.generation_id WHERE g.run_id = ? ORDER BY a.attempt_no`,
       )
       .bind(runId)
@@ -145,6 +149,9 @@ export function runSetupMetrics(deps: Deps, run: Pick<RunRow, 'created_at'>, { s
         cachedInputTokens: attempt.cached_input_tokens,
         reasoningTokens: attempt.reasoning_tokens,
         durationMs: attempt.duration_ms,
+        // D-113: the calls this attempt really sent: none when refused before the send, the steps a
+        // tool loop sent, one otherwise.
+        providerCalls: attempt.unsent === 1 ? 0 : attempt.kind === 'tool_loop' ? (attempt.steps_used ?? null) : 1,
       })),
   }))
   const metrics = setupMetrics(
@@ -269,6 +276,7 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
             reasoningTokens: null,
             durationMs: null,
             observedModel: null,
+            modelNote: null,
             sha256: output?.text_sha256 ?? null,
           }
         }
@@ -292,6 +300,8 @@ export async function getResults(deps: Deps, userId: string, runId: string) {
           reasoningTokens: accepted?.reasoning_tokens ?? null,
           durationMs: accepted?.duration_ms ?? null,
           observedModel: accepted?.observed_model ?? null,
+          // Spec 07 Q1 (D-115): Google answered from another model than the one asked for.
+          modelNote: observedModelNote(configuration.provider, configuration.modelId, accepted?.observed_model ?? null),
           // Spec 06 §5.4 (D-102): the full trace (which response answered each call) and per-step usage.
           ...(accepted?.trace_json ? { trace: JSON.parse(accepted.trace_json) as ToolTrace, steps: stepsOf(accepted.id) } : {}),
           // Every sample side by side, only when the judge asked for repeats (D-65). After reveal only, like everything here.

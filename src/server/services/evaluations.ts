@@ -157,7 +157,14 @@ export function parseStoredDraft(row: Pick<EvaluationRow, 'draft_json'>): Draft 
     // Spec 03 (D-75): the task kit; each case keeps its own kitFields as part of `cases`.
     ...(raw.kit !== undefined ? { kit: raw.kit } : {}),
   })
-  if (!parsed.success) throw new ApiError(500, 'INTERNAL', 'Stored draft failed validation.')
+  if (!parsed.success) {
+    // D-114: a stored draft whose only fault is parties × questions over the limit (it cannot be saved
+    // that way, but one written into the store directly can exist) gets the plain-words refusal, not a
+    // generic error. Anything else stays an internal error.
+    const capError = testimonyCapError(Array.isArray(raw.configurations) ? raw.configurations.length : 0, Array.isArray(raw.cases) ? raw.cases.length : 0)
+    if (capError && parsed.error.issues.every((issue) => issue.message === capError.message)) throw capError
+    throw new ApiError(500, 'INTERNAL', 'Stored draft failed validation.')
+  }
   return { schemaVersion: 1, ...parsed.data }
 }
 

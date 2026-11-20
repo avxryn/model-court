@@ -1056,6 +1056,17 @@ export const MIGRATIONS: Migration[] = [
        BEGIN SELECT RAISE(ABORT, 'IMMUTABLE_GRADER_CREDENTIALS'); END`,
     ],
   },
+  {
+    // D-113: an attempt refused before any network send (the outbound allowlist, a missing document or
+    // source, an unusable key, an adapter that cannot carry the request, a fence before the send) is
+    // marked, so setup metrics do not count it as a provider call. Additive: existing rows read 0, which
+    // is what they were counted as before. Set once, in the attempt's final commit.
+    id: '0016_attempt_unsent',
+    statements: [
+      `ALTER TABLE generation_attempts ADD COLUMN unsent INTEGER NOT NULL DEFAULT 0 CHECK (unsent IN (0,1))`,
+      immutable('generation_attempts', 'unsent', "OLD.status <> 'running'"),
+    ],
+  },
 ]
 
 const LEDGER = `CREATE TABLE IF NOT EXISTS mc_schema_migrations (id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`

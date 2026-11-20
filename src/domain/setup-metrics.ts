@@ -23,6 +23,11 @@ export interface AttemptUsage {
   cachedInputTokens: number | null
   reasoningTokens: number | null
   durationMs: number | null
+  /**
+   * D-113: provider calls this attempt sent, when recorded: 0 for an attempt refused before any send,
+   * the steps a tool loop sent. Absent or null: the record's per-attempt count, as before.
+   */
+  providerCalls?: number | null
 }
 
 /** One testimony (one generation slot), however many provider calls it took. */
@@ -162,10 +167,11 @@ export function setupMetrics(input: SetupMetricsInput, table: PriceTable, import
       for (const attempt of record.attempts) {
         if (attempt.attemptNo === 2) retries++
         if (attempt.status === 'running') continue
-        // A canceled or provably unsent attempt never reached the provider.
-        const unsent = attempt.status === 'canceled' || attempt.errorCode === 'CANCELED'
-        if (!unsent) providerCalls += callsPerAttempt
-        if ((attempt.status === 'failed' || attempt.status === 'uncertain') && attempt.errorCode && !unsent) {
+        // A canceled attempt never reached the provider; one refused before the send (D-113) sent nothing
+        // either, but its error still counts, because the owner should see why the testimony is missing.
+        const canceled = attempt.status === 'canceled' || attempt.errorCode === 'CANCELED'
+        if (!canceled) providerCalls += typeof attempt.providerCalls === 'number' ? attempt.providerCalls : callsPerAttempt
+        if ((attempt.status === 'failed' || attempt.status === 'uncertain') && attempt.errorCode && !canceled) {
           errorCodes[attempt.errorCode] = (errorCodes[attempt.errorCode] ?? 0) + 1
         }
         const hasUsage = attempt.inputTokens !== null && attempt.outputTokens !== null

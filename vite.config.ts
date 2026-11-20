@@ -1,5 +1,6 @@
+import { existsSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import react from '@vitejs/plugin-react'
 import generouted from '@generouted/react-router/plugin'
 import { cloudflare } from '@cloudflare/vite-plugin'
@@ -8,6 +9,11 @@ import { deepspaceBuild } from 'deepspace/build'
 import { prerender } from './prerender.ts'
 
 const appDir = fileURLToPath(new URL('.', import.meta.url))
+// A worktree may link node_modules to another checkout (a junction or symlink). Vite resolves the
+// link and would refuse files outside this root with a 403 (fonts on the landing, in smoke), so the
+// resolved folder is allowed too. With a real node_modules this adds nothing.
+const nodeModules = fileURLToPath(new URL('./node_modules', import.meta.url))
+const linkedModules = existsSync(nodeModules) ? realpathSync(nodeModules) : nodeModules
 
 export default defineConfig({
   plugins: [
@@ -46,6 +52,11 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    fs: {
+      allow: [searchForWorkspaceRoot(appDir), linkedModules],
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

@@ -141,6 +141,29 @@ describe('setupMetrics', () => {
     expect(metrics.A.calls).toMatchObject({ canceled: 1, providerCalls: 0, errorCodes: {} })
   })
 
+  it('counts an attempt refused before the send as no provider call, but keeps its error (D-113)', () => {
+    const metrics = setupMetrics(
+      {
+        parties: [PARTIES[0]],
+        eligibleCaseKeys: [],
+        records: [
+          rec('q1', 'A', 'failed', [fail('PROVIDER_REJECTED_REQUEST', true, { providerCalls: 0 })]),
+          rec('q2', 'A', 'failed', [fail('PROVIDER_REJECTED_REQUEST', true, { providerCalls: 1 })]),
+        ],
+      },
+      TABLE,
+    )
+    expect(metrics.A.calls).toMatchObject({ failed: 2, providerCalls: 1, errorCodes: { PROVIDER_REJECTED_REQUEST: 2 } })
+  })
+
+  it('counts the steps a tool attempt sent when they are recorded (D-113)', () => {
+    const metrics = setupMetrics(
+      { parties: [PARTIES[0]], eligibleCaseKeys: [], records: [rec('q1', 'A', 'failed', [fail('TOOL_PROTOCOL_ERROR', true, { providerCalls: 3 })], { calls: 1 })] },
+      TABLE,
+    )
+    expect(metrics.A.calls.providerCalls).toBe(3)
+  })
+
   it('reports no price for unpriced routes and imported parties separately', () => {
     const metrics = setupMetrics(
       {
