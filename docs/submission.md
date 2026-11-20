@@ -10,7 +10,7 @@ where the agent helped). The full note follows the form text. Agent facts come f
 | Field | Value |
 |---|---|
 | Deployed app URL | `https://model-court.app.space/` |
-| Repository | `github.com/avxryn/model-court` (reviewers need access: make it public or add them) |
+| Repository | `github.com/avxryn/model-court` (public since Nov 20) |
 
 ### Writeup (plain text, paste as is)
 
@@ -80,9 +80,9 @@ Where the agent helped: the coding agent wrote the code, tests, docs and deploys
 - [x] The live URL works for a fresh judge account and a second juror account: one full hearing,
       unsealed, with a verdict (Nov 20: 10/10 live calls, a guest juror, unsealed, judgment entered; [verification.md](verification.md))
 - [x] Both providers verified with a real call (Nov 17; [provider-contracts.md](provider-contracts.md))
-- [ ] The repository is accessible to reviewers. `avxryn/model-court` is private; make it public or
-      add the reviewers. The tree and full history were scanned for real key formats before each push
-      and none were found.
+- [x] The repository is accessible to reviewers: `avxryn/model-court` is public since Nov 20, with branch
+      protection, secret scanning and push protection on. The tree and full history were scanned for real
+      key formats before each push and before publishing, and none were found.
 - [x] `master` matches what is live (fast-forwarded to `claude/roadmap-1-3` on Nov 20)
 - [x] Part B of [verification.md](verification.md) holds your own checks (Nov 17 and Nov 20)
 - [ ] The note above contains only observed facts, and you have read it through (every bracket is filled)
