@@ -50,8 +50,8 @@ The note to submit, and the checklist to finish first. Due **Friday Nov 20, 2026
 
 ## Checklist
 
-- [ ] The live URL works for a fresh judge account and a second juror account: one full hearing,
-      unsealed, with a verdict
+- [x] The live URL works for a fresh judge account and a second juror account: one full hearing,
+      unsealed, with a verdict (Nov 20: 10/10 live calls, a guest juror, unsealed, judgment entered; [verification.md](verification.md))
 - [x] Both providers verified with a real call (Nov 17; [provider-contracts.md](provider-contracts.md))
 - [ ] The repository is accessible to reviewers. `avxryn/model-court` is private; make it public or
       add the reviewers. The tree and full history were scanned for real key formats before each push
