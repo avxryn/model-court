@@ -71,5 +71,5 @@ The note to submit, and the checklist to finish first. Due **Friday Nov 20, 2026
 - [x] `master` matches what is live (fast-forwarded to `claude/roadmap-1-3` on Nov 20)
 - [x] Part B of [verification.md](verification.md) holds your own checks (Nov 17 and Nov 20)
 - [ ] The note above contains only observed facts, and you have read it through (every bracket is filled)
-- [ ] The exposed Anthropic key is rotated
+- [x] The exposed Anthropic key is rotated (Nov 20)
 - [ ] Submitted before **Friday Nov 20, 2026, 11:59 p.m. Eastern**

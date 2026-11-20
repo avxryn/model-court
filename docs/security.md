@@ -159,9 +159,10 @@ was fixed in D-113).
 
 ## Open risks
 
-> [!WARNING]
-> An Anthropic API key was exposed and still has to be rotated. Revoke it in the Anthropic console, create a
-> new workspace key, and replace the saved key in Settings. Never paste a key into a document, chat or command.
+> [!NOTE]
+> An Anthropic API key that was exposed earlier was rotated by Avery on Nov 20, 2026 (reported in the working
+> session). Never paste a key into a document, chat or command; if one is exposed, revoke it at the
+> provider, create a new one and replace the saved key in Settings.
 
 | Risk | State | Source |
 |---|---|---|
