@@ -97,7 +97,7 @@ npx deepspace dev start
 
 See `docs/runbook.md`. Keep generation off (`GENERATION_ENABLED="false"`) on a new deployment until
 the providers pass `npm run smoke:providers`. A migration that rebuilds tables (0009, 0015) needs a
-backup first; the live backup path is not built yet (runbook, "Backup and restore").
+backup first (runbook, "The live backup path": `npm run backup`).
 
 ### Verification after deploy
 
@@ -123,7 +123,7 @@ jurors · 2 attempts per answer · 20 calls per user per day, 100 per day and 50
 
 ## Known unfinished edges
 
-- No live backup path yet (V9): items 1–7 were deployed without one, on Avery's choice.
+- The live backup path (D-117: sealed daily backups to the owner's private files) is built but not yet turned on or checked on DeepSpace; items 1–7 were deployed without a backup, on Avery's choice.
 - No full signed-in hearing with jurors on the live app yet; the roadmap's signed-in screens are covered by render and integration tests, not by Playwright.
 - Paid smoke checks pending for multi-message calls, structured output, PDF, tool calls and Gemini, so those hearings stay blocked.
 - Accessibility checks beyond axe and the 390 px layout (keyboard-only review, 200% zoom, contrast audit) are pending.

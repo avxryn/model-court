@@ -4,7 +4,7 @@
  * Worker `fetch` for the two fixed provider endpoints.
  */
 
-import { enqueueJob, verifyJwt } from 'deepspace/worker'
+import { appFiles, enqueueJob, verifyJwt, type AppFilesEnv } from 'deepspace/worker'
 import { MODEL_ROUTES, PRICE_TABLES } from '../domain/registry'
 import { NOTICES_COLLECTION } from '../schemas/notices-schema'
 import type { Env } from '../../worker'
@@ -16,6 +16,36 @@ import { TOOL_STEP_JOB_TYPE } from './services/tool-loop'
 import { SqlBatchDatabase } from './db/sql-batch-database'
 import { storeStub, type ModelCourtStore } from './db/store-object'
 import { allowlistedFetch } from './providers/endpoints'
+import type { BackupFiles } from './services/store-backup'
+
+/**
+ * V9 (D-117): the app owner's private files folder (`scope: 'self'`), used only for sealed backups.
+ * The owner downloads from it with `npx deepspace app files get --private <key>`; it is never public.
+ */
+function ownerBackupFiles(env: Env): BackupFiles | undefined {
+  if (!env.OWNER_USER_ID) return undefined
+  const files = () => appFiles(env as unknown as AppFilesEnv, { scope: 'self', userId: env.OWNER_USER_ID })
+  return {
+    upload: async (key, body) => {
+      await files().upload(new Blob([body], { type: 'application/json' }), { key, name: key.split('/').pop() })
+    },
+    list: async (prefix) => {
+      const out: Array<{ key: string; ref: string }> = []
+      let cursor: string | undefined
+      // Bounded: retention keeps at most 60 backups, so a few pages at most.
+      for (let page = 0; page < 20; page++) {
+        const result = await files().list({ prefix, limit: 100, ...(cursor ? { cursor } : {}) })
+        out.push(...result.files.map((file) => ({ key: file.relativeKey, ref: file.key })))
+        if (!result.cursor) break
+        cursor = result.cursor
+      }
+      return out
+    },
+    remove: async (ref) => {
+      await files().delete(ref)
+    },
+  }
+}
 
 /**
  * A fresh adapter (and Durable Object stub) per call of platformDeps, i.e. per
@@ -80,5 +110,6 @@ export function platformDeps(env: Env): Deps {
     // Spec 07 §6.5: the explicit outbound allowlist; adapters and the key check narrow it to one provider.
     providerFetch: allowlistedFetch((input, init) => fetch(input, init), undefined, (event) => console.log(JSON.stringify({ app: 'model-court', ...event }))),
     log: (event) => console.log(JSON.stringify({ app: 'model-court', ...event })),
+    backupFiles: ownerBackupFiles(env),
   }
 }

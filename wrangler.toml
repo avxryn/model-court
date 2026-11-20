@@ -45,6 +45,11 @@ MAX_DAILY_CALLS_GLOBAL = "100"
 MAX_LIFETIME_CALLS_GLOBAL = "500"
 # Exact https origin used for invitation links; empty = the request origin.
 PUBLIC_APP_ORIGIN = ""
+# V9 (D-117): sealed daily backups to the owner's private files. Set this to the public key printed by
+# `npm run backup -- keygen` (not a secret) to turn them on; see docs/runbook.md "The live backup path".
+# BACKUP_PUBLIC_KEY = ""
+# Operator-only: take one backup now (epoch ms); BACKUP_KEEP (default 14) sets how many are kept.
+# BACKUP_REQUESTED_AT = ""
 # Shipped revision recorded in run snapshots; set to the commit you deploy.
 APP_COMMIT = "d00ff70"
 

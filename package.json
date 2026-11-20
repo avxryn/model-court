@@ -31,6 +31,7 @@
     "test:integration": "vitest run -c vitest.integration.config.ts",
     "check": "tsc --noEmit && eslint . && vitest run && vitest run -c vitest.integration.config.ts && vitest run -c vitest.integration.store.config.ts && npm run test:smoke",
     "secrets:provision": "node scripts/provision-app-secrets.mjs",
+    "backup": "esbuild scripts/backup.ts --bundle --platform=node --format=esm --outfile=.smoke/backup.mjs --external:wrangler --log-level=warning && node .smoke/backup.mjs",
     "smoke:providers": "esbuild scripts/provider-smoke.ts --bundle --platform=node --format=esm --outfile=.smoke/provider-smoke.mjs --log-level=warning && node .smoke/provider-smoke.mjs",
     "test:integration:store": "vitest run -c vitest.integration.store.config.ts"
   },

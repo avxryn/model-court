@@ -31,6 +31,12 @@ export interface ConfigEnv {
   CREDENTIAL_REKEY_REVOKE_UNREADABLE?: string
   /** Operator-only, after a store restore: revoke every active key created before this epoch-ms instant. */
   CREDENTIAL_REVOKE_CREATED_BEFORE?: string
+  /** V9 (D-117): the operator's P-256 public key (base64 SPKI). Set = daily sealed backups on. Public, not a secret. */
+  BACKUP_PUBLIC_KEY?: string
+  /** V9: how many backups to keep in the owner's private folder (1–60, default 14). */
+  BACKUP_KEEP?: string
+  /** V9: operator-only; take one backup now unless one exists at or after this epoch-ms instant. */
+  BACKUP_REQUESTED_AT?: string
   APP_COMMIT?: string
   DEEPSPACE_APP_ID: string
 }
@@ -61,7 +67,41 @@ export interface AppConfig {
     rekeyRevokeUnreadable: boolean
     revokeCreatedBefore: number | null
   }
+  /**
+   * V9 (D-117): sealed backups to the owner's private files. `publicKey` null = off. Problems here are
+   * logged by the backup task and never make the app unready.
+   */
+  backup: { publicKey: string | null; keep: number; requestedAt: number | null; problems: string[] }
   problems: string[]
+}
+
+/** A P-256 SPKI is 91 bytes and starts with this DER prefix (id-ecPublicKey, prime256v1). Full check at seal time. */
+const P256_SPKI_PREFIX = [0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07]
+
+function backupConfig(env: ConfigEnv): AppConfig['backup'] {
+  const problems: string[] = []
+  let publicKey: string | null = null
+  const raw = env.BACKUP_PUBLIC_KEY?.trim()
+  if (raw) {
+    const bytes = decodeBase64Key(raw, 91)
+    if (bytes && P256_SPKI_PREFIX.every((byte, index) => bytes[index] === byte)) publicKey = raw
+    else problems.push('BACKUP_PUBLIC_KEY is not a base64 P-256 public key; backups are off.')
+  }
+  let keep = 14
+  const keepRaw = env.BACKUP_KEEP?.trim()
+  if (keepRaw) {
+    const parsed = Number(keepRaw)
+    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 60) keep = parsed
+    else problems.push('BACKUP_KEEP is not an integer from 1 to 60; keeping 14.')
+  }
+  let requestedAt: number | null = null
+  const requested = env.BACKUP_REQUESTED_AT?.trim()
+  if (requested) {
+    const parsed = Number(requested)
+    if (Number.isSafeInteger(parsed) && parsed > 0) requestedAt = parsed
+    else problems.push('BACKUP_REQUESTED_AT is not a positive epoch-millisecond integer; ignored.')
+  }
+  return { publicKey, keep, requestedAt, problems }
 }
 
 function decodeBase64Key(value: string | undefined, bytes: number): Uint8Array<ArrayBuffer> | null {
@@ -175,6 +215,7 @@ export function parseConfig(env: ConfigEnv): AppConfig {
       rekeyRevokeUnreadable: rekeyTargetVersion !== null && env.CREDENTIAL_REKEY_REVOKE_UNREADABLE === 'true',
       revokeCreatedBefore,
     },
+    backup: backupConfig(env),
     credentialTtlMs: Math.min(Math.max(positiveInt(env.CREDENTIAL_TTL_DAYS, 7, problems, 'CREDENTIAL_TTL_DAYS') || 7, 1), 90) * 24 * 60 * 60 * 1000,
     problems,
   }

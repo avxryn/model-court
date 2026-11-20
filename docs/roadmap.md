@@ -14,7 +14,7 @@ Ordered by usefulness for the effort, given what the app already has.
 | 6. Mock tools | D-99–D-105 | Blocked until a route passes the paid tools smoke mode |
 | 7. Providers and parties | D-106–D-112 | Gemini routes off until Avery's live check; up to 3 parties live (5 in code) |
 
-Follow-ups after delivery: D-113–D-116. Still open: a live backup path (V9, `docs/runbook.md`), signed-in
+Follow-ups after delivery: D-113–D-117 (D-117: the live backup path, built, not yet turned on). Still open: signed-in
 Playwright runs (they need a test account), and Avery's confirmation of each spec's defaults.
 
 ## Goal

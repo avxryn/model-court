@@ -4,6 +4,7 @@
  * external boundaries (identity token issuer, job queue, notices, provider fetch).
  */
 
+import type { BackupFiles } from './services/store-backup'
 import type { KitTable } from '../domain/kits/registry'
 import type { PriceTable } from '../domain/prices'
 import type { ModelRoute } from '../domain/registry'
@@ -55,6 +56,8 @@ export interface Deps {
   providerFetch: typeof fetch
   /** Structured, allowlisted operational log line (no content, no secrets). */
   log: (event: Record<string, string | number | boolean | null>) => void
+  /** V9 (D-117): the app owner's private files, for sealed backups only; absent = backups off. */
+  backupFiles?: BackupFiles
   /** Task kits by version (spec 03, D-76); absent means the registry's `KITS`. Integration tests inject a kit here. */
   kits?: KitTable
 }

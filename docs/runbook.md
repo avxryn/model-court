@@ -189,21 +189,48 @@ the parts that can be tested locally:
 Verified locally on both stores (`tests/integration/backup-restore.test.ts`, and the post-restore cases in
 `credential-rekey.test.ts`).
 
-### What still needs the live platform (unverified)
+### The live backup path (D-117)
 
-No operator path yet runs `exportSnapshot` against the live store or carries a file in or out. Choose one,
-then verify it end to end on a staging app before relying on it:
+Sealed backups go to the app owner's **private** files folder (`appFiles`, `scope: 'self'`), sealed to an
+operator P-256 public key. The Worker holds only the public key, so it can write new backups but never read
+old ones, and there is no backup secret to upload. There is no HTTP route that exports or restores.
 
-1. **Durable Object point-in-time recovery.** SQLite-backed Durable Objects keep 30 days of history
-   (`ctx.storage.getBookmarkForTime`, `onNextSessionRestoreBookmark`). This needs a method on
-   `ModelCourtStore` and a way for the operator to call it. It is unknown whether DeepSpace exposes
-   either. The restore happens in place and **brings back old ciphertext**, so step 3 below is mandatory.
-2. **Sealed export to per-app storage.** A cron-triggered export, sealed under a new
-   `MODEL_COURT_BACKUP_KEY` secret and written to a per-app R2 bucket (`[[r2_buckets]]` with
-   `bucket_name = "auto"`), then downloaded with a platform tool. Neither the bucket provisioning nor a
-   download command has been checked. A stronger variant seals to an operator-held public key, so the
-   Worker cannot read old backups.
-3. **No temporary public route.** Do not add an HTTP export or restore endpoint, even one restricted to the owner.
+- **Daily:** the `mc-backup` cron task runs at 03:17 America/Chicago once `BACKUP_PUBLIC_KEY` is set.
+- **On demand:** set `BACKUP_REQUESTED_AT` to the current epoch ms and deploy; within a minute the
+  maintenance task takes one backup unless one at or after that time exists. Leaving it set is harmless.
+- **Retention:** the newest `BACKUP_KEEP` files (default 14) under `model-court-backups/`; other files in
+  the folder are never touched.
+- **Logs:** `backup.written` (key, bytes, rows), `backup.failed` (a reason word), `backup.config_problem`.
+  Backup settings never make `/healthz` unready.
+
+**One-time setup (Avery):**
+
+1. `npm run backup -- keygen` on your own machine. It writes the private key to
+   `~/.model-court/backup-private-key.txt` (never shown) and prints the public key. Move the private key
+   into your password manager; without it no backup can be opened.
+2. Put the public key in `wrangler.toml` `[vars]` as `BACKUP_PUBLIC_KEY` (it is not a secret) and deploy.
+
+**Taking and checking a backup:**
+
+1. Set `BACKUP_REQUESTED_AT` (`node -e "console.log(Date.now())"`) and deploy, or wait for the daily run.
+2. `npx deepspace logs --search backup.` shows `backup.written` with its key.
+3. `npx deepspace app files list --private` lists `model-court-backups/…`;
+   `npx deepspace app files get --private model-court-backups/<file>.json --out <file>.json` downloads one.
+4. `npm run backup -- open <file>.json` checks the seal and the content digest and prints row counts.
+   `npm run backup -- trial-restore <file>.json` restores it into a fresh, in-memory local store and
+   compares every table's row count (the restore adds one `store.restore` audit event).
+
+**Before a deploy that rebuilds tables** (0009, 0015 and any later rebuild): take an on-demand backup with
+the release that is live now, confirm `backup.written`, download it and run `trial-restore`, then deploy the
+new code. Keep that file until a hearing has run end to end on the new version.
+
+**Verified:** sealing, opening, retention, the request logic and the restore on both local stores
+(`store-backup.test.ts`, `backup-seal.test.ts`), and `open` and `trial-restore` on a real sealed file.
+**Not yet verified live:** that `appFiles` writes from a cron context on DeepSpace, and that
+`app files get --private` reads what the Worker wrote. The first on-demand backup after deploying checks both.
+
+Durable Object point-in-time recovery (`getBookmarkForTime`) is still not exposed by DeepSpace as far as
+we know; if it is used, it brings back old ciphertext, so step 3 of the restore procedure is mandatory.
 
 ### Restore procedure (any method)
 
