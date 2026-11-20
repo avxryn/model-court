@@ -1,5 +1,7 @@
 # Spec 07: More providers and more parties
 
+**Delivered** Nov 19, 2026: built on `claude/roadmap-1-3` and deployed to the live app (build `fbe5c5c`); decisions D-106–D-112 in `docs/decisions.md`. Open questions were answered with this spec's proposed defaults, for Avery to confirm. The status line below is the spec as first written.
+
 Status: draft, Nov 18, 2026. Research only. No code, no paid calls. Roadmap item 7 (`docs/roadmap.md`).
 Read with `docs/provider-contracts.md`, `docs/architecture.md` and `docs/specs/02-scenarios.md` (its
 "compare through an anchor" is the other half of the "more parties" answer).

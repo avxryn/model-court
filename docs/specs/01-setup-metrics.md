@@ -1,5 +1,7 @@
 # Spec 01: Setup comparison (cost, speed and consistency)
 
+**Delivered** Nov 19, 2026: built on `claude/roadmap-1-3` and deployed to the live app (build `fbe5c5c`); decisions D-62–D-66 in `docs/decisions.md`. Open questions were answered with this spec's proposed defaults, for Avery to confirm. The status line below is the spec as first written.
+
 Status: draft for review, Nov 18, 2026. Roadmap item 1 (`docs/roadmap.md`). Research only so far: no code,
 no migration, no deploy. Work lands on a branch cut from `master` after the v1 submission (Nov 20, 11:59 p.m.
 Eastern) and deploys only when Avery says so.

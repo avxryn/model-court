@@ -1,5 +1,7 @@
 # Spec 02: Reusable scenarios and re-hearing
 
+**Delivered** Nov 19, 2026: built on `claude/roadmap-1-3` and deployed to the live app (build `fbe5c5c`); decisions D-67–D-72 in `docs/decisions.md`. Open questions were answered with this spec's proposed defaults, for Avery to confirm. The status line below is the spec as first written.
+
 Status: draft for review, Nov 18, 2026. Roadmap item 2 (`docs/roadmap.md`). Research only: nothing here is
 built. Lands on a branch after the submission (Nov 20, 11:59 p.m. Eastern) and deploys only when Avery says so.
 

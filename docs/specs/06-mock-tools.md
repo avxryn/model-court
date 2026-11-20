@@ -1,5 +1,7 @@
 # Spec 06: Tool calling with mock tools
 
+**Delivered** Nov 19, 2026: built on `claude/roadmap-1-3` and deployed to the live app (build `fbe5c5c`); decisions D-99–D-105 in `docs/decisions.md`. Open questions were answered with this spec's proposed defaults, for Avery to confirm. The status line below is the spec as first written.
+
 Status: draft for review, Nov 18, 2026. Roadmap item 6 (`docs/roadmap.md`). Research only: no code, no
 migration and no paid call has been made for this spec. Builds on the task-kit contract in
 `docs/roadmap.md` ("The shared contract: task kits"); `docs/specs/03-task-kits.md` did not exist when

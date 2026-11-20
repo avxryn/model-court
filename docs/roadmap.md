@@ -1,7 +1,21 @@
 # Model Court roadmap: use-case kits
 
-Status: planning, Nov 18, 2026. Each item gets a spec in `docs/specs/` before any code.
+Status: **delivered**, Nov 19, 2026. All seven items are built on `claude/roadmap-1-3`, each from its spec in
+`docs/specs/`, and deployed to the live app (build `fbe5c5c`, recorded in `docs/verification.md`).
 Ordered by usefulness for the effort, given what the app already has.
+
+| Item | Decisions | Live state |
+|---|---|---|
+| 1. Setup comparison | D-62–D-66 | On. Cost is an estimate from the dated price table |
+| 2. Scenarios and re-hearing | D-67–D-72 | On |
+| 3. Task kits, summarization, classification | D-75–D-80 | On (text kits need no extra provider check) |
+| 4. Structured extraction | D-85–D-91 | Blocked until a route passes the paid json (and pdf) smoke modes |
+| 5. Grounded sources | D-92–D-98 | On |
+| 6. Mock tools | D-99–D-105 | Blocked until a route passes the paid tools smoke mode |
+| 7. Providers and parties | D-106–D-112 | Gemini routes off until Avery's live check; up to 3 parties live (5 in code) |
+
+Follow-ups after delivery: D-113–D-116. Still open: a live backup path (V9, `docs/runbook.md`), signed-in
+Playwright runs (they need a test account), and Avery's confirmation of each spec's defaults.
 
 ## Goal
 
@@ -24,7 +38,8 @@ leaderboard, no platform-paid calls, no fully automatic verdicts (see "Out of sc
 - Keys, cost, consent and deletion are always in plain words. Court terms are display strings only.
 - Tests with each feature: unit for pure rules, integration on both stores, Playwright for flows.
 - The submission build stays untouched until it is submitted (Nov 20, 11:59 p.m. Eastern). Roadmap
-  work lands on branches and deploys only when Avery says so.
+  work lands on branches and deploys only when Avery says so. (Avery chose to deploy items 1–7 on Nov 19,
+  before the deadline and without a backup; see `docs/verification.md`.)
 
 ## What already exists (build on it)
 

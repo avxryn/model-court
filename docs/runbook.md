@@ -148,6 +148,12 @@ needs no backup first (unlike 0009). Older code never names the tables. A store 
 whole and leaves PDF bytes out (`redactions.pdfChunksOmitted`); after a restore those PDFs read "Source file not restored"
 until the judge uploads the same file again on the draft, which restores the hearing's copy too.
 
+## Migration 0016 (attempt unsent marker, D-113)
+
+`0016_attempt_unsent` only adds one column, `generation_attempts.unsent` (default 0), and one trigger; no table is rebuilt,
+so it needs no backup first. Older code never names the column, so rolling the app back is safe. Backups taken before it
+restore after it (the column takes its default).
+
 ## pdf.js (spec 04 decision 9, D-90)
 
 `pdfjs-dist` is pinned to an exact version (6.5.438) and loaded only on PDF screens, from the app's own origin. Treat every

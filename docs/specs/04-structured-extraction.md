@@ -1,5 +1,7 @@
 # Spec 04: Structured extraction (text, then PDF)
 
+**Delivered** Nov 19, 2026: built on `claude/roadmap-1-3` and deployed to the live app (build `fbe5c5c`); decisions D-85–D-91 in `docs/decisions.md`. Open questions were answered with this spec's proposed defaults, for Avery to confirm. The status line below is the spec as first written.
+
 Status: approved, Nov 18, 2026. Avery accepted all ten recommendations (section 14). Roadmap item 4
 (`docs/roadmap.md`). No code yet.
 Builds on the task-kit contract in `docs/roadmap.md` ("The shared contract: task kits") and on spec 03

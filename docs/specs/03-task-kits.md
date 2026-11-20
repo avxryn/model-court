@@ -1,5 +1,7 @@
 # Spec 03: Task kits and automatic checks, with summarization and classification
 
+**Delivered** Nov 19, 2026: built on `claude/roadmap-1-3` and deployed to the live app (build `fbe5c5c`); decisions D-75–D-80 in `docs/decisions.md`. Open questions were answered with this spec's proposed defaults, for Avery to confirm. The status line below is the spec as first written.
+
 Status: draft for review, Nov 18, 2026. Roadmap item 3 (`docs/roadmap.md`). Research only: nothing here is
 built, and nothing lands on `master` or the live app before the Nov 20 submission and Avery's go-ahead.
 Decision number to record when built: the next free `D-` entry in `docs/decisions.md` (D-62 at the time of
