@@ -52,7 +52,7 @@ Non-goals:
   (roadmap "Deferred": no cross-customer aggregation). Sharing is a file the judge chooses to send.
 - Pooling scores across hearings, statistical tests, or a ranking of setups across hearings.
 - Reusing earlier testimony in a new hearing (open question Q4); every re-hearing regenerates.
-- Repeat samples of the same setup within one hearing (item 1, `docs/specs/01-setup-metrics.md`).
+- Repeat samples of the same setup within one hearing (item 1, `docs/archive/specs/01-setup-metrics.md`).
 - More than three parties in one hearing (item 7). Chaining hearings through an anchor is the
   interim way to look at more setups.
 

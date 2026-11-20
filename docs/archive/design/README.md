@@ -19,7 +19,7 @@ Findings that cut across notes:
 ## Research: can jurors sign in with an email link or email/password?
 
 **Answer: no, not for real users on DeepSpace today.** Phase 3's "email-link sign-in for jurors" should be
-recorded as unsupported and stopped, as `docs/v2-plan.md` says. Checks were read-only: package sources, the CLI's
+recorded as unsupported and stopped, as `docs/archive/v2-plan.md` says. Checks were read-only: package sources, the CLI's
 `--help`, and the public docs. No account was created and nothing was deployed.
 
 Evidence:

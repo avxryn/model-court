@@ -1,6 +1,6 @@
 /**
  * Phase 7 (D-41): accountless jurors. Re-proves pre-reveal blinding and access
- * control for the cookie path, as docs/design/accountless-jurors.md requires.
+ * control for the cookie path, as docs/archive/design/accountless-jurors.md requires.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'

@@ -52,7 +52,8 @@ a password on the command line.
 
 ## Model Court (project-specific)
 
-- The specification is the blueprint: `C:\Users\avery\Documents\Codex\2026-11-15\wha\outputs\Model-Court-Technical-Specification.md` (v1.2). Plan and status: `docs/implementation-plan.md`; deviations: `docs/decisions.md`; evidence: `docs/verification.md` (agent and human checks kept separate).
+- The specification is the blueprint: `C:\Users\avery\Documents\Codex\2026-11-15\wha\outputs\Model-Court-Technical-Specification.md` (v1.2), now history like everything in `docs/archive/` (finished plans, specs, design notes: not maintained; change the maintained docs instead). Start from `docs/README.md`, the map of maintained docs. Decisions and deviations: `docs/decisions.md`; evidence: `docs/verification.md` (agent and human checks kept separate).
+- The GitHub repository `avxryn/model-court` (remote `origin`) is private until Avery says otherwise; `space` is the DeepSpace deploy remote.
 - Live generation is strictly BYOK. Never add platform-billed AI or integration routes, a billing selector, or a fallback payer. Never put provider keys in logs, jobs, receipts, notices, URLs, or responses.
 - Keep layering: `src/domain` (pure rules) ← `src/server/services` (use cases + SQL) ← `src/server/api.ts` (HTTP). Browser code may import server modules only as types (lint-enforced).
 - Run `npm run check` before handing over. It needs no network and no keys.

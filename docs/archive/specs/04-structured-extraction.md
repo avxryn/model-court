@@ -5,7 +5,7 @@
 Status: approved, Nov 18, 2026. Avery accepted all ten recommendations (section 14). Roadmap item 4
 (`docs/roadmap.md`). No code yet.
 Builds on the task-kit contract in `docs/roadmap.md` ("The shared contract: task kits") and on spec 03
-(`docs/specs/03-task-kits.md`, written in parallel). Whatever this kit needs from the framework is
+(`docs/archive/specs/03-task-kits.md`, written in parallel). Whatever this kit needs from the framework is
 listed under "Asks of the kit framework" below, not redefined here.
 
 Provider facts below come from the providers' own pages, read on 2026-11-18:

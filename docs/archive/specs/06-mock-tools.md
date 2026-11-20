@@ -4,7 +4,7 @@
 
 Status: draft for review, Nov 18, 2026. Roadmap item 6 (`docs/roadmap.md`). Research only: no code, no
 migration and no paid call has been made for this spec. Builds on the task-kit contract in
-`docs/roadmap.md` ("The shared contract: task kits"); `docs/specs/03-task-kits.md` did not exist when
+`docs/roadmap.md` ("The shared contract: task kits"); `docs/archive/specs/03-task-kits.md` did not exist when
 this was written, so everything this spec needs from the framework is listed under
 [Asks of the kit framework](#13-asks-of-the-kit-framework) rather than defined here.
 
@@ -273,7 +273,7 @@ Notes:
   empty-store check includes the new tables.
 - Purge (`maintenance.ts`) and evaluation deletion cascade through the FKs; nothing extra to purge.
 - This shape (per-step rows with their own fence and lease, a step outbox, the commit of step *k*
-  creating step *k+1*) is the one `docs/design/conversations.md` proposed for S3b. If S3b is built
+  creating step *k+1*) is the one `docs/archive/design/conversations.md` proposed for S3b. If S3b is built
   later it can reuse these tables with a `kind` discriminator instead of adding `conversation_turns`.
 
 ## 5. API changes
@@ -824,7 +824,7 @@ Steps 1 and 2 can run in parallel once the kit framework's types exist.
 3. **Step machinery.** Migration, `tool-loop.ts` (claim, send, commit, dispatch, leases), admission,
    retry, cancel, delete, revoke and backup changes, job type in `jobs.ts` and `platform.ts`.
    Integration tests on both stores. ~2 sessions (the largest and riskiest step; review it with an
-   independent security pass like `docs/security-review-v2.md`).
+   independent security pass like `docs/archive/security-reviews/v2.md`).
 4. **Read paths.** Review DTO, results, export, owner run view step counts, check runner wiring. ~1 session.
 5. **UI.** `ToolTaskEditor` with "Try a call", start-dialog upper bound, hearing step progress, juror
    `ToolTrace` and tool list in `CaseEvidence`, record trace and checks. Render tests and Playwright.
@@ -835,7 +835,7 @@ Steps 1 and 2 can run in parallel once the kit framework's types exist.
 
 ## 13. Asks of the kit framework
 
-From `docs/specs/03-task-kits.md`, this spec needs:
+From `docs/archive/specs/03-task-kits.md`, this spec needs:
 
 1. **Per-question kit input.** A typed slot for `inputKind: 'tools'` (this spec assumes
    `case.toolTask`), validated at draft save and admission, frozen in the snapshot and hashed. One kit
@@ -859,7 +859,7 @@ From `docs/specs/03-task-kits.md`, this spec needs:
    default (judge may change it?) and `messageTemplateVersion: 'tools-v1'`; plus
    `toolProtocolVersion` recorded in the snapshot (or a generic `kitProtocolVersion`).
 8. **Generation dispatch hook.** A clean branch point in `handleGenerationJob` (or a shared paid-call
-   helper, as `docs/design/special-master.md` proposed) so a kit can run a multi-call attempt without
+   helper, as `docs/archive/design/special-master.md` proposed) so a kit can run a multi-call attempt without
    copying the claim/fence/commit code.
 9. **Kit version in the snapshot**, immutable, so old hearings keep reading their kit version.
 10. **Starter content.** Default juror instructions and an example tool task for "Start from a template".

@@ -5,7 +5,7 @@ Status: planning, Nov 17, 2026. Work happens on the `next` branch. The submissio
 Nothing from `next` deploys before then.
 
 Goal: make the app easier to follow and give it a courtroom "case file" look, then build every deferred
-spec feature (P1) and every stretch goal in `docs/implementation-plan.md`.
+spec feature (P1) and every stretch goal in `docs/archive/implementation-plan.md`.
 
 ## Ground rules (all phases)
 

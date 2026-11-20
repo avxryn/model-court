@@ -4,7 +4,7 @@
 
 Status: draft for review, Nov 18, 2026. Roadmap item 5 (`docs/roadmap.md`). Research only: no code, no
 migration and no provider call has been made for this spec. Builds on the task-kit contract in
-`docs/roadmap.md` ("The shared contract: task kits") and on `docs/specs/03-task-kits.md`. That file
+`docs/roadmap.md` ("The shared contract: task kits") and on `docs/archive/specs/03-task-kits.md`. That file
 did not exist when this was written, so everything this kit needs from the framework is listed under
 "Asks of the kit framework" and is not redefined here.
 
@@ -660,7 +660,7 @@ answer-key slot.
    live checks (paid, run by Avery), and record labelling. Needs its own short design note on
    blinding first. *About 1–2 sessions.*
 
-## 13. Asks of the kit framework (`docs/specs/03-task-kits.md`)
+## 13. Asks of the kit framework (`docs/archive/specs/03-task-kits.md`)
 
 - **A1. Per-question material storage outside the draft.** A kit with `inputKind: 'sources'` (and
   item 4's `document`) needs large, ordered, per-question items in side tables, frozen per hearing and
